@@ -1,2 +1,2 @@
-# pathogensportal---db
+# pathogensportal - db
 pathogensportal - db
