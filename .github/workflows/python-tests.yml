@@ -1,0 +1,32 @@
+name: "CI: Tests"
+
+# Spustí unit testy (pytest) při každém pushi i PR — okamžitá zpětná vazba.
+# Je tolerantní: dokud žádné testy nejsou, projde (nezablokuje čerstvý repo).
+on:
+  push:
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          [ -f requirements.txt ] && pip install -r requirements.txt || true
+          pip install pytest
+
+      - name: Run pytest
+        run: |
+          set +e
+          pytest -q
+          code=$?
+          # pytest exit 5 = zatím žádné testy = OK pro čerstvý repo
+          if [ "$code" -eq 5 ]; then echo "zatím žádné testy — OK"; exit 0; fi
+          exit $code
