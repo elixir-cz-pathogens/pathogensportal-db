@@ -5,12 +5,13 @@ Výstup: site/static/data/charts/*.json
 """
 
 import json
+import os
 import pandas as pd
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-DATA_IN = ROOT / "data"
-DATA_OUT = ROOT / "site" / "static" / "data" / "charts"
+DATA_IN = Path(os.environ.get("DATA_IN",  str(ROOT / "data")))
+DATA_OUT = Path(os.environ.get("DATA_OUT", str(ROOT / "site" / "static" / "data" / "charts")))
 
 COLORS = {
     "blue":   ("rgba(13,110,253,0.6)",  "rgb(13,110,253)"),
