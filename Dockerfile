@@ -2,6 +2,13 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
+# generate_json.py volá regionální/věkové dotazy přes systémové sqlite3 CLI
+# (subprocess, ne Python modul sqlite3) — bez něj FileNotFoundError spadne
+# hned na první takové funkci a nedoběhnou ani ISIN grafy za ní.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends sqlite3 \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
