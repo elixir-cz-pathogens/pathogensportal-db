@@ -19,6 +19,12 @@ from pathlib import Path
 
 BASE_URL = "https://szu.gov.cz/wp-content/uploads/2023/03"
 
+# Indexová stránka SZÚ vypisuje odkazy na PDF všech týdnů běžící sezóny —
+# není potřeba hádat URL vzor (ten obsahuje rok/měsíc uploadu, ne týden),
+# stačí z ní vytáhnout poslední odkaz. Nahrazuje dřívější ruční krok
+# (kopírování PDF do data/pdfs/) pro aktuální sezónu.
+CURRENT_SEASON_LISTING_URL = "https://szu.gov.cz/publikace-szu/data/akutni-respiracni-infekce-chripka/"
+
 SEASONS = [
     "2012_2013", "2013_2014", "2014_2015", "2015_2016",
     "2016_2017", "2017_2018", "2018_2019", "2019_2020",
@@ -145,13 +151,28 @@ def _parse_last_pdf(pdf_bytes: bytes, season: str) -> pd.DataFrame:
                     if not virus_raw:
                         continue
 
-                    virus = _resolve_virus(virus_raw)
-                    if not virus:
-                        continue
-
                     val = str(row[kumul_idx]).strip() if row[kumul_idx] else ""
-                    nums = re.findall(r"\d+", val)
-                    if nums:
+
+                    # pdfplumber občas slije několik sousedních nízkopočetných
+                    # virů do jedné buňky (virus_raw i kumulativní hodnota mají
+                    # stejný počet řádků oddělených \n, ve stejném pořadí) —
+                    # rozdělíme je 1:1, jinak by se vzalo jen první číslo a
+                    # zbytek (např. SARS-CoV-2 slitý s "pozitivní"/"negativní"
+                    # souhrnem) by tiše zmizel.
+                    virus_lines = virus_raw.split("\n")
+                    val_lines = val.split("\n")
+                    if len(virus_lines) > 1 and len(virus_lines) == len(val_lines):
+                        pairs = list(zip(virus_lines, val_lines))
+                    else:
+                        pairs = [(virus_raw, val)]
+
+                    for v_raw, v_val in pairs:
+                        virus = _resolve_virus(v_raw)
+                        if not virus:
+                            continue
+                        nums = re.findall(r"\d+", v_val)
+                        if not nums:
+                            continue
                         count = int(nums[0])
                         if count > 0:
                             rows.append({
@@ -329,9 +350,62 @@ def download_local(pdf_base_dir: Path, output_dir: Path,
     return downloaded
 
 
+def _season_from_week(week: int, year: int) -> str:
+    """
+    Určí sezónu 'YYYY_YYYY' z kalendářního týdne a roku.
+    Sezóna začíná týdnem 40 (ověřeno na živé stránce SZÚ — první týden
+    sezóny 2025/2026 je "40_tyden_2025", poslední před přechodem na
+    novou sezónu je "39_tyden" následujícího roku).
+    """
+    if week >= 40:
+        return f"{year}_{year + 1}"
+    return f"{year - 1}_{year}"
+
+
+def download_current(output_dir: Path, listing_url: str = CURRENT_SEASON_LISTING_URL) -> list[str]:
+    """
+    Stáhne a naparsuje nejnovější týdenní PDF běžící sezóny přímo z indexové
+    stránky SZÚ. Vždy přepíše CSV aktuální sezóny (na rozdíl od historických
+    sezón v download(), které se stahují jen jednou a pak cachují).
+    """
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    print(f"  [szu_flu_current] nacitam {listing_url}")
+    resp = requests.get(listing_url, timeout=30)
+    resp.raise_for_status()
+
+    links = re.findall(
+        r'href="(https://szu\.gov\.cz/wp-content/uploads/[^"]*podle_typu_viru[^"]*\.pdf)"',
+        resp.text,
+    )
+    if not links:
+        raise ValueError(
+            "Na stránce SZÚ nenalezeny žádné odkazy 'podle_typu_viru' — web mohl změnit strukturu"
+        )
+
+    latest_url = max(set(links), key=_pdf_sort_key)
+    year, week = _pdf_sort_key(latest_url)
+    if (year, week) == (0, 0):
+        raise ValueError(f"Nepodařilo se rozparsovat týden/rok z URL: {latest_url}")
+
+    season = _season_from_week(week, year)
+    print(f"  [szu_flu_current] nejnovejsi: tyden {week}/{year} -> sezona {season} ({latest_url})")
+
+    pdf_resp = requests.get(latest_url, timeout=30)
+    pdf_resp.raise_for_status()
+
+    df = _parse_last_pdf(pdf_resp.content, season)
+    if df.empty:
+        raise ValueError(f"[szu_flu_current] naparsovane PDF ({latest_url}) neobsahuje zadna data")
+
+    out_path = output_dir / f"szu_influenza_{season}.csv"
+    df.to_csv(out_path, index=False, encoding="utf-8")
+    top = df.groupby("virus")["pocet"].sum().sort_values(ascending=False).head(4)
+    print(f"  [szu_flu_current] {season} — {len(df):,} zaznamu (tyden {week})  top: {dict(top)}")
+    return [str(out_path)]
+
+
 if __name__ == "__main__":
     root = Path(__file__).resolve().parents[2]
     download(root / "data" / "szu")
-    pdf_dir = root / "data" / "pdfs"
-    if pdf_dir.exists():
-        download_local(pdf_dir, root / "data" / "szu")
+    download_current(root / "data" / "szu")

@@ -37,6 +37,9 @@ def download(output_dir: Path) -> list[str]:
             encoding="utf-8-sig",
         )
 
+        if df.empty:
+            raise ValueError(f"[{name}] stažený CSV je prázdný — zdroj pravděpodobně změnil formát")
+
         # Sjednotime nazev datumoveho sloupce
         if "datum" in df.columns:
             df["datum"] = pd.to_datetime(df["datum"]).dt.date

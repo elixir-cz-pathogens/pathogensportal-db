@@ -29,6 +29,11 @@ def download(output_dir: Path) -> list[str]:
     # Filtr na CR
     df_cz = df[df["geoId"] == COUNTRY_CODE].copy()
 
+    if df_cz.empty:
+        raise ValueError(
+            f"Filtr na geoId={COUNTRY_CODE} nevrátil žádné řádky — zdroj pravděpodobně změnil formát"
+        )
+
     # Datum ze sloupcu den/mesic/rok
     df_cz["datum"] = pd.to_datetime(
         df_cz[["year", "month", "day"]].rename(columns={"year": "year", "month": "month", "day": "day"})
