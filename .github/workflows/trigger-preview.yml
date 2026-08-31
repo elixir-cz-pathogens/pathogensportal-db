@@ -1,0 +1,71 @@
+name: "Preview: rebuild the dev preview site"
+
+# Pokes the preview build that already exists on pathogens-dev. This workflow does
+# NOT build anything itself: Hugo, the datascrapper image and the pipeline all run
+# on the server, where the Hugo version is pinned to match the portal's CI.
+#
+# The key this uses is pinned to a forced command on the server and can start one
+# systemd unit — it cannot read or write a single file. See the `preview` role in
+# the private infra repo (pathogensportal-priv/ansible/roles/preview/).
+#
+# Requires:
+#   secret: PREVIEW_TRIGGER_SSH_KEY   (private half of the trigger key)
+#   vars:   PREVIEW_HOST              (pathogens-dev.vm.cesnet.cz)
+#           PREVIEW_SSH_HOST_KEY      (the server's ssh-ed25519 line — public data)
+#           PREVIEW_TRIGGER_ENABLED=true
+#
+# ⚠️ The flag is per environment and there is deliberately only one environment
+#    here. Do NOT add a production variant of this workflow: production must never
+#    build unreviewed content from a branch.
+
+on:
+  push:
+    branches: [dev]
+  # So a rebuild can be forced without an empty commit.
+  workflow_dispatch:
+
+jobs:
+  trigger:
+    if: ${{ vars.PREVIEW_TRIGGER_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    # The full pipeline (scrape -> charts -> ebola -> hugo) takes several minutes;
+    # this is a ceiling, not an expectation.
+    timeout-minutes: 30
+
+    steps:
+      - name: Check the trigger target is configured
+        # Without this an empty variable produces `ssh preview-trigger@` and an
+        # incomprehensible failure several steps later.
+        run: |
+          test -n "${{ vars.PREVIEW_HOST }}" || {
+            echo "::error::Missing repo variable PREVIEW_HOST."; exit 1; }
+          test -n "${{ vars.PREVIEW_SSH_HOST_KEY }}" || {
+            echo "::error::Missing repo variable PREVIEW_SSH_HOST_KEY (the server's ssh-ed25519 line)."; exit 1; }
+
+      - name: Trigger the rebuild and stream the build log
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.PREVIEW_TRIGGER_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+          # ⛔ NOT ssh-keyscan. A keyscan trusts whatever answers, on every run —
+          # trust on first use, with no first use. The host key is public data, so
+          # it is a VARIABLE, and it is pinned here exactly as the portal's deploy
+          # workflows pin theirs.
+          printf '%s %s\n' "${{ vars.PREVIEW_HOST }}" "${{ vars.PREVIEW_SSH_HOST_KEY }}" > ~/.ssh/known_hosts
+
+          # No command is passed on purpose: the key carries a forced command on the
+          # server, so anything sent here would be ignored anyway. The build runs
+          # synchronously and its journal comes back on stdout, which means THIS job
+          # goes red when the build fails.
+          #
+          # ServerAlive* keeps the connection up across the long silent stretch while
+          # the scrapers run.
+          ssh -o StrictHostKeyChecking=yes \
+              -o ServerAliveInterval=30 \
+              -o ServerAliveCountMax=20 \
+              "preview-trigger@${{ vars.PREVIEW_HOST }}"
+
+      - name: Where to look
+        if: success()
+        run: echo "Preview updated → https://${{ vars.PREVIEW_HOST }}/preview/"
