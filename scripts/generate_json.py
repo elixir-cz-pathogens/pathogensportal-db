@@ -10,8 +10,8 @@ import pandas as pd
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-DATA_IN = Path(os.environ.get("DATA_IN",  str(ROOT / "data")))
-DATA_OUT = Path(os.environ.get("DATA_OUT", str(ROOT / "site" / "static" / "data" / "charts")))
+DATA_DIR = Path(os.environ.get("DATA_DIR",  str(ROOT / "data")))
+OUTPUT_DIR = Path(os.environ.get("OUTPUT_DIR", str(ROOT / "site" / "static" / "data" / "charts")))
 
 COLORS = {
     "blue":   ("rgba(13,110,253,0.6)",  "rgb(13,110,253)"),
@@ -46,15 +46,15 @@ def to_weekly(df: pd.DataFrame, date_col="datum") -> pd.DataFrame:
 
 
 def save(name: str, obj: dict):
-    DATA_OUT.mkdir(parents=True, exist_ok=True)
-    path = DATA_OUT / f"{name}.json"
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    path = OUTPUT_DIR / f"{name}.json"
     path.write_text(json.dumps(obj, ensure_ascii=False, default=str), encoding="utf-8")
     print(f"  [{name}] → {path}")
 
 
 # ── 1. Epidemiologická křivka — týdenní nové případy + úmrtí ─────────────────
 def covid_cases_weekly():
-    df = pd.read_csv(DATA_IN / "mzcr" / "covid_pripady.csv")
+    df = pd.read_csv(DATA_DIR / "mzcr" / "covid_pripady.csv")
     df = to_weekly(df)
     w = df.groupby("week").agg(
         pripady=("prirustkovy_pocet_nakazenych", "sum"),
@@ -72,7 +72,7 @@ def covid_cases_weekly():
 
 # ── 2. Hospitalizace — stav pacientů ─────────────────────────────────────────
 def covid_hospitalization():
-    df = pd.read_csv(DATA_IN / "mzcr" / "covid_hospitalizace.csv")
+    df = pd.read_csv(DATA_DIR / "mzcr" / "covid_hospitalizace.csv")
     df["datum"] = pd.to_datetime(df["datum"])
     # Downsampling na tydenni maximum (je to pocet, ne sum)
     df["week"] = df["datum"].dt.to_period("W").dt.start_time
@@ -91,7 +91,7 @@ def covid_hospitalization():
 
 # ── 3. Testování — PCR pozitivita % ──────────────────────────────────────────
 def covid_testing():
-    df = pd.read_csv(DATA_IN / "mzcr" / "covid_testy.csv")
+    df = pd.read_csv(DATA_DIR / "mzcr" / "covid_testy.csv")
     df = to_weekly(df)
     w = df.groupby("week").agg(
         pcr=("pocet_PCR_testy", "sum"),
@@ -109,7 +109,7 @@ def covid_testing():
 
 # ── 4. 7denní incidence na 100 000 ───────────────────────────────────────────
 def covid_incidence():
-    df = pd.read_csv(DATA_IN / "mzcr" / "covid_incidence.csv")
+    df = pd.read_csv(DATA_DIR / "mzcr" / "covid_incidence.csv")
     df["datum"] = pd.to_datetime(df["datum"])
     df = df.sort_values("datum")
     # Každý 7. bod (nechceme zbytecne husty graf)
@@ -125,7 +125,7 @@ def covid_incidence():
 
 # ── 5. Souhrnné statistiky (pro info karty) ───────────────────────────────────
 def covid_summary():
-    df = pd.read_csv(DATA_IN / "mzcr" / "covid_pripady.csv")
+    df = pd.read_csv(DATA_DIR / "mzcr" / "covid_pripady.csv")
     last = df.iloc[-1]
     save("covid_summary", {
         "celkem_nakazenych": int(last["kumulativni_pocet_nakazenych"]),
@@ -157,7 +157,7 @@ FLU_COLORS = {
 
 def _load_influenza() -> pd.DataFrame:
     import glob
-    files = sorted(glob.glob(str(DATA_IN / "szu" / "szu_influenza_*.csv")))
+    files = sorted(glob.glob(str(DATA_DIR / "szu" / "szu_influenza_*.csv")))
     if not files:
         return pd.DataFrame()
     dfs = [pd.read_csv(f) for f in files]
@@ -271,7 +271,7 @@ def flu_respiratory_all():
 def _db_query(sql: str) -> pd.DataFrame:
     """Spustí SQL na covid.db přes CLI (conda sqlite3 má linking issue)."""
     import subprocess, io as _io
-    db_path = str(DATA_IN / "covid.db")
+    db_path = str(DATA_DIR / "covid.db")
     result = subprocess.run(
         ["sqlite3", "-csv", "-header", db_path, sql],
         capture_output=True, text=True, timeout=180
@@ -463,7 +463,7 @@ def covid_by_vaccination():
 # ISIN — Infekční nemoci (ÚZIS ČR, CC BY 4.0)
 # ─────────────────────────────────────────────────────────────────────────────
 
-ISIN_FILE = DATA_IN / "isin" / "isin_infekcni_nemoci.csv"
+ISIN_FILE = DATA_DIR / "isin" / "isin_infekcni_nemoci.csv"
 
 # Mapping NUTS3 → human-readable short name (same order as SVG map)
 NUTS3_NAMES = {

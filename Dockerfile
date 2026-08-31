@@ -15,9 +15,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Cesty jsou konfigurovatelné — kontejner je tím pádem přenositelný.
-# Jména proměnných odpovídají .env.example (DATA_IN / DATA_OUT).
-ENV DATA_IN=/data \
-    DATA_OUT=/output/charts
+# Jména proměnných odpovídají .env.example i deploy/docker-compose.yml v portál-repu
+# (DATA_DIR / OUTPUT_DIR).
+ENV DATA_DIR=/data \
+    OUTPUT_DIR=/output/charts
 
 # Stáhne data a vygeneruje chart JSON (běh na vyžádání / z cronu):
 #   docker compose --profile tools run --rm datascrapper
