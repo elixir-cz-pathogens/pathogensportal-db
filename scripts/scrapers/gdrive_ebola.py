@@ -124,9 +124,9 @@ def download(out_dir: Path, extract: bool = False) -> list[Path]:
 
 
 if __name__ == "__main__":
-    result = download(
-        Path(__file__).resolve().parents[2] / "data" / "ebola",
-        extract=False,
-    )
+    import os
+
+    data_dir = Path(os.environ.get("DATA_DIR", str(Path(__file__).resolve().parents[2] / "data")))
+    result = download(data_dir / "ebola", extract=False)
     for p in result:
         print(p)

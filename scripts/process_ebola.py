@@ -1,14 +1,18 @@
 """
 Zpracuje nejnovější ebola ZIP z Google Drive (IMG AV ČR) a vygeneruje:
-  1. site/static/data/charts/ebola_timeseries.json  — Chart.js časová řada
-  2. site/content/en/dashboards/ebola-*.md          — Hugo stránky (jedna na každý HTML ze zipu)
+  1. $OUTPUT_DIR/ebola_timeseries.json   — Chart.js časová řada
+  2. $CONTENT_DIR/ebola-*.md              — Hugo stránky, česky (jedna na každý HTML ze zipu)
 
 Použití:
   python3 scripts/process_ebola.py
 
 Proměnné prostředí (volitelné):
-  PORTAL_DIR  — cesta k www repozitáři (default: ../../www)
-  EBOLA_DIR   — cesta ke složce s ebola ZIP soubory (default: data/ebola)
+  EBOLA_DIR    — cesta ke složce s ebola ZIP soubory (default: $DATA_DIR/ebola, stejná
+                 proměnná jako run_all.py/gdrive_ebola.py)
+  OUTPUT_DIR   — kam psát chart JSON, stejná proměnná jako generate_json.py
+                 (default: site/static/data/charts v tomhle repu)
+  CONTENT_DIR  — kam psát Hugo Markdown stránky (default: site/content/cs/dashboards
+                 v tomhle repu)
 """
 
 import csv
@@ -23,10 +27,10 @@ from bs4 import BeautifulSoup
 from markdownify import markdownify as html2md
 
 ROOT        = Path(__file__).resolve().parent.parent
-EBOLA_DIR   = Path(os.environ.get("EBOLA_DIR",  str(ROOT / "data" / "ebola")))
-PORTAL_DIR  = Path(os.environ.get("PORTAL_DIR", str(ROOT.parent / "www")))
-CHARTS_OUT  = PORTAL_DIR / "site" / "static" / "data" / "charts"
-CONTENT_OUT = PORTAL_DIR / "site" / "content" / "en" / "dashboards"
+_DATA_DIR   = Path(os.environ.get("DATA_DIR", str(ROOT / "data")))
+EBOLA_DIR   = Path(os.environ.get("EBOLA_DIR", str(_DATA_DIR / "ebola")))
+CHARTS_OUT  = Path(os.environ.get("OUTPUT_DIR",  str(ROOT / "site" / "static" / "data" / "charts")))
+CONTENT_OUT = Path(os.environ.get("CONTENT_DIR", str(ROOT / "site" / "content" / "cs" / "dashboards")))
 
 # Mapování: HTML filename → (Hugo slug, český název stránky)
 PAGE_MAP = {
