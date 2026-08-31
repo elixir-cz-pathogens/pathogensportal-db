@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from scrapers import mzcr_covid, ecdc_covid, szu_influenza, uzis_isin
 
-DATA_ROOT = Path(os.getenv("DATA_IN") or Path(__file__).resolve().parents[1] / "data")
+DATA_ROOT = Path(os.getenv("DATA_DIR") or Path(__file__).resolve().parents[1] / "data")
 
 
 def run() -> int:
