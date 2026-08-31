@@ -597,6 +597,131 @@ def isin_age_groups():
     })
 
 
+# ── 17. Tematické skupiny nemocí (inspirováno švýcarským IDD) ────────────────
+# Konkrétně pojmenované nemoci s veřejnozdravotním významem se řadí do skupin;
+# zbytkové ICD "nezařazené jinde" kategorie padají do Ostatní. Chřipka se
+# vynechává úplně — máme podrobnější SZÚ zdroj (flu_* funkce výš).
+
+EXCLUDED_DISEASES = {
+    "Chřipka způsobená identifikovaným sezónním chřipkovým virem",
+}
+
+DISEASE_GROUPS = {
+    "childhood_airborne": {
+        "title": "Časté dětské/vzdušné",
+        "diseases": [
+            "Plané neštovice [varicella]",
+            "Pásový opar [herpes zoster]",
+            "Spála [scarlatina]",
+            "Příušnice [parotitis epidemica]",
+            "Spalničky",
+        ],
+    },
+    "gastrointestinal": {
+        "title": "Střevní/potravinové",
+        "diseases": [
+            "Jiné infekce způsobené salmonelami",
+            "Střevní infekce viry a jinými určenými mikroorganismy",
+            "Shigelóza",
+            "Jiné bakteriální intoxikace – otravy, přenesené potravou",
+            "Jiné bakteriální střevní infekce",
+            "Jiná gastroenteritida a kolitida infekčního a NS původu",
+        ],
+    },
+    "skin_contact": {
+        "title": "Kožní/kontaktní",
+        "diseases": [
+            "Svrab [scabies]",
+            "Růže – erysipel",
+            "Zavšivení – pedikulóza [pediculosis], ftiriáza [phthiriasis]",
+        ],
+    },
+    "vector_animal": {
+        "title": "Klíšťaty/zvířaty přenášené",
+        "diseases": [
+            "Virová encefalitida přenášená klíšťaty",
+            "Kousnutí nebo úder psem",
+            "Kousnutí nebo úder jinými savci",
+            "Jiné spirochetové infekce",
+        ],
+    },
+    "hepatitis": {
+        "title": "Hepatitidy",
+        "diseases": [
+            "Chronická virová hepatitida",
+            "Akutní hepatitida A",
+            "Akutní hepatitida B",
+            "Jiná akutní virová hepatitida",
+            "Neurčená virová hepatitida",
+        ],
+    },
+    "sti": {
+        "title": "Pohlavně přenosné",
+        "diseases": [
+            "Jiná chlamydiová onemocnění přenášená pohlavním stykem",
+            "Trichomoniáza",
+            "Jiné, převážně pohlavním stykem přenášené nemoci nezařazené jinde",
+        ],
+    },
+    "rare_severe": {
+        "title": "Vzácné závažné",
+        "diseases": [
+            "Záškrt [diphtheria]",
+            "Opičí neštovice",
+            "Meningokokové infekce",
+            "Břišní tyfus a paratyfus",
+            "Q horečka",
+            "Brucelóza – vlnivá horečka",
+            "Žlutá zimnice",
+            "Tularemie",
+        ],
+    },
+}
+
+
+def isin_disease_groups():
+    df = _load_isin()
+    if df.empty:
+        print("  [isin_groups] žádná data"); return
+
+    assigned = set(EXCLUDED_DISEASES)
+    for group in DISEASE_GROUPS.values():
+        assigned.update(group["diseases"])
+
+    color_cycle = ["blue", "red", "teal", "orange", "green", "purple",
+                   "blue", "red", "teal", "orange"]
+
+    for key, group in DISEASE_GROUPS.items():
+        diseases = group["diseases"]
+        subset = df[df["diagnoza_nazev"].isin(diseases)]
+        if subset.empty:
+            print(f"  [isin_groups] {key}: žádná data"); continue
+
+        by_year = (subset.groupby(["rok", "diagnoza_nazev"])["pocet_pripadu"]
+                   .sum().unstack(fill_value=0))
+        years = [str(y) for y in sorted(by_year.index.tolist())]
+
+        datasets = []
+        for i, diag in enumerate(diseases):
+            if diag in by_year.columns:
+                datasets.append(ds(diag, by_year[diag].tolist(),
+                                   color_cycle[i % len(color_cycle)], "bar"))
+
+        save(f"isin_group_{key}", {"labels": years, "datasets": datasets})
+        print(f"  [isin_groups] {key}: {len(datasets)} nemocí, {subset['pocet_pripadu'].sum():,.0f} případů celkem")
+
+    # Ostatní — vše nezařazené do žádné skupiny výš (a ne chřipka)
+    other = df[~df["diagnoza_nazev"].isin(assigned)]
+    if not other.empty:
+        by_year_total = other.groupby("rok")["pocet_pripadu"].sum().sort_index()
+        years = [str(y) for y in by_year_total.index.tolist()]
+        save("isin_group_other", {
+            "labels": years,
+            "datasets": [ds("Ostatní diagnózy (souhrn)", by_year_total.tolist(), "blue", "bar")],
+        })
+        print(f"  [isin_groups] other: {len(other['diagnoza_nazev'].unique())} diagnóz, {other['pocet_pripadu'].sum():,.0f} případů celkem")
+
+
 if __name__ == "__main__":
     print("Generuji Chart.js JSON data...")
     covid_cases_weekly()
@@ -619,4 +744,5 @@ if __name__ == "__main__":
     isin_regional_map()
     isin_monthly_trend()
     isin_age_groups()
+    isin_disease_groups()
     print("Hotovo.")
