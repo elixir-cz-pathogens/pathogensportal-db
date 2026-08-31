@@ -5,6 +5,7 @@ Exit kód: 0 pokud všechny zdroje uspěly, 1 pokud alespoň jeden selhal
 (důležité pro cron/CI — bez toho selhání zdroje projde bez povšimnutí).
 """
 
+import os
 import sys
 import time
 from pathlib import Path
@@ -14,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from scrapers import mzcr_covid, ecdc_covid, szu_influenza, uzis_isin
 
-DATA_ROOT = Path(__file__).resolve().parents[1] / "data"
+DATA_ROOT = Path(os.getenv("DATA_DIR") or Path(__file__).resolve().parents[1] / "data")
 
 
 def run() -> int:
