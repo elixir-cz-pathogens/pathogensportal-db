@@ -14,6 +14,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from scrapers import mzcr_covid, ecdc_covid, szu_influenza, uzis_isin
+from snapshot import snapshot
 
 DATA_ROOT = Path(os.getenv("DATA_DIR") or Path(__file__).resolve().parents[1] / "data")
 
@@ -46,6 +47,14 @@ def run() -> int:
     print(f"  Hotovo — {len(all_files)} CSV souboru v {DATA_ROOT}")
     for f in all_files:
         print(f"    {f}")
+
+    # Snapshot i při částečném selhání — co se stáhlo, má smysl uchovat.
+    if all_files:
+        result = snapshot(all_files, DATA_ROOT)
+        print(f"\n  Snapshot: {len(result['new'])} nových, "
+              f"{len(result['unchanged'])} beze změny (přeskočeno)")
+        for rel in result["new"]:
+            print(f"    + {rel}")
 
     if failures:
         print(f"\n  SELHALO {len(failures)}/{len(jobs)} zdrojů:")
