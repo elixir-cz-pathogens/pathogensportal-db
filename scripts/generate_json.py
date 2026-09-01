@@ -52,6 +52,46 @@ def save(name: str, obj: dict):
     print(f"  [{name}] → {path}")
 
 
+# ── Přístup k Postgresu (volitelný) ──────────────────────────────────────────
+# Postgres je bonus, ne podmínka: generátor musí umět doběhnout i tam, kde žádná
+# databáze neběží (lokální vývoj, samostatně spuštěný kontejner). Stejný přístup
+# jako pp-charts.js na frontendu — zkus DB, když není, spadni zpátky na soubory.
+# SQL se používá tam, kde dává smysl (joiny napříč zdroji), ne plošně.
+
+def _dsn() -> str:
+    return (
+        f"host={os.environ.get('DB_HOST', 'localhost')} "
+        f"port={os.environ.get('DB_PORT', '5432')} "
+        f"dbname={os.environ.get('POSTGRES_DB', 'pathogens')} "
+        f"user={os.environ.get('POSTGRES_USER', 'portal')} "
+        f"password={os.environ.get('POSTGRES_PASSWORD', 'portal_dev')} "
+        f"connect_timeout={os.environ.get('DB_CONNECT_TIMEOUT', '3')}"
+    )
+
+
+def db_query(sql: str, params: tuple = ()) -> pd.DataFrame | None:
+    """
+    Vrátí DataFrame, nebo None když databáze není dostupná / je prázdná.
+    None znamená "použij souborovou cestu", ne "chyba".
+    """
+    try:
+        import psycopg
+    except ImportError:
+        return None
+    try:
+        # Ne pd.read_sql_query — ta s psycopg3 spojením vyžaduje SQLAlchemy.
+        # Kurzor + DataFrame ručně je bez další závislosti.
+        with psycopg.connect(_dsn()) as conn, conn.cursor() as cur:
+            cur.execute(sql, params)
+            rows = cur.fetchall()
+            cols = [d.name for d in cur.description]
+        df = pd.DataFrame(rows, columns=cols)
+        return df if not df.empty else None
+    except Exception as e:
+        print(f"  [db] nedostupná ({type(e).__name__}) — použiju soubory")
+        return None
+
+
 # ── 1. Epidemiologická křivka — týdenní nové případy + úmrtí ─────────────────
 def covid_cases_weekly():
     df = pd.read_csv(DATA_DIR / "mzcr" / "covid_pripady.csv")
@@ -565,6 +605,43 @@ def isin_regional_incidence():
     Bez tohohle je mapa hlavně mapou toho, kde bydlí víc lidí — Praha a Středočeský
     kraj mají nejvíc případů prostě proto, že jsou největší.
     """
+    # Přednostně SQL: tohle je join dvou různých zdrojů (ISIN × ČSÚ), přesně ta
+    # třída dotazu, kvůli které analytická vrstva vznikla.
+    sql_df = db_query("""
+        SELECT o.region_code,
+               SUM(o.value)                                   AS pripadu,
+               MAX(p.value)                                   AS obyvatel,
+               EXTRACT(YEAR FROM o.period_start)::int         AS rok
+        FROM observation o
+        JOIN population p ON p.region_code = o.region_code
+                         AND p.sex = 'total'
+                         AND p.year = EXTRACT(YEAR FROM o.period_start)
+        WHERE o.source_id = 'isin'
+          AND o.snapshot_date = (SELECT MAX(snapshot_date) FROM observation WHERE source_id='isin')
+          AND EXTRACT(YEAR FROM o.period_start) =
+              (SELECT MAX(EXTRACT(YEAR FROM period_start)) FROM observation WHERE source_id='isin')
+        GROUP BY o.region_code, rok
+    """)
+    if sql_df is not None:
+        # float() schválně: Postgres NUMERIC přijde jako Decimal a json.dumps by
+        # ho serializoval jako řetězec ("720.6"), ne číslo — frontend by dostal
+        # jiný typ ze SQL cesty než ze souborové.
+        regions = {
+            str(r.region_code).strip(): round(float(r.pripadu) / float(r.obyvatel) * 100_000, 1)
+            for r in sql_df.itertuples()
+            if str(r.region_code).strip() in NUTS3_NAMES and r.obyvatel
+        }
+        if regions:
+            year = int(sql_df["rok"].max())
+            save("isin_regional_incidence", {
+                "year": year, "population_year": year,
+                "unit": "případů na 100 000 obyvatel",
+                "regions": regions, "labels": NUTS3_NAMES,
+            })
+            print(f"  [isin_incidence] {len(regions)} krajů (zdroj: SQL)")
+            return
+
+    # Fallback: soubory
     df = _load_isin()
     pop = _load_population()
     if df.empty:
