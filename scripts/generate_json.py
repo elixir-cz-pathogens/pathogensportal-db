@@ -492,6 +492,16 @@ def _load_isin() -> pd.DataFrame:
     return df
 
 
+POPULATION_FILE = DATA_DIR / "csu" / "population.csv"
+
+
+def _load_population() -> pd.DataFrame:
+    """Jmenovatele z ČSÚ (scripts/scrapers/csu_population.py). Prázdné = ještě nestaženo."""
+    if not POPULATION_FILE.exists():
+        return pd.DataFrame()
+    return pd.read_csv(POPULATION_FILE)
+
+
 # ── 13. Top 10 diagnóz — roční počty případů 2018–2025 ───────────────────────
 def isin_top_diseases():
     df = _load_isin()
@@ -546,6 +556,50 @@ def isin_regional_map():
         "regions": region_data,
         "labels": NUTS3_NAMES,
     })
+
+
+# ── 14b. Regionální mapa — incidence na 100 tis. obyvatel ────────────────────
+def isin_regional_incidence():
+    """
+    Totéž co isin_regional_map, ale přepočtené na 100 tis. obyvatel.
+    Bez tohohle je mapa hlavně mapou toho, kde bydlí víc lidí — Praha a Středočeský
+    kraj mají nejvíc případů prostě proto, že jsou největší.
+    """
+    df = _load_isin()
+    pop = _load_population()
+    if df.empty:
+        print("  [isin_incidence] žádná data ISIN"); return
+    if pop.empty:
+        print("  [isin_incidence] chybí populační data (ČSÚ) — přeskakuji"); return
+
+    last_year = int(df["rok"].max())
+
+    # Populace za stejný rok; když ještě není zveřejněná, vezmi nejnovější dostupnou.
+    pop_total = pop[pop["pohlavi"] == "Celkem"]
+    pop_year = last_year if last_year in set(pop_total["rok"]) else int(pop_total["rok"].max())
+    denom = pop_total[pop_total["rok"] == pop_year].set_index("kraj_kod")["pocet"]
+
+    cases = (df[df["rok"] == last_year]
+             .groupby("kraj_kod")["pocet_pripadu"]
+             .sum())
+
+    region_data = {}
+    for code, n in cases.items():
+        code = str(code).strip()
+        if code in NUTS3_NAMES and code in denom.index:
+            region_data[code] = round(n / denom[code] * 100_000, 1)
+
+    if not region_data:
+        print("  [isin_incidence] žádný kraj se nespároval s populací"); return
+
+    save("isin_regional_incidence", {
+        "year": last_year,
+        "population_year": pop_year,
+        "unit": "případů na 100 000 obyvatel",
+        "regions": region_data,
+        "labels": NUTS3_NAMES,
+    })
+    print(f"  [isin_incidence] {len(region_data)} krajů, populace za {pop_year}")
 
 
 # ── 15. Sezónní trend — měsíční případy vybraných nemocí (2018–) ─────────────
@@ -742,6 +796,7 @@ if __name__ == "__main__":
     print("  --- ISIN infekční nemoci ---")
     isin_top_diseases()
     isin_regional_map()
+    isin_regional_incidence()
     isin_monthly_trend()
     isin_age_groups()
     isin_disease_groups()

@@ -13,7 +13,7 @@ from pathlib import Path
 # Přidej scripts/ do Python path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from scrapers import mzcr_covid, ecdc_covid, szu_influenza, uzis_isin
+from scrapers import mzcr_covid, ecdc_covid, szu_influenza, uzis_isin, csu_population
 from snapshot import snapshot
 
 DATA_ROOT = Path(os.getenv("DATA_DIR") or Path(__file__).resolve().parents[1] / "data")
@@ -26,6 +26,7 @@ def run() -> int:
         ("SZÚ chřipka (hist.)",   szu_influenza.download,      DATA_ROOT / "szu"),
         ("SZÚ chřipka (aktuál.)", szu_influenza.download_current, DATA_ROOT / "szu"),
         ("ÚZIS ISIN inf. nem.",   uzis_isin.download,          DATA_ROOT / "isin"),
+        ("ČSÚ populace",          csu_population.download,     DATA_ROOT / "csu"),
     ]
 
     all_files = []
