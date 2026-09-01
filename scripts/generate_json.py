@@ -52,6 +52,46 @@ def save(name: str, obj: dict):
     print(f"  [{name}] → {path}")
 
 
+# ── Přístup k Postgresu (volitelný) ──────────────────────────────────────────
+# Postgres je bonus, ne podmínka: generátor musí umět doběhnout i tam, kde žádná
+# databáze neběží (lokální vývoj, samostatně spuštěný kontejner). Stejný přístup
+# jako pp-charts.js na frontendu — zkus DB, když není, spadni zpátky na soubory.
+# SQL se používá tam, kde dává smysl (joiny napříč zdroji), ne plošně.
+
+def _dsn() -> str:
+    return (
+        f"host={os.environ.get('DB_HOST', 'localhost')} "
+        f"port={os.environ.get('DB_PORT', '5432')} "
+        f"dbname={os.environ.get('POSTGRES_DB', 'pathogens')} "
+        f"user={os.environ.get('POSTGRES_USER', 'portal')} "
+        f"password={os.environ.get('POSTGRES_PASSWORD', 'portal_dev')} "
+        f"connect_timeout={os.environ.get('DB_CONNECT_TIMEOUT', '3')}"
+    )
+
+
+def db_query(sql: str, params: tuple = ()) -> pd.DataFrame | None:
+    """
+    Vrátí DataFrame, nebo None když databáze není dostupná / je prázdná.
+    None znamená "použij souborovou cestu", ne "chyba".
+    """
+    try:
+        import psycopg
+    except ImportError:
+        return None
+    try:
+        # Ne pd.read_sql_query — ta s psycopg3 spojením vyžaduje SQLAlchemy.
+        # Kurzor + DataFrame ručně je bez další závislosti.
+        with psycopg.connect(_dsn()) as conn, conn.cursor() as cur:
+            cur.execute(sql, params)
+            rows = cur.fetchall()
+            cols = [d.name for d in cur.description]
+        df = pd.DataFrame(rows, columns=cols)
+        return df if not df.empty else None
+    except Exception as e:
+        print(f"  [db] nedostupná ({type(e).__name__}) — použiju soubory")
+        return None
+
+
 # ── 1. Epidemiologická křivka — týdenní nové případy + úmrtí ─────────────────
 def covid_cases_weekly():
     df = pd.read_csv(DATA_DIR / "mzcr" / "covid_pripady.csv")
@@ -492,6 +532,16 @@ def _load_isin() -> pd.DataFrame:
     return df
 
 
+POPULATION_FILE = DATA_DIR / "csu" / "population.csv"
+
+
+def _load_population() -> pd.DataFrame:
+    """Jmenovatele z ČSÚ (scripts/scrapers/csu_population.py). Prázdné = ještě nestaženo."""
+    if not POPULATION_FILE.exists():
+        return pd.DataFrame()
+    return pd.read_csv(POPULATION_FILE)
+
+
 # ── 13. Top 10 diagnóz — roční počty případů 2018–2025 ───────────────────────
 def isin_top_diseases():
     df = _load_isin()
@@ -546,6 +596,87 @@ def isin_regional_map():
         "regions": region_data,
         "labels": NUTS3_NAMES,
     })
+
+
+# ── 14b. Regionální mapa — incidence na 100 tis. obyvatel ────────────────────
+def isin_regional_incidence():
+    """
+    Totéž co isin_regional_map, ale přepočtené na 100 tis. obyvatel.
+    Bez tohohle je mapa hlavně mapou toho, kde bydlí víc lidí — Praha a Středočeský
+    kraj mají nejvíc případů prostě proto, že jsou největší.
+    """
+    # Přednostně SQL: tohle je join dvou různých zdrojů (ISIN × ČSÚ), přesně ta
+    # třída dotazu, kvůli které analytická vrstva vznikla.
+    sql_df = db_query("""
+        SELECT o.region_code,
+               SUM(o.value)                                   AS pripadu,
+               MAX(p.value)                                   AS obyvatel,
+               EXTRACT(YEAR FROM o.period_start)::int         AS rok
+        FROM observation o
+        JOIN population p ON p.region_code = o.region_code
+                         AND p.sex = 'total'
+                         AND p.year = EXTRACT(YEAR FROM o.period_start)
+        WHERE o.source_id = 'isin'
+          AND o.snapshot_date = (SELECT MAX(snapshot_date) FROM observation WHERE source_id='isin')
+          AND EXTRACT(YEAR FROM o.period_start) =
+              (SELECT MAX(EXTRACT(YEAR FROM period_start)) FROM observation WHERE source_id='isin')
+        GROUP BY o.region_code, rok
+    """)
+    if sql_df is not None:
+        # float() schválně: Postgres NUMERIC přijde jako Decimal a json.dumps by
+        # ho serializoval jako řetězec ("720.6"), ne číslo — frontend by dostal
+        # jiný typ ze SQL cesty než ze souborové.
+        regions = {
+            str(r.region_code).strip(): round(float(r.pripadu) / float(r.obyvatel) * 100_000, 1)
+            for r in sql_df.itertuples()
+            if str(r.region_code).strip() in NUTS3_NAMES and r.obyvatel
+        }
+        if regions:
+            year = int(sql_df["rok"].max())
+            save("isin_regional_incidence", {
+                "year": year, "population_year": year,
+                "unit": "případů na 100 000 obyvatel",
+                "regions": regions, "labels": NUTS3_NAMES,
+            })
+            print(f"  [isin_incidence] {len(regions)} krajů (zdroj: SQL)")
+            return
+
+    # Fallback: soubory
+    df = _load_isin()
+    pop = _load_population()
+    if df.empty:
+        print("  [isin_incidence] žádná data ISIN"); return
+    if pop.empty:
+        print("  [isin_incidence] chybí populační data (ČSÚ) — přeskakuji"); return
+
+    last_year = int(df["rok"].max())
+
+    # Populace za stejný rok; když ještě není zveřejněná, vezmi nejnovější dostupnou.
+    pop_total = pop[pop["pohlavi"] == "Celkem"]
+    pop_year = last_year if last_year in set(pop_total["rok"]) else int(pop_total["rok"].max())
+    denom = pop_total[pop_total["rok"] == pop_year].set_index("kraj_kod")["pocet"]
+
+    cases = (df[df["rok"] == last_year]
+             .groupby("kraj_kod")["pocet_pripadu"]
+             .sum())
+
+    region_data = {}
+    for code, n in cases.items():
+        code = str(code).strip()
+        if code in NUTS3_NAMES and code in denom.index:
+            region_data[code] = round(n / denom[code] * 100_000, 1)
+
+    if not region_data:
+        print("  [isin_incidence] žádný kraj se nespároval s populací"); return
+
+    save("isin_regional_incidence", {
+        "year": last_year,
+        "population_year": pop_year,
+        "unit": "případů na 100 000 obyvatel",
+        "regions": region_data,
+        "labels": NUTS3_NAMES,
+    })
+    print(f"  [isin_incidence] {len(region_data)} krajů, populace za {pop_year}")
 
 
 # ── 15. Sezónní trend — měsíční případy vybraných nemocí (2018–) ─────────────
@@ -742,6 +873,7 @@ if __name__ == "__main__":
     print("  --- ISIN infekční nemoci ---")
     isin_top_diseases()
     isin_regional_map()
+    isin_regional_incidence()
     isin_monthly_trend()
     isin_age_groups()
     isin_disease_groups()
