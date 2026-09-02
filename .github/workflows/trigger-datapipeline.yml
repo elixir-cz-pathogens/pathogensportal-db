@@ -1,0 +1,73 @@
+name: "Data pipeline: refresh the data on the dev server"
+
+# Pokes the data pipeline on pathogens-dev. This workflow does NOT run the pipeline
+# itself: the scrapers, the datascrapper image and the data processing all run ON
+# THE SERVER, which is where they will stay — the target architecture puts the
+# variable data managers and a Postgres database there, so the server is the
+# pipeline's permanent home, not a convenience.
+#
+# The key this uses is pinned to a forced command on the server and can start one
+# systemd unit — it cannot read or write a single file. See the `datapipeline` role in
+# the private infra repo (pathogensportal-priv/ansible/roles/datapipeline/).
+#
+# Requires:
+#   secret: PIPELINE_TRIGGER_SSH_KEY  (private half of the trigger key)
+#   vars:   PIPELINE_HOST              (pathogens-dev.vm.cesnet.cz)
+#           PIPELINE_SSH_HOST_KEY      (the server's ssh-ed25519 line — public data)
+#           PIPELINE_TRIGGER_ENABLED=true
+#
+# ⚠️ The flag is per environment and there is deliberately only one environment
+#    here. Do NOT add a production variant of this workflow: production must never
+#    take unreviewed data straight off a branch.
+
+on:
+  push:
+    branches: [dev]
+  # So a rebuild can be forced without an empty commit.
+  workflow_dispatch:
+
+jobs:
+  trigger:
+    if: ${{ vars.PIPELINE_TRIGGER_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    # The full pipeline (scrape -> charts -> ebola -> hugo) takes several minutes;
+    # this is a ceiling, not an expectation.
+    timeout-minutes: 30
+
+    steps:
+      - name: Check the trigger target is configured
+        # Without this an empty variable produces `ssh pipeline-trigger@` and an
+        # incomprehensible failure several steps later.
+        run: |
+          test -n "${{ vars.PIPELINE_HOST }}" || {
+            echo "::error::Missing repo variable PIPELINE_HOST."; exit 1; }
+          test -n "${{ vars.PIPELINE_SSH_HOST_KEY }}" || {
+            echo "::error::Missing repo variable PIPELINE_SSH_HOST_KEY (the server's ssh-ed25519 line)."; exit 1; }
+
+      - name: Trigger the refresh and stream the pipeline log
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.PIPELINE_TRIGGER_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+          # ⛔ NOT ssh-keyscan. A keyscan trusts whatever answers, on every run —
+          # trust on first use, with no first use. The host key is public data, so
+          # it is a VARIABLE, and it is pinned here exactly as the portal's deploy
+          # workflows pin theirs.
+          printf '%s %s\n' "${{ vars.PIPELINE_HOST }}" "${{ vars.PIPELINE_SSH_HOST_KEY }}" > ~/.ssh/known_hosts
+
+          # No command is passed on purpose: the key carries a forced command on the
+          # server, so anything sent here would be ignored anyway. The build runs
+          # synchronously and its journal comes back on stdout, which means THIS job
+          # goes red when the build fails.
+          #
+          # ServerAlive* keeps the connection up across the long silent stretch while
+          # the scrapers run.
+          ssh -o StrictHostKeyChecking=yes \
+              -o ServerAliveInterval=30 \
+              -o ServerAliveCountMax=20 \
+              "pipeline-trigger@${{ vars.PIPELINE_HOST }}"
+
+      - name: Where to look
+        if: success()
+        run: echo "Data refreshed → https://${{ vars.PIPELINE_HOST }}/"

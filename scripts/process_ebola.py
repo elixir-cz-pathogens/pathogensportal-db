@@ -21,6 +21,7 @@ import json
 import os
 import re
 import zipfile
+from datetime import date
 from pathlib import Path
 
 from bs4 import BeautifulSoup
@@ -167,7 +168,58 @@ def build_kam_dal_cards(soup: BeautifulSoup) -> str:
     return cards_html
 
 
-def html_to_md(html_text: str, current_file: str) -> tuple[str, str]:
+def _cell(value: str) -> str:
+    value = str(value or "").strip()
+    return value if value else "—"
+
+
+def fill_data_table(main, rows: list[dict]) -> None:
+    """
+    Naplní „Tabulku hodnot“ daty.
+
+    Zdrojové HTML má `<tbody>` prázdné — na původním webu ho doplňoval JavaScript
+    z přiloženého CSV. Ten skript se sem nepřenáší (a CSV na portálu neleží), takže
+    tabulka zůstávala prázdná a DataTables z motivu do ní psaly „No data available
+    in table“. Řádky proto vypisujeme rovnou při generování: portál je statický,
+    tabulka nemá důvod čekat na JavaScript.
+
+    Datum zůstává ve tvaru ISO schválně — DataTables řadí sloupec jako řetězec,
+    a „1. 9. 2026“ by se seřadilo před „30. 8. 2026“.
+    """
+    table = main.find(id="data-table")
+    if table is None:
+        return
+    tbody = table.find("tbody")
+    if tbody is None:
+        return
+    tbody.clear()
+
+    soup = BeautifulSoup("", "html.parser")
+    for r in rows:
+        tr = soup.new_tag("tr")
+        for key in ("date", "sitrep_number", "confirmed_cases_cumulative",
+                    "confirmed_deaths_cumulative", "new_confirmed_cases_reported",
+                    "daily_deaths_reported"):
+            td = soup.new_tag("td")
+            td.string = _cell(r.get(key))
+            tr.append(td)
+
+        td = soup.new_tag("td")
+        url = str(r.get("source_url") or "").strip()
+        if url:
+            a = soup.new_tag("a", href=url)
+            # Popiskem je doména, ne „odkaz“ — v seznamu odkazů (čtečka obrazovky)
+            # tak jde poznat, kdo hodnotu hlásil.
+            a.string = re.sub(r"^www\.", "", url.split("/")[2]) if "//" in url else url
+            td.append(a)
+        else:
+            td.string = "—"
+        tr.append(td)
+        tbody.append(tr)
+
+
+def html_to_md(html_text: str, current_file: str,
+               rows: list[dict] | None = None) -> tuple[str, str]:
     """
     Převede HTML na (nav_pills_html, body_md).
     Sekce 'Kam dál' je odstraněna z body_md a vrácena jako Bootstrap kartičky
@@ -178,11 +230,17 @@ def html_to_md(html_text: str, current_file: str) -> tuple[str, str]:
     nav_pills    = build_nav_pills(current_file)
     kam_dal_html = build_kam_dal_cards(soup) if current_file == "index.html" else ""
 
-    # Odstraň nepotřebné elementy
-    for tag in soup.find_all(["header", "footer", "script", "style"]):
+    # Odstraň nepotřebné elementy. `noscript` je mezi nimi proto, že markdownify
+    # jeho obsah rozbalí do běžného textu: poznámka určená čtenářům s vypnutým
+    # JavaScriptem se pak zobrazovala všem — a od chvíle, kdy se tabulka hodnot
+    # generuje staticky, navíc tvrdila něco, co není pravda.
+    for tag in soup.find_all(["header", "footer", "script", "style", "noscript"]):
         tag.decompose()
 
     main = soup.find("main") or soup.find("body") or soup
+
+    if rows:
+        fill_data_table(main, rows)
 
     # Odstraň sekci "Kam dál" z těla
     h2_kam = main.find(lambda t: t.name == "h2" and "Kam" in t.get_text())
@@ -214,6 +272,118 @@ def html_to_md(html_text: str, current_file: str) -> tuple[str, str]:
 
 
 # ── Chart JSON ────────────────────────────────────────────────────────────────
+
+def _series(label: str, data: list, color: str, fill: bool = True, kind: str = "line") -> dict:
+    return {
+        "label": label, "data": data,
+        "backgroundColor": f"rgba({color},0.15)", "borderColor": f"rgb({color})",
+        "borderWidth": 2, "fill": fill, "tension": 0.3, "pointRadius": 2,
+        "type": kind,
+    }
+
+
+def generate_extra_charts(rows: list[dict]) -> None:
+    """
+    Denní přírůstky a souhrn. Tyhle soubory na portálu existovaly, ale nic je
+    negenerovalo — ebola_summary tam zůstal zamrzlý na datech z 13. 7. 2026,
+    zatímco případů mezitím přibylo několikanásobně. Teď se počítají ze stejné
+    kurátorované časové řady jako zbytek.
+    """
+    labels = [r["date"] for r in rows]
+
+    def ints(key):
+        return [int(r[key]) if str(r.get(key, "")).strip() else None for r in rows]
+
+    save_json("ebola_daily", {
+        "labels": labels,
+        "datasets": [_series("Nově hlášené případy (den)", ints("new_confirmed_cases_reported"),
+                             "13,110,253", fill=False, kind="bar")],
+    })
+
+    save_json("ebola_deaths_cumulative", {
+        "labels": labels,
+        "datasets": [_series("Úmrtí mezi potvrzenými případy (kumulativní)",
+                             ints("confirmed_deaths_cumulative"), "220,53,69")],
+    })
+
+    last = rows[-1]
+    cases_n = int(last["confirmed_cases_cumulative"])
+    deaths_n = int(last["confirmed_deaths_cumulative"])
+    save_json("ebola_summary", {
+        "celkem_nakazenych": cases_n,
+        "celkem_umrti": deaths_n,
+        "cfr_pct": round(deaths_n / cases_n * 100, 1) if cases_n else None,
+        "posledni_datum": last["date"],
+    })
+
+
+# Referenční trajektorie minulých epidemií: (den od prvního hlášeného případu,
+# kumulativní počet potvrzených případů). Kurátorované hodnoty z literatury —
+# historické epidemie jsou uzavřené, takže se nemění a nemá je odkud stahovat.
+# Současná epidemie se sem doplňuje z naší vlastní časové řady, ne ručně.
+HISTORICAL_TRAJECTORIES: dict[str, list[tuple[int, int]]] = {
+    "Západní Afrika 2014–2016": [(0, 49), (24, 224), (85, 528), (99, 759)],
+    "DRK 2018–2020":            [(0, 26), (4, 43), (59, 159), (97, 308)],
+    "DRK 2020":                 [(0, 6), (40, 56), (95, 100), (100, 110)],
+    "DRK 2025":                 [(0, 28), (31, 64), (88, 64)],
+    "DRK 2012":                 [(0, 10), (17, 28), (45, 50), (98, 77)],
+}
+
+TRAJECTORY_WINDOW_DAYS = 100
+
+
+def generate_trajectories(rows: list[dict]) -> None:
+    """
+    Srovnání rychlosti růstu epidemií v prvních ~100 dnech.
+
+    Dvě věci, které tenhle graf dřív dělal špatně:
+
+    1. Řada „DRK 2026“ byla vypsaná ručně a zamrzla na 1 031 případech, zatímco
+       naše vlastní data ukazovala 6 100. Teď se počítá z `rows` — ze stejné
+       řady, ze které žijí ostatní grafy — takže zastarat nemůže.
+
+    2. Osa X byla kategorická: dny 0, 4, 6, 12, … 99, 100 se kreslily rovnoměrně,
+       takže úsek 0→4 byl stejně široký jako 59→85. U grafu, který má porovnávat
+       *rychlost* růstu, tím sklony křivek nic neznamenaly. Proto {x, y} body
+       a `x_scale: "linear"` — vzdálenost na ose teď odpovídá počtu dnů.
+
+    Řídké řady se navíc nesmí kreslit přes `null` v poli zarovnaném na společné
+    popisky: sousední hodnoty pak nejsou sousední body a Chart.js mezi nimi
+    úsečku nenakreslí. Každá řada proto nese jen své vlastní body.
+    """
+    day_zero = date.fromisoformat(rows[0]["date"])
+    current = []
+    for r in rows:
+        day = (date.fromisoformat(r["date"]) - day_zero).days
+        if day > TRAJECTORY_WINDOW_DAYS:
+            break
+        current.append({"x": day, "y": int(r["confirmed_cases_cumulative"])})
+
+    datasets = [{"label": "DRK 2026", "data": current}]
+    datasets += [
+        {"label": label, "data": [{"x": d, "y": v} for d, v in points]}
+        for label, points in HISTORICAL_TRAJECTORIES.items()
+    ]
+
+    # Logaritmická osa Y: současná epidemie je řádově větší než všechny historické
+    # (6 100 proti 759 u nejhorší z nich), takže na lineární ose by se ty menší
+    # slisovaly na nulu. Na logaritmické je navíc sklon přímo rychlost růstu —
+    # tedy to, co má srovnání trajektorií vlastně ukázat.
+    save_json("ebola_trajectories", {
+        "x_scale": "linear",
+        "x_unit": "den",
+        "x_title": "Den od prvního hlášeného případu",
+        "y_scale": "logarithmic",
+        "datasets": datasets,
+    })
+
+
+def save_json(name: str, obj: dict) -> None:
+    CHARTS_OUT.mkdir(parents=True, exist_ok=True)
+    path = CHARTS_OUT / f"{name}.json"
+    path.write_text(json.dumps(obj, ensure_ascii=False), encoding="utf-8")
+    print(f"  [{name}] → {path}")
+
 
 def generate_chart(rows: list[dict]) -> None:
     CHARTS_OUT.mkdir(parents=True, exist_ok=True)
@@ -269,6 +439,30 @@ Data z kurátorované časové řady (CC BY 4.0, IMG AV ČR).
 
 """
 
+# Stránka "Graf vývoje" ze zipu žádný graf neobsahuje — je to jen text. Grafy,
+# které k ní patří, se na portálu generovaly, ale nikde nezobrazovaly.
+GRAF_VYVOJ_BLOCK = """\
+
+---
+
+## Denně hlášené případy
+
+{{< chart id="ebolaDaily" src="/data/charts/ebola_daily.json" type="bar" title="Ebola BDBV 2026 — nově hlášené případy za den (DRC)" height="320" >}}
+
+## Kumulativní úmrtí
+
+{{< chart id="ebolaDeaths" src="/data/charts/ebola_deaths_cumulative.json" type="line" title="Ebola BDBV 2026 — kumulativní úmrtí mezi potvrzenými případy (DRC)" height="320" >}}
+
+## Srovnání s předchozími epidemiemi
+
+Kumulativní počty případů podle počtu dnů od začátku epidemie. Srovnání je orientační — jednotlivá ohniska se liší dostupností testování i rozsahem sledovaného území.
+
+{{< chart id="ebolaTrajectories" src="/data/charts/ebola_trajectories.json" type="line" title="Trajektorie vybraných ebolavirových epidemií" height="360" >}}
+
+---
+
+"""
+
 FRONTMATTER_INDEX = """\
 ---
 title: "Ebola — Bundibugyo virus (DRC/Uganda 2026)"
@@ -296,29 +490,40 @@ build:
 """
 
 
-def generate_page(filename: str, html_text: str, citation: dict) -> None:
+def _insert_charts(body_md: str, block: str) -> str:
+    """
+    Vloží blok grafů za druhý H2. Když stránka druhý H2 nemá (kratší sekce),
+    připojí ho na konec — dřív se v takovém případě graf tiše zahodil.
+    """
+    lines = body_md.split("\n")
+    insert_at, h2_count = 0, 0
+    for i, line in enumerate(lines):
+        if line.startswith("## "):
+            h2_count += 1
+            if h2_count == 2:
+                insert_at = i
+                break
+    if insert_at:
+        lines.insert(insert_at, block)
+        return "\n".join(lines)
+    return body_md.rstrip() + "\n" + block
+
+
+def generate_page(filename: str, html_text: str, citation: dict,
+                  rows: list[dict] | None = None) -> None:
     slug, page_title = PAGE_MAP[filename]
-    nav_pills, body_md = html_to_md(html_text, filename)
+    nav_pills, body_md = html_to_md(html_text, filename, rows)
 
     if filename == "index.html":
         fm = FRONTMATTER_INDEX.format(
             version=citation.get("version", "?"),
             date_released=citation.get("date_released", "?"),
         )
-        # Vloží chart blok za druhý H2
-        lines = body_md.split("\n")
-        insert_at, h2_count = 0, 0
-        for i, line in enumerate(lines):
-            if line.startswith("## "):
-                h2_count += 1
-                if h2_count == 2:
-                    insert_at = i
-                    break
-        if insert_at:
-            lines.insert(insert_at, CHART_BLOCK)
-            body_md = "\n".join(lines)
+        body_md = _insert_charts(body_md, CHART_BLOCK)
     else:
         fm = FRONTMATTER_SUB.format(page_title=page_title)
+        if filename == "graf-vyvoj.html":
+            body_md = _insert_charts(body_md, GRAF_VYVOJ_BLOCK)
 
     md   = fm + nav_pills + body_md
     path = CONTENT_OUT / f"{slug}.md"
@@ -347,9 +552,11 @@ def run() -> None:
     print(f"  HTML souborů k zpracování: {list(html_files.keys())}")
 
     generate_chart(rows)
+    generate_extra_charts(rows)
+    generate_trajectories(rows)
 
     for filename, html_text in html_files.items():
-        generate_page(filename, html_text, citation)
+        generate_page(filename, html_text, citation, rows)
 
     print("  Hotovo.")
 
