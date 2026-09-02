@@ -49,8 +49,13 @@ CREATE TABLE IF NOT EXISTS observation (
     value          NUMERIC      NOT NULL,
     snapshot_date  DATE         NOT NULL,
     ingested_at    TIMESTAMPTZ  DEFAULT NOW(),
-    UNIQUE (source_id, diagnosis_name, region_code, age_group, sex,
-            period_start, metric, snapshot_date)
+    -- NULLS NOT DISTINCT je tu nutnost, ne kosmetika: NULL znamená "nerozlišeno
+    -- podle téhle dimenze" (ISIN neagreguje podle pohlaví, takže sex je vždy NULL).
+    -- Ve výchozím chování Postgresu se dva NULL nepovažují za shodné, unikátní klíč
+    -- by tedy nikdy nesedl, ON CONFLICT by se nespustil a každý běh loaderu by
+    -- data zduplikoval. Vyžaduje PostgreSQL 15+ (compose pinuje postgres:16).
+    UNIQUE NULLS NOT DISTINCT (source_id, diagnosis_name, region_code, age_group, sex,
+                               period_start, metric, snapshot_date)
 );
 
 CREATE INDEX IF NOT EXISTS idx_observation_lookup
