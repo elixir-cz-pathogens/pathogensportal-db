@@ -436,11 +436,34 @@ def covid_by_age():
     if df.empty:
         print("  [covid_age] zadna data"); return
 
-    # Seřaď věkové skupiny chronologicky (1920-1924, ..., 2020-2024)
     df = df.sort_values("vek_skupina")
-    df["hosp_rate"] = (df["hospitalizace"] / df["pripady"] * 100).round(1)
 
+    # Dvě vady zdrojových dat, které se nesmí kreslit jako věkové kohorty:
+    #  - "-" = ročník nevyplněn. Není to věková skupina, je to chybějící údaj,
+    #    a je ho hodně (~13 % případů) — jako sloupec vlevo dominoval celému grafu.
+    #  - ročníky před 1900 = zjevné překlepy (narozen 1860 => 160 let). Bylo jich
+    #    dohromady 10 případů, ale zabíraly pětinu vodorovné osy.
+    # Nezahazujeme je mlčky: počty jdou do JSONu, ať je stránka může uvést.
+    def year_of(label: str):
+        head = str(label)[:4]
+        return int(head) if head.isdigit() else None
+
+    unknown = int(df.loc[df["vek_skupina"].map(year_of).isna(), "pripady"].sum())
+    years = df["vek_skupina"].map(year_of)
+    implausible = int(df.loc[years.notna() & (years < 1900), "pripady"].sum())
+
+    df = df[years.notna() & (years >= 1900)].copy()
+    if df.empty:
+        print("  [covid_age] po odfiltrovani nezbyla zadna data"); return
+
+    df["hosp_rate"] = (df["hospitalizace"] / df["pripady"] * 100).round(1)
     labels = df["vek_skupina"].tolist()
+    excluded = {
+        "neznamy_rocnik": unknown,
+        "implauzibilni_rocnik": implausible,
+    }
+    print(f"  [covid_age] mimo graf: {unknown:,} bez ročníku, {implausible:,} s ročníkem <1900")
+
     save("covid_by_age", {
         "labels": labels,
         "datasets": [
@@ -448,12 +471,14 @@ def covid_by_age():
             ds("Hospitalizace", df["hospitalizace"].tolist(), "orange", "bar"),
             ds("Úmrtí", df["umrti"].tolist(), "red", "bar"),
         ],
+        **excluded,
     })
     save("covid_hosp_rate_by_age", {
         "labels": labels,
         "datasets": [
             ds("Hospitalizační míra (%)", df["hosp_rate"].tolist(), "orange"),
         ],
+        **excluded,
     })
 
 
