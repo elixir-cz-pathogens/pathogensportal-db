@@ -86,7 +86,12 @@ def fit_quasipoisson(X: np.ndarray, y: np.ndarray, prior_w: np.ndarray | None = 
         z = eta + (y - mu) / mu          # pracovní odezva
         XtW = X.T * W
         A = XtW @ X
-        beta_new = np.linalg.solve(A, XtW @ z)
+        try:
+            beta_new = np.linalg.solve(A, XtW @ z)
+        except np.linalg.LinAlgError:
+            # Degenerovaná baseline (skoro samé nuly) — pseudoinverze místo
+            # pádu; výsledek stejně projde prahovou podlahou.
+            beta_new = np.linalg.pinv(A) @ (XtW @ z)
         if np.max(np.abs(beta_new - beta)) < 1e-8:
             beta = beta_new
             break
@@ -96,7 +101,10 @@ def fit_quasipoisson(X: np.ndarray, y: np.ndarray, prior_w: np.ndarray | None = 
     mu = np.exp(eta)
     W = w * mu
     A = (X.T * W) @ X
-    A_inv = np.linalg.inv(A)
+    try:
+        A_inv = np.linalg.inv(A)
+    except np.linalg.LinAlgError:
+        A_inv = np.linalg.pinv(A)
 
     pearson = (y - mu) * np.sqrt(w / mu)
     phi = max(1.0, float(pearson @ pearson) / max(n - p, 1))  # disperze, min. 1 (Poisson)
@@ -149,6 +157,21 @@ def farrington_score(counts: np.ndarray, t0: int) -> dict | None:
             "threshold": float(RARE_ALERT - 0.5),
             "score": None,
             "signal": y0 >= RARE_ALERT,
+            "n_baseline": len(idx),
+        }
+
+    if y.sum() == 0:
+        # Historie případy má, ale v baseline oknech nejsou žádné — typicky
+        # nemoc, která se začala vykazovat až v průběhu období, nebo silně
+        # mimosezónní výskyt. GLM nad samými nulami je singulární; chová se to
+        # tedy jako sporadická řada s prahem jednoho případu.
+        return {
+            "type": "sporadic",
+            "observed": y0,
+            "expected": 0.0,
+            "threshold": 1.0,
+            "score": round(y0, 2),
+            "signal": y0 >= MIN_CASES_GLM,
             "n_baseline": len(idx),
         }
 
