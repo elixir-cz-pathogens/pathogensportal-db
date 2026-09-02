@@ -33,6 +33,26 @@ from psycopg import sql
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = Path(os.environ.get("DATA_DIR", str(ROOT / "data")))
+SCHEMA_FILE = ROOT / "db" / "init.sql"
+
+
+def ensure_schema(conn) -> None:
+    """
+    Zajistí, že tabulky existují — aplikací `db/init.sql`.
+
+    Proč to loader dělá sám: Postgres spustí skripty z `docker-entrypoint-initdb.d`
+    jen při první inicializaci prázdného datového svazku. Na databázi, která už
+    jednou běžela, se `init.sql` znovu nespustí, takže tabulky přidané později
+    (`observation`, `population`) by tam nikdy nevznikly a zápis by spadl na
+    "relation does not exist".
+
+    Schéma se schválně neopisuje do Pythonu — `db/init.sql` zůstává jediným
+    zdrojem pravdy a je celý idempotentní (CREATE TABLE IF NOT EXISTS,
+    ON CONFLICT DO NOTHING), takže opakované spuštění nic nerozbije.
+    """
+    if not SCHEMA_FILE.exists():
+        raise FileNotFoundError(f"Chybí schéma {SCHEMA_FILE}")
+    conn.execute(SCHEMA_FILE.read_text(encoding="utf-8"))
 
 
 def dsn() -> str:
@@ -148,6 +168,7 @@ def main() -> int:
         return 0
 
     with psycopg.connect(dsn()) as conn:
+        ensure_schema(conn)
         load_population(conn)
         load_isin(conn, snap)
         conn.commit()
