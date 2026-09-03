@@ -114,18 +114,25 @@ def fit_quasipoisson(X: np.ndarray, y: np.ndarray, prior_w: np.ndarray | None = 
 
 
 def _anscombe(y: np.ndarray, mu: np.ndarray, phi: float, hat: np.ndarray) -> np.ndarray:
-    """Standardizovaná Anscombeho rezidua — na nich stojí převažování epidemií."""
+    """Standardizovaná Anscombeho rezidua — na nich stojí převažování epidemií.
+    μ má podlahu, jinak bod s μ≈0 dá nekonečné reziduum (a dělení nulou níž)."""
+    mu = np.maximum(mu, 1e-3)
     r = 1.5 * (np.power(y, 2 / 3) - np.power(mu, 2 / 3)) / np.power(mu, 1 / 6)
     return r / np.sqrt(phi * (1 - hat))
 
 
 # ── skórování jedné řady ─────────────────────────────────────────────────────
 
-def farrington_score(counts: np.ndarray, t0: int) -> dict | None:
+def farrington_score(counts: np.ndarray, t0: int,
+                     exclude_t: frozenset = frozenset()) -> dict | None:
     """
     Oskóruje měsíc t0 řady `counts` (kompletní měsíční mřížka, index = pořadí
     měsíce od začátku dat). Vrací dict s výsledkem, nebo None, když řadu nelze
     hodnotit (málo historie).
+
+    exclude_t jsou měsíce vynechané z baseline (typicky covidová éra 2020–21,
+    kdy protiepidemická opatření stlačila hlášení většiny nemocí hluboko pod
+    normál). Vynechaný rok se nepočítá ani do minima let historie.
     """
     # Baseline: stejné kalendářní měsíce v minulých letech ± HALF_WINDOW.
     idx, years_used = [], set()
@@ -136,7 +143,7 @@ def farrington_score(counts: np.ndarray, t0: int) -> dict | None:
             break
         for d in range(-HALF_WINDOW, HALF_WINDOW + 1):
             t = anchor + d
-            if 0 <= t < t0:
+            if 0 <= t < t0 and t not in exclude_t:
                 idx.append(t)
                 years_used.add(k)
         k += 1
@@ -195,10 +202,16 @@ def farrington_score(counts: np.ndarray, t0: int) -> dict | None:
 
     mu, beta, cov, phi, hat, mu0, x0 = fit_with_trend_rule()
 
-    # Převážení minulých epidemií a jeden refit (Noufaily 2012).
+    # Převážení odlehlých bodů baseline a jeden refit. Noufaily 2012 převažuje
+    # jen kladná rezidua (minulé epidemie); tady se převažuje symetricky,
+    # protože covidové roky počty naopak *potlačily* — jednostranné převážení
+    # nechává stlačenou baseline táhnout očekávání dolů a návrat k normálu pak
+    # vypadá jako epidemie. Změřeno na datech 12/2025: 24 z 67 signálů stálo
+    # na baseline, kde roky 2020–21 měly méně než polovinu normálu.
     resid = _anscombe(y, mu, phi, hat)
-    if np.any(resid > REWEIGHT_LIMIT):
-        w = np.where(resid > REWEIGHT_LIMIT, resid ** -2, 1.0)
+    outlier = np.abs(resid) > REWEIGHT_LIMIT
+    if np.any(outlier):
+        w = np.where(outlier, resid ** -2.0, 1.0)
         w = w * len(w) / w.sum()
         mu, beta, cov, phi, hat, mu0, x0 = fit_with_trend_rule(prior_w=w)
 
@@ -278,11 +291,11 @@ def build_grid(long: pd.DataFrame, n_months: int):
 
 # ── běhy ─────────────────────────────────────────────────────────────────────
 
-def run_current(long, periods, n_months) -> int:
+def run_current(long, periods, n_months, exclude_t=frozenset()) -> int:
     t0 = n_months - 1
     signals, scored, skipped = [], 0, 0
     for meta, counts in build_grid(long, n_months):
-        res = farrington_score(counts, t0)
+        res = farrington_score(counts, t0, exclude_t)
         if res is None:
             skipped += 1
             continue
@@ -312,7 +325,8 @@ def run_current(long, periods, n_months) -> int:
     return 0
 
 
-def run_backtest(long, periods, n_months, diagnoza: str | None) -> int:
+def run_backtest(long, periods, n_months, diagnoza: str | None,
+                 exclude_t=frozenset()) -> int:
     if diagnoza:
         long = long[long.diagnoza_nazev == diagnoza]
         if long.empty:
@@ -322,7 +336,7 @@ def run_backtest(long, periods, n_months, diagnoza: str | None) -> int:
     start = 12 * MIN_YEARS  # skórovat lze až s MIN_YEARS lety historie
     for meta, counts in build_grid(long, n_months):
         for t0 in range(start, n_months):
-            res = farrington_score(counts, t0)
+            res = farrington_score(counts, t0, exclude_t)
             if res is None:
                 continue
             rows.append({**meta, "period": periods[t0], **res})
@@ -341,12 +355,17 @@ def main() -> int:
                     help="oskórovat celou historii (výstup CSV), ne jen poslední měsíc")
     ap.add_argument("--diagnoza", default=None,
                     help="omezit backtest na jednu diagnózu (přesný název)")
+    ap.add_argument("--covid-baseline", choices=["vynechat", "ponechat"], default="ponechat",
+                    help="zda covidovou éru 2020–21 zahrnout do baseline (default: ponechat)")
     args = ap.parse_args()
 
     long, periods, n_months = load_series()
+    exclude_t = frozenset()
+    if args.covid_baseline == "vynechat":
+        exclude_t = frozenset(i for i, p in enumerate(periods) if "2020-01" <= p <= "2021-12")
     if args.backtest:
-        return run_backtest(long, periods, n_months, args.diagnoza)
-    return run_current(long, periods, n_months)
+        return run_backtest(long, periods, n_months, args.diagnoza, exclude_t)
+    return run_current(long, periods, n_months, exclude_t)
 
 
 if __name__ == "__main__":
