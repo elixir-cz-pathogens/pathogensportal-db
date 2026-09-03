@@ -24,4 +24,4 @@ ENV DATA_DIR=/data \
 # Stáhne data (vč. Ebola) a vygeneruje chart JSON + Ebola Markdown stránky
 # (běh na vyžádání / z cronu):
 #   docker compose --profile tools run --rm datascrapper
-CMD ["sh", "-c", "python scripts/run_all.py && python scripts/scrapers/gdrive_ebola.py && python scripts/generate_json.py && python scripts/process_ebola.py"]
+CMD ["sh", "-c", "python scripts/run_all.py && python scripts/scrapers/gdrive_ebola.py && python scripts/generate_json.py && python scripts/detect_anomalies.py && python scripts/process_ebola.py"]
