@@ -327,7 +327,7 @@ def flu_regional_overview():
         ORDER BY Year, pozitivni DESC
     """)
     if df.empty:
-        print("  [flu_regional] zadna data"); return
+        print("  [flu_regional] covid.db chybí — graf se negeneruje a na portálu zůstává poslední verze (sezóna 2024/25); přepis na SZÚ krajská PDF je v plánu revize"); return
 
     df["Region"] = df["Region"].map(REGION_CLEAN).fillna(df["Region"])
     years = sorted(df["Year"].unique())
@@ -400,105 +400,105 @@ def flu_regional_weekly():
 # COVID pacienti — věková a vakcinační analýza
 # ─────────────────────────────────────────────────────────────────────────────
 
-# ── 11. Případy a hospitalizace podle věkové skupiny ─────────────────────────
+# ── 11. Případy a úmrtí podle věkové skupiny ─────────────────────────────────
+# Zdroj: otevřená data MZČR (osoby.csv agregované scraperem, umrti.csv) —
+# náhrada za dřívější nereprodukovatelnou covid.db. Chybějící věk (~0,5 %)
+# se nezahazuje mlčky: počet jde do JSONu, ať ho stránka může uvést.
+
+AGE_BINS = list(range(0, 90, 10))  # 0–9 … 80+
+
+def _age_group(vek: float) -> str:
+    if vek < 0:
+        return "neznámý"
+    lo = min(int(vek) // 10 * 10, 80)
+    return "80+" if lo == 80 else f"{lo}–{lo + 9}"
+
+AGE_LABELS = [f"{lo}–{lo + 9}" for lo in AGE_BINS[:-1]] + ["80+"]
+
+
 def covid_by_age():
-    df = _db_query("""
-        SELECT RokNarozeni as vek_skupina,
-               COUNT(*) as pripady,
-               SUM(CASE WHEN bin_Hospitalizace = 1 THEN 1 ELSE 0 END) as hospitalizace,
-               SUM(CASE WHEN Umrti = '1' THEN 1 ELSE 0 END) as umrti
-        FROM pacienti
-        WHERE RokNarozeni IS NOT NULL AND RokNarozeni != ''
-        GROUP BY RokNarozeni
-        ORDER BY RokNarozeni
-    """)
-    if df.empty:
-        print("  [covid_age] zadna data"); return
+    osoby_path = DATA_DIR / "mzcr" / "covid_osoby_agg.csv"
+    umrti_path = DATA_DIR / "mzcr" / "covid_umrti.csv"
+    if not osoby_path.exists() or not umrti_path.exists():
+        print("  [covid_age] chybí covid_osoby_agg.csv / covid_umrti.csv — přeskakuji")
+        return
 
-    df = df.sort_values("vek_skupina")
+    osoby = pd.read_csv(osoby_path)
+    osoby["skupina"] = osoby["vek"].apply(_age_group)
+    cases = osoby.groupby("skupina")["pripady"].sum()
+    unknown_cases = int(cases.get("neznámý", 0))
 
-    # Dvě vady zdrojových dat, které se nesmí kreslit jako věkové kohorty:
-    #  - "-" = ročník nevyplněn. Není to věková skupina, je to chybějící údaj,
-    #    a je ho hodně (~13 % případů) — jako sloupec vlevo dominoval celému grafu.
-    #  - ročníky před 1900 = zjevné překlepy (narozen 1860 => 160 let). Bylo jich
-    #    dohromady 10 případů, ale zabíraly pětinu vodorovné osy.
-    # Nezahazujeme je mlčky: počty jdou do JSONu, ať je stránka může uvést.
-    def year_of(label: str):
-        head = str(label)[:4]
-        return int(head) if head.isdigit() else None
+    umrti = pd.read_csv(umrti_path)
+    umrti["skupina"] = umrti["vek"].fillna(-1).apply(_age_group)
+    deaths = umrti.groupby("skupina").size()
+    unknown_deaths = int(deaths.get("neznámý", 0))
 
-    unknown = int(df.loc[df["vek_skupina"].map(year_of).isna(), "pripady"].sum())
-    years = df["vek_skupina"].map(year_of)
-    implausible = int(df.loc[years.notna() & (years < 1900), "pripady"].sum())
-
-    df = df[years.notna() & (years >= 1900)].copy()
-    if df.empty:
-        print("  [covid_age] po odfiltrovani nezbyla zadna data"); return
-
-    df["hosp_rate"] = (df["hospitalizace"] / df["pripady"] * 100).round(1)
-    labels = df["vek_skupina"].tolist()
-    excluded = {
-        "neznamy_rocnik": unknown,
-        "implauzibilni_rocnik": implausible,
-    }
-    print(f"  [covid_age] mimo graf: {unknown:,} bez ročníku, {implausible:,} s ročníkem <1900")
+    c = [int(cases.get(g, 0)) for g in AGE_LABELS]
+    d = [int(deaths.get(g, 0)) for g in AGE_LABELS]
+    print(f"  [covid_age] mimo graf: {unknown_cases:,} případů a {unknown_deaths} úmrtí bez věku")
 
     save("covid_by_age", {
-        "labels": labels,
+        "labels": AGE_LABELS,
         "datasets": [
-            ds("Případy", df["pripady"].tolist(), "blue", "bar"),
-            ds("Hospitalizace", df["hospitalizace"].tolist(), "orange", "bar"),
-            ds("Úmrtí", df["umrti"].tolist(), "red", "bar"),
+            ds("Případy", c, "blue", "bar"),
+            ds("Úmrtí", d, "red", "bar"),
         ],
-        **excluded,
+        "neznamy_vek_pripady": unknown_cases,
+        "neznamy_vek_umrti": unknown_deaths,
     })
-    save("covid_hosp_rate_by_age", {
-        "labels": labels,
-        "datasets": [
-            ds("Hospitalizační míra (%)", df["hosp_rate"].tolist(), "orange"),
-        ],
-        **excluded,
+
+    # Smrtnost (CFR) podle věku — úmrtí / případy. Nahrazuje dřívější
+    # hospitalizační míru: hospitalizace s věkem v otevřených datech nejsou.
+    cfr = [round(d[i] / c[i] * 100, 2) if c[i] else None for i in range(len(AGE_LABELS))]
+    save("covid_cfr_by_age", {
+        "labels": AGE_LABELS,
+        "datasets": [ds("Smrtnost (CFR %)", cfr, "red")],
     })
 
 
-# ── 12. Případy a výsledky dle počtu dávek vakcíny ───────────────────────────
+# ── 12. Případy a hospitalizace dle očkování ─────────────────────────────────
+# Zdroj: ockovani-pozitivni.csv + ockovani-hospitalizace.csv (denní počty podle
+# stavu očkování, od ledna 2021 — před začátkem očkování kategorie neexistovaly).
+
+VAX_COLS = [
+    ("bez_ockovani",         "Bez očkování"),
+    ("nedokoncene_ockovani", "Nedokončené očkování"),
+    ("dokoncene_ockovani",   "Dokončené očkování"),
+    ("posilujici_davka",     "Posilující dávka"),
+]
+
+
 def covid_by_vaccination():
-    df = _db_query("""
-        SELECT
-            CASE
-                WHEN Datum_Ctvrta_davka IS NOT NULL THEN '4+ dávky'
-                WHEN Datum_Treti_davka IS NOT NULL  THEN '3 dávky'
-                WHEN Datum_Druha_davka IS NOT NULL  THEN '2 dávky'
-                WHEN Datum_Prvni_davka IS NOT NULL  THEN '1 dávka'
-                ELSE 'Nevakcinován'
-            END as ockovani,
-            COUNT(*) as pripady,
-            SUM(CASE WHEN bin_Hospitalizace = 1 THEN 1 ELSE 0 END) as hospitalizace,
-            SUM(CASE WHEN Umrti = '1' THEN 1 ELSE 0 END) as umrti
-        FROM pacienti
-        GROUP BY ockovani
-    """)
-    if df.empty:
-        print("  [covid_vax] zadna data"); return
+    poz_path = DATA_DIR / "mzcr" / "covid_vax_pozitivni.csv"
+    hosp_path = DATA_DIR / "mzcr" / "covid_vax_hospitalizace.csv"
+    if not poz_path.exists() or not hosp_path.exists():
+        print("  [covid_vax] chybí covid_vax_*.csv — přeskakuji")
+        return
 
-    order = ["Nevakcinován", "1 dávka", "2 dávky", "3 dávky", "4+ dávky"]
-    df["ockovani"] = pd.Categorical(df["ockovani"], categories=order, ordered=True)
-    df = df.sort_values("ockovani")
-    df["hosp_rate"] = (df["hospitalizace"] / df["pripady"] * 100).round(1)
+    poz = pd.read_csv(poz_path)
+    hosp = pd.read_csv(hosp_path)
 
-    labels = df["ockovani"].tolist()
+    labels = [label for _, label in VAX_COLS]
+    cases = [int(poz[f"pozitivni_{col}"].sum()) for col, _ in VAX_COLS]
+    hospit = [int(hosp[f"hospitalizovani_{col}"].sum()) for col, _ in VAX_COLS]
+    period = f"{poz.datum.min()} – {poz.datum.max()}"
+    print(f"  [covid_vax] období {period}")
+
     save("covid_by_vaccination", {
         "labels": labels,
+        "obdobi": period,
         "datasets": [
-            ds("Případy", df["pripady"].tolist(), "blue", "bar"),
-            ds("Hospitalizace", df["hospitalizace"].tolist(), "orange", "bar"),
-            ds("Úmrtí", df["umrti"].tolist(), "red", "bar"),
+            ds("Případy", cases, "blue", "bar"),
+            ds("Hospitalizace", hospit, "orange", "bar"),
         ],
     })
     save("covid_hosp_rate_by_vax", {
         "labels": labels,
+        "obdobi": period,
         "datasets": [
-            ds("Hospitalizační míra (%)", df["hosp_rate"].tolist(), "orange"),
+            ds("Hospitalizační míra (%)",
+               [round(h / c * 100, 2) if c else None for c, h in zip(cases, hospit)],
+               "orange"),
         ],
     })
 
