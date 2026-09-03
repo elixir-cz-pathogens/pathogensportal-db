@@ -284,115 +284,98 @@ def flu_respiratory_all():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Regionální data — SZÚ lab_tests z covid.db
+# Regionální a týdenní chřipka — SZÚ týdenní PDF (szu_weekly scraper)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _db_query(sql: str) -> pd.DataFrame:
-    """Spustí SQL na covid.db přes CLI (conda sqlite3 má linking issue)."""
-    import subprocess, io as _io
-    db_path = str(DATA_DIR / "covid.db")
-    result = subprocess.run(
-        ["sqlite3", "-csv", "-header", db_path, sql],
-        capture_output=True, text=True, timeout=180
-    )
-    if result.returncode != 0 or not result.stdout.strip():
-        return pd.DataFrame()
-    return pd.read_csv(_io.StringIO(result.stdout))
-
-
-REGION_CLEAN = {
-    "Praha + Středočeský kraj":  "Praha + Stř. Čechy",
-    "Jihomoravský kraj":         "Jihomoravský",
-    "Jihočeský kraj":            "Jihočeský",
-    "Karlovarský kraj":          "Karlovarský",
-    "Královéhradecký kraj":      "Královéhradecký",
-    "Liberecký kraj":            "Liberecký",
-    "Moravskoslezský kraj":      "Moravskoslezský",
-    "Olomoucký kraj":            "Olomoucký",
-    "Pardubický kraj":           "Pardubický",
-    "Plzeňský kraj":             "Plzeňský",
-    "Ústecký kraj":              "Ústecký",
-    "Vysočina":                  "Vysočina",
+REGION_SHORT = {
+    "Praha + Středočeský kraj": "Praha + Stř. Čechy",
+    "Jihomoravský kraj":        "Jihomoravský",
+    "Jihočeský kraj":           "Jihočeský",
+    "Karlovarský kraj":         "Karlovarský",
+    "Královéhradecký kraj":     "Královéhradecký",
+    "Liberecký kraj":           "Liberecký",
+    "Moravskoslezský kraj":     "Moravskoslezský",
+    "Olomoucký kraj":           "Olomoucký",
+    "Pardubický kraj":          "Pardubický",
+    "Plzeňský kraj":            "Plzeňský",
+    "Ústecký kraj":             "Ústecký",
+    "Vysočina":                 "Vysočina",
 }
 
-# ── 9. Regionální chřipka — kumulativní total per region per rok ──────────────
-def flu_regional_overview():
-    df = _db_query("""
-        SELECT Year, Region, SUM(Positive_Weekly) as pozitivni
-        FROM lab_tests
-        WHERE Region NOT LIKE '%Celk%'
-          AND Region NOT LIKE '%Vysočina Olomoucký%'
-          AND Region NOT LIKE '%Vysočina Vysočina%'
-        GROUP BY Year, Region
-        ORDER BY Year, pozitivni DESC
-    """)
+
+def _load_szu_weekly():
+    path = DATA_DIR / "szu" / "szu_weekly_viry.csv"
+    return pd.read_csv(path) if path.exists() else pd.DataFrame()
+
+
+# ── 9a. Týdenní detekce — běžící sezóna ──────────────────────────────────────
+def flu_weekly():
+    df = _load_szu_weekly()
     if df.empty:
-        print("  [flu_regional] covid.db chybí — graf se negeneruje a na portálu zůstává poslední verze (sezóna 2024/25); přepis na SZÚ krajská PDF je v plánu revize"); return
+        print("  [flu_weekly] szu_weekly_viry.csv chybí — přeskakuji")
+        return
+    season = sorted(df["sezona"].unique())[-1]
+    d = df[df["sezona"] == season].copy()
+    d["kt"] = d["rok"].astype(str) + "-" + d["tyden"].astype(str).str.zfill(2)
+    weeks = sorted(d["kt"].unique())
+    labels = [f"KT {int(k[5:])}/{k[2:4]}" for k in weeks]
 
-    df["Region"] = df["Region"].map(REGION_CLEAN).fillna(df["Region"])
-    years = sorted(df["Year"].unique())
-    regions = list(REGION_CLEAN.values())
+    def series(viruses):
+        sub = d[d["virus"].isin(viruses)].groupby("kt")["pocet"].sum()
+        return [int(sub.get(w, 0)) for w in weeks]
 
-    color_cycle = ["blue", "red", "teal", "orange", "green", "purple",
-                   "blue", "red", "teal", "orange", "green"]
-    datasets = []
-    for i, region in enumerate(regions):
-        rdf = df[df["Region"] == region].set_index("Year")
-        data = [int(rdf.loc[y, "pozitivni"]) if y in rdf.index else 0 for y in years]
-        if sum(data) == 0:
-            continue
-        datasets.append(ds(region, data, color_cycle[i % len(color_cycle)], "bar"))
-
-    save("flu_regional_overview", {
-        "labels": [str(y) for y in years],
-        "datasets": datasets,
+    save("flu_weekly", {
+        "season": season.replace("_", "/"),
+        "labels": labels,
+        "datasets": [
+            ds("Influenza A (celkem)", series(["Influenza A", "Influenza A/H1N1pdm",
+                                               "Influenza A/H3N2", "Influenza A/H1"]), "blue"),
+            ds("Influenza B", series(["Influenza B"]), "red"),
+            ds("RSV", series(["RSV"]), "orange"),
+            ds("SARS-CoV-2", series(["SARS-CoV-2"]), "purple"),
+        ],
     })
 
 
-# ── 10. Regionální chřipka — aktuální týden (posledních 20 KT) ───────────────
+# ── 9b. Regionální chřipka — týdenní průběh a sezónní součty ─────────────────
+def _load_szu_kraje():
+    path = DATA_DIR / "szu" / "szu_weekly_kraje.csv"
+    return pd.read_csv(path) if path.exists() else pd.DataFrame()
+
+
 def flu_regional_weekly():
-    df = _db_query("""
-        SELECT Year, Week, Region, SUM(Positive_Weekly) as pozitivni
-        FROM lab_tests
-        WHERE Region NOT LIKE '%Celk%'
-          AND Region NOT LIKE '%Vysočina Olomoucký%'
-          AND Region NOT LIKE '%Vysočina Vysočina%'
-        GROUP BY Year, Week, Region
-        ORDER BY Year, Week
-    """)
+    df = _load_szu_kraje()
     if df.empty:
-        print("  [flu_regional_weekly] zadna data"); return
+        print("  [flu_regional] szu_weekly_kraje.csv chybí — přeskakuji")
+        return
+    df["kraj"] = df["kraj"].map(REGION_SHORT).fillna(df["kraj"])
+    df["kt"] = df["rok"].astype(str) + "-" + df["tyden"].astype(str).str.zfill(2)
+    weeks = sorted(df["kt"].unique())
+    labels = [f"KT {int(k[5:])}/{k[2:4]}" for k in weeks]
 
-    df["Region"] = df["Region"].map(REGION_CLEAN).fillna(df["Region"])
-    # Pouze sezóna 2024-2025 (KT40/2024 – KT36/2025)
-    mask = ((df["Year"] == 2024) & (df["Week"] >= 40)) | \
-           ((df["Year"] == 2025) & (df["Week"] <= 36))
-    df = df[mask]
-    df["label"] = df.apply(
-        lambda r: f"KT{int(r.Week):02d}/{int(r.Year)}", axis=1
-    )
-    labels = df["label"].unique().tolist()
-    # Seřaď správně (2024/KT40 → 2025/KT36)
-    labels = sorted(labels, key=lambda x: (
-        int(x.split("/")[1]),
-        int(x.replace("KT","").split("/")[0])
-    ))
-
-    color_cycle = ["blue", "red", "teal", "orange", "green", "purple",
-                   "blue", "red", "teal", "orange", "green"]
+    top = df.groupby("kraj")["pozitivni"].sum().nlargest(6).index.tolist()
+    colors = ["blue", "red", "teal", "orange", "green", "purple"]
     datasets = []
-    top_regions = (df.groupby("Region")["pozitivni"].sum()
-                   .sort_values(ascending=False).head(6).index.tolist())
+    for i, kraj in enumerate(top):
+        sub = df[df["kraj"] == kraj].set_index("kt")["pozitivni"]
+        datasets.append(ds(kraj, [int(sub.get(w, 0)) for w in weeks], colors[i]))
+    save("flu_regional_weekly", {"labels": labels, "datasets": datasets})
 
-    for i, region in enumerate(top_regions):
-        rdf = df[df["Region"] == region].set_index("label")
-        data = [int(rdf.loc[lbl, "pozitivni"]) if lbl in rdf.index else 0
-                for lbl in labels]
-        datasets.append(ds(region, data, color_cycle[i % len(color_cycle)]))
 
-    save("flu_regional_weekly", {
-        "labels": labels,
-        "datasets": datasets,
+def flu_regional_overview():
+    df = _load_szu_kraje()
+    if df.empty:
+        print("  [flu_regional] szu_weekly_kraje.csv chybí — přeskakuji")
+        return
+    df["kraj"] = df["kraj"].map(REGION_SHORT).fillna(df["kraj"])
+    agg = (df.groupby("kraj")[["pozitivni", "vysetreno"]].sum()
+             .sort_values("pozitivni", ascending=False))
+    save("flu_regional_overview", {
+        "labels": agg.index.tolist(),
+        "datasets": [
+            ds("Pozitivní záchyty", agg["pozitivni"].astype(int).tolist(), "red", "bar"),
+            ds("Vyšetřeno vzorků", agg["vysetreno"].astype(int).tolist(), "blue", "bar"),
+        ],
     })
 
 
@@ -866,6 +849,7 @@ if __name__ == "__main__":
     covid_summary()
     print("  --- Influenza ---")
     flu_season_overview()
+    flu_weekly()
     flu_respiratory_all()
     print("  --- Regionální ---")
     flu_regional_overview()
