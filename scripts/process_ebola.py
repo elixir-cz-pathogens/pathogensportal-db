@@ -433,7 +433,7 @@ CHART_BLOCK = """\
 
 Data z kurátorované časové řady (CC BY 4.0, IMG AV ČR).
 
-{{< chart id="ebolaTimeseries" src="/data/charts/ebola_timeseries.json" type="line" title="Ebola BDBV 2026 — kumulativní případy a úmrtí (DRC)" height="360" >}}
+{{< chart id="ebolaTimeseries" src="/data/charts/ebola_timeseries.json" type="line" title="Ebola BDBV 2026 — kumulativní případy a úmrtí (DRC)" height="360" note="Kumulativní absolutní počty potvrzených případů a úmrtí od začátku epidemie, celá postižená oblast (DRK)." >}}
 
 ---
 
@@ -447,17 +447,17 @@ GRAF_VYVOJ_BLOCK = """\
 
 ## Denně hlášené případy
 
-{{< chart id="ebolaDaily" src="/data/charts/ebola_daily.json" type="bar" title="Ebola BDBV 2026 — nově hlášené případy za den (DRC)" height="320" >}}
+{{< chart id="ebolaDaily" src="/data/charts/ebola_daily.json" type="bar" title="Ebola BDBV 2026 — nově hlášené případy za den (DRC)" height="320" note="Absolutní počty nově hlášených potvrzených případů za den — přímo hlášené hodnoty ze SitRepů, ne rozdíly kumulativ." >}}
 
 ## Kumulativní úmrtí
 
-{{< chart id="ebolaDeaths" src="/data/charts/ebola_deaths_cumulative.json" type="line" title="Ebola BDBV 2026 — kumulativní úmrtí mezi potvrzenými případy (DRC)" height="320" >}}
+{{< chart id="ebolaDeaths" src="/data/charts/ebola_deaths_cumulative.json" type="line" title="Ebola BDBV 2026 — kumulativní úmrtí mezi potvrzenými případy (DRC)" height="320" note="Kumulativní absolutní počet úmrtí mezi laboratorně potvrzenými případy." >}}
 
 ## Srovnání s předchozími epidemiemi
 
 Kumulativní počty případů podle počtu dnů od začátku epidemie. Srovnání je orientační — jednotlivá ohniska se liší dostupností testování i rozsahem sledovaného území.
 
-{{< chart id="ebolaTrajectories" src="/data/charts/ebola_trajectories.json" type="line" title="Trajektorie vybraných ebolavirových epidemií" height="360" >}}
+{{< chart id="ebolaTrajectories" src="/data/charts/ebola_trajectories.json" type="line" title="Trajektorie vybraných ebolavirových epidemií" height="360" note="Kumulativní absolutní počty případů; osa X = dny od prvního hlášeného případu, osa Y logaritmická (epidemie se liší o řády)." >}}
 
 ---
 
