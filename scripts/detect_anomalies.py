@@ -8,8 +8,11 @@ endemickou hladinu a označí měsíce, kdy hlášený počet překročil prahov
 Metoda je Farringtonův algoritmus (Farrington et al. 1996) s vylepšeními podle
 Noufaily et al. 2012 — stejný postup, který týdně běží nad tisíci řadami v UKHSA
 a jehož referenční implementací je R balík `surveillance`. Zde reimplementace
-v čistém numpy: model má jen dva parametry (konstanta + trend), takže IRLS je
-pár řádků a pipeline nepotřebuje těžkou závislost typu statsmodels.
+v čistém numpy (malé GLM, IRLS je pár řádků — pipeline nepotřebuje těžkou
+závislost typu statsmodels). Baseline má dvě varianty, viz `farrington_score`:
+plná historie se sezónními faktory (default, Noufaily) a klasická okna ±1 měsíc
+(`--model okna`); v simulační studii má plná varianta vyšší záchyt při
+srovnatelném podílu planých poplachů — viz scripts/simulate_detection.py.
 
 Jak se skóruje jeden měsíc jedné řady:
 
@@ -59,6 +62,9 @@ MIN_YEARS = 3           # méně let historie → řada se nehodnotí
 MIN_CASES_GLM = 3       # signál z GLM se nehlásí pod 3 případy (šum u malých čísel)
 RARE_TOTAL = 5          # suma celé historie ≤ 5 → „vzácná“ řada, GLM nedává smysl
 RARE_ALERT = 2          # u vzácné řady se hlásí ≥ 2 případy v měsíci (1 import je běžný)
+RECENT_SKIP = 6         # plný model: posledních 6 měsíců mimo baseline (rozjíždějící se
+                        # epidemie nesmí zvednout vlastní práh — Noufaily vynechává 26 týdnů)
+FULL_MIN_POINTS = 42    # plný model má 13 parametrů; pod ~3 body na parametr → okna
 
 REGION_UNKNOWN = "CZ999"  # „neuvedeno“ — patří do součtu ČR, samostatně se neskóruje
 
@@ -124,7 +130,8 @@ def _anscombe(y: np.ndarray, mu: np.ndarray, phi: float, hat: np.ndarray) -> np.
 # ── skórování jedné řady ─────────────────────────────────────────────────────
 
 def farrington_score(counts: np.ndarray, t0: int,
-                     exclude_t: frozenset = frozenset()) -> dict | None:
+                     exclude_t: frozenset = frozenset(),
+                     model: str = "plny", phase: int = 0) -> dict | None:
     """
     Oskóruje měsíc t0 řady `counts` (kompletní měsíční mřížka, index = pořadí
     měsíce od začátku dat). Vrací dict s výsledkem, nebo None, když řadu nelze
@@ -133,8 +140,18 @@ def farrington_score(counts: np.ndarray, t0: int,
     exclude_t jsou měsíce vynechané z baseline (typicky covidová éra 2020–21,
     kdy protiepidemická opatření stlačila hlášení většiny nemocí hluboko pod
     normál). Vynechaný rok se nepočítá ani do minima let historie.
+
+    model volí stavbu baseline:
+      "okna" — klasický Farrington 1996: stejné kalendářní měsíce ±HALF_WINDOW
+               z minulých let (~21 bodů); sezónnost řeší výběr dat.
+      "plny" — Noufaily 2012: celá historie kromě posledních RECENT_SKIP měsíců
+               (ty může kontaminovat rozjíždějící se epidemie), sezónnost přes
+               faktor kalendářního měsíce (referenční úroveň = cílový měsíc,
+               takže predikce v t0 je prostě exp(intercept)). Využívá ~4× víc
+               dat; když jich je na 13 parametrů málo, spadne zpět na okna.
+    phase je kalendářní měsíc indexu t=0 (0 = leden) — potřebuje ho jen "plny".
     """
-    # Baseline: stejné kalendářní měsíce v minulých letech ± HALF_WINDOW.
+    # Okenní baseline se staví vždy — je zároveň fallbackem plného modelu.
     idx, years_used = [], set()
     k = 1
     while True:
@@ -149,6 +166,13 @@ def farrington_score(counts: np.ndarray, t0: int,
         k += 1
     if len(years_used) < MIN_YEARS:
         return None
+
+    seasonal_factors = False
+    if model == "plny":
+        full = [t for t in range(0, t0 - RECENT_SKIP) if t not in exclude_t]
+        if len(full) >= FULL_MIN_POINTS:
+            idx = full
+            seasonal_factors = True
 
     idx = np.array(sorted(idx))
     y = counts[idx].astype(float)
@@ -184,21 +208,33 @@ def farrington_score(counts: np.ndarray, t0: int,
 
     # Čas škálujeme na roky, ať je koeficient trendu čitelný a IRLS stabilní.
     t_scale = (idx - t0) / 12.0
-    X_trend = np.column_stack([np.ones(len(idx)), t_scale])
-    X_const = np.ones((len(idx), 1))
+    ones = np.ones(len(idx))
+    if seasonal_factors:
+        # Faktor kalendářního měsíce; referenční úroveň = cílový měsíc, takže
+        # predikce v t0 nepotřebuje žádnou dummy a x0 má jedničku jen u interceptu.
+        months = (idx + phase) % 12
+        target_m = (t0 + phase) % 12
+        other = np.array([m for m in range(12) if m != target_m])
+        D = (months[:, None] == other[None, :]).astype(float)
+        X_with = np.column_stack([ones, t_scale, D])
+        X_without = np.column_stack([ones, D])
+    else:
+        X_with = np.column_stack([ones, t_scale])
+        X_without = ones.reshape(-1, 1)
 
     def fit_with_trend_rule(prior_w=None):
         """Farringtonovo pravidlo: trend jen průkazný a nepřestřelující."""
-        mu, beta, cov, phi, hat = fit_quasipoisson(X_trend, y, prior_w)
+        mu, beta, cov, phi, hat = fit_quasipoisson(X_with, y, prior_w)
         se_trend = np.sqrt(max(cov[1, 1], 0))
-        mu0 = float(np.exp(np.clip(beta[0], -30, 30)))  # predikce v t0 (t_scale=0)
+        mu0 = float(np.exp(np.clip(beta[0], -30, 30)))  # predikce v t0 (t_scale=0, dummy=0)
         significant = se_trend > 0 and abs(beta[1]) / se_trend > 1.96
         if significant and mu0 <= max(y.max(), 1.0):
-            x0 = np.array([1.0, 0.0])
+            x0 = np.zeros(X_with.shape[1]); x0[0] = 1.0
             return mu, beta, cov, phi, hat, mu0, x0
-        mu, beta, cov, phi, hat = fit_quasipoisson(X_const, y, prior_w)
+        mu, beta, cov, phi, hat = fit_quasipoisson(X_without, y, prior_w)
         mu0 = float(np.exp(np.clip(beta[0], -30, 30)))
-        return mu, beta, cov, phi, hat, mu0, np.array([1.0])
+        x0 = np.zeros(X_without.shape[1]); x0[0] = 1.0
+        return mu, beta, cov, phi, hat, mu0, x0
 
     mu, beta, cov, phi, hat, mu0, x0 = fit_with_trend_rule()
 
@@ -211,12 +247,13 @@ def farrington_score(counts: np.ndarray, t0: int,
     resid = _anscombe(y, mu, phi, hat)
     outlier = np.abs(resid) > REWEIGHT_LIMIT
     if np.any(outlier):
-        w = np.where(outlier, resid ** -2.0, 1.0)
+        w = np.ones(len(resid))
+        w[outlier] = resid[outlier] ** -2.0  # jen kde třeba — np.where počítá obě větve
         w = w * len(w) / w.sum()
         mu, beta, cov, phi, hat, mu0, x0 = fit_with_trend_rule(prior_w=w)
 
     # Práh: horní mez predikčního intervalu na škále 2/3 (Farrington 1996).
-    var_mu0 = mu0 ** 2 * float(x0 @ cov[: len(x0), : len(x0)] @ x0)
+    var_mu0 = mu0 ** 2 * float(x0 @ cov @ x0)
     V = phi * mu0 + var_mu0
     if mu0 > 0 and V > 0:
         U = mu0 * (1 + (2 / 3) * Z_QUANTILE * np.sqrt(V) / mu0) ** 1.5
@@ -291,11 +328,12 @@ def build_grid(long: pd.DataFrame, n_months: int):
 
 # ── běhy ─────────────────────────────────────────────────────────────────────
 
-def run_current(long, periods, n_months, exclude_t=frozenset()) -> int:
+def run_current(long, periods, n_months, exclude_t=frozenset(),
+                model="plny", phase=0) -> int:
     t0 = n_months - 1
     signals, scored, skipped = [], 0, 0
     for meta, counts in build_grid(long, n_months):
-        res = farrington_score(counts, t0, exclude_t)
+        res = farrington_score(counts, t0, exclude_t, model, phase)
         if res is None:
             skipped += 1
             continue
@@ -326,7 +364,7 @@ def run_current(long, periods, n_months, exclude_t=frozenset()) -> int:
 
 
 def run_backtest(long, periods, n_months, diagnoza: str | None,
-                 exclude_t=frozenset()) -> int:
+                 exclude_t=frozenset(), model="plny", phase=0) -> int:
     if diagnoza:
         long = long[long.diagnoza_nazev == diagnoza]
         if long.empty:
@@ -336,7 +374,7 @@ def run_backtest(long, periods, n_months, diagnoza: str | None,
     start = 12 * MIN_YEARS  # skórovat lze až s MIN_YEARS lety historie
     for meta, counts in build_grid(long, n_months):
         for t0 in range(start, n_months):
-            res = farrington_score(counts, t0, exclude_t)
+            res = farrington_score(counts, t0, exclude_t, model, phase)
             if res is None:
                 continue
             rows.append({**meta, "period": periods[t0], **res})
@@ -357,15 +395,19 @@ def main() -> int:
                     help="omezit backtest na jednu diagnózu (přesný název)")
     ap.add_argument("--covid-baseline", choices=["vynechat", "ponechat"], default="ponechat",
                     help="zda covidovou éru 2020–21 zahrnout do baseline (default: ponechat)")
+    ap.add_argument("--model", choices=["okna", "plny"], default="plny",
+                    help="plny = Noufaily 2012, celá historie (default; v simulaci vyšší záchyt při srovnatelných planých poplaších), okna = Farrington 1996 (±1 měsíc)")
     args = ap.parse_args()
 
     long, periods, n_months = load_series()
     exclude_t = frozenset()
     if args.covid_baseline == "vynechat":
         exclude_t = frozenset(i for i, p in enumerate(periods) if "2020-01" <= p <= "2021-12")
+    phase = int(periods[0][5:7]) - 1  # kalendářní měsíc indexu t=0 (0 = leden)
     if args.backtest:
-        return run_backtest(long, periods, n_months, args.diagnoza, exclude_t)
-    return run_current(long, periods, n_months, exclude_t)
+        return run_backtest(long, periods, n_months, args.diagnoza, exclude_t,
+                            args.model, phase)
+    return run_current(long, periods, n_months, exclude_t, args.model, phase)
 
 
 if __name__ == "__main__":
