@@ -243,34 +243,13 @@ def flu_season_overview():
     })
 
 
-# ── 7. Týdenní trend chřipky — poslední sezóna ───────────────────────────────
-def flu_weekly_last_season():
-    df = _load_influenza()
-    if df.empty:
-        print("  [flu_weekly] žádná data, přeskakuji")
-        return
-
-    last_season = sorted(df["sezona"].unique())[-1]
-    season_df = df[df["sezona"] == last_season].copy()
-
-    flu_viruses = [v for v in season_df["virus"].unique() if "Influenza" in v]
-    flu_df = season_df[season_df["virus"].isin(flu_viruses)].copy()
-    flu_df["flu_group"] = flu_df["virus"].apply(
-        lambda v: "Influenza B" if "B" in v else "Influenza A (celkem)"
-    )
-
-    by_week = flu_df.groupby(["tyden_kt", "flu_group"])["pocet"].sum().unstack(fill_value=0).reset_index()
-    by_week = by_week.sort_values("tyden_kt")
-    labels = [f"KT {int(w)}" for w in by_week["tyden_kt"]]
-
-    save("flu_weekly", {
-        "season": last_season.replace("_", "/"),
-        "labels": labels,
-        "datasets": [
-            ds("Influenza A", by_week.get("Influenza A (celkem)", pd.Series([0]*len(labels))).tolist(), "blue"),
-            ds("Influenza B", by_week.get("Influenza B", pd.Series([0]*len(labels))).tolist(), "red"),
-        ],
-    })
+# ── 7. Týdenní trend chřipky — ODSTRANĚNO ────────────────────────────────────
+# Bývalý flu_weekly stál na omylu: SZÚ PDF nesou pro sezóny od 2013/14 jen
+# kumulativní souhrn („týden 0“), skutečně týdenní řádky měla jediná sezóna
+# 2012/13. Graf tak vždy vykreslil jediný bod „KT 0“ a tvářil se jako trend.
+# Poctivá týdenní extrakce je možná — indexová stránka SZÚ hostuje PDF každého
+# týdne běžící sezóny a diference kumulativ dají týdenní přírůstky — ale to je
+# samostatná úloha (viz issue #46). Do té doby se soubor negeneruje.
 
 
 # ── 8. Respirační viry — celkový přehled per sezóna ─────────────────────────
@@ -305,115 +284,98 @@ def flu_respiratory_all():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Regionální data — SZÚ lab_tests z covid.db
+# Regionální a týdenní chřipka — SZÚ týdenní PDF (szu_weekly scraper)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _db_query(sql: str) -> pd.DataFrame:
-    """Spustí SQL na covid.db přes CLI (conda sqlite3 má linking issue)."""
-    import subprocess, io as _io
-    db_path = str(DATA_DIR / "covid.db")
-    result = subprocess.run(
-        ["sqlite3", "-csv", "-header", db_path, sql],
-        capture_output=True, text=True, timeout=180
-    )
-    if result.returncode != 0 or not result.stdout.strip():
-        return pd.DataFrame()
-    return pd.read_csv(_io.StringIO(result.stdout))
-
-
-REGION_CLEAN = {
-    "Praha + Středočeský kraj":  "Praha + Stř. Čechy",
-    "Jihomoravský kraj":         "Jihomoravský",
-    "Jihočeský kraj":            "Jihočeský",
-    "Karlovarský kraj":          "Karlovarský",
-    "Královéhradecký kraj":      "Královéhradecký",
-    "Liberecký kraj":            "Liberecký",
-    "Moravskoslezský kraj":      "Moravskoslezský",
-    "Olomoucký kraj":            "Olomoucký",
-    "Pardubický kraj":           "Pardubický",
-    "Plzeňský kraj":             "Plzeňský",
-    "Ústecký kraj":              "Ústecký",
-    "Vysočina":                  "Vysočina",
+REGION_SHORT = {
+    "Praha + Středočeský kraj": "Praha + Stř. Čechy",
+    "Jihomoravský kraj":        "Jihomoravský",
+    "Jihočeský kraj":           "Jihočeský",
+    "Karlovarský kraj":         "Karlovarský",
+    "Královéhradecký kraj":     "Královéhradecký",
+    "Liberecký kraj":           "Liberecký",
+    "Moravskoslezský kraj":     "Moravskoslezský",
+    "Olomoucký kraj":           "Olomoucký",
+    "Pardubický kraj":          "Pardubický",
+    "Plzeňský kraj":            "Plzeňský",
+    "Ústecký kraj":             "Ústecký",
+    "Vysočina":                 "Vysočina",
 }
 
-# ── 9. Regionální chřipka — kumulativní total per region per rok ──────────────
-def flu_regional_overview():
-    df = _db_query("""
-        SELECT Year, Region, SUM(Positive_Weekly) as pozitivni
-        FROM lab_tests
-        WHERE Region NOT LIKE '%Celk%'
-          AND Region NOT LIKE '%Vysočina Olomoucký%'
-          AND Region NOT LIKE '%Vysočina Vysočina%'
-        GROUP BY Year, Region
-        ORDER BY Year, pozitivni DESC
-    """)
+
+def _load_szu_weekly():
+    path = DATA_DIR / "szu" / "szu_weekly_viry.csv"
+    return pd.read_csv(path) if path.exists() else pd.DataFrame()
+
+
+# ── 9a. Týdenní detekce — běžící sezóna ──────────────────────────────────────
+def flu_weekly():
+    df = _load_szu_weekly()
     if df.empty:
-        print("  [flu_regional] zadna data"); return
+        print("  [flu_weekly] szu_weekly_viry.csv chybí — přeskakuji")
+        return
+    season = sorted(df["sezona"].unique())[-1]
+    d = df[df["sezona"] == season].copy()
+    d["kt"] = d["rok"].astype(str) + "-" + d["tyden"].astype(str).str.zfill(2)
+    weeks = sorted(d["kt"].unique())
+    labels = [f"KT {int(k[5:])}/{k[2:4]}" for k in weeks]
 
-    df["Region"] = df["Region"].map(REGION_CLEAN).fillna(df["Region"])
-    years = sorted(df["Year"].unique())
-    regions = list(REGION_CLEAN.values())
+    def series(viruses):
+        sub = d[d["virus"].isin(viruses)].groupby("kt")["pocet"].sum()
+        return [int(sub.get(w, 0)) for w in weeks]
 
-    color_cycle = ["blue", "red", "teal", "orange", "green", "purple",
-                   "blue", "red", "teal", "orange", "green"]
-    datasets = []
-    for i, region in enumerate(regions):
-        rdf = df[df["Region"] == region].set_index("Year")
-        data = [int(rdf.loc[y, "pozitivni"]) if y in rdf.index else 0 for y in years]
-        if sum(data) == 0:
-            continue
-        datasets.append(ds(region, data, color_cycle[i % len(color_cycle)], "bar"))
-
-    save("flu_regional_overview", {
-        "labels": [str(y) for y in years],
-        "datasets": datasets,
+    save("flu_weekly", {
+        "season": season.replace("_", "/"),
+        "labels": labels,
+        "datasets": [
+            ds("Influenza A (celkem)", series(["Influenza A", "Influenza A/H1N1pdm",
+                                               "Influenza A/H3N2", "Influenza A/H1"]), "blue"),
+            ds("Influenza B", series(["Influenza B"]), "red"),
+            ds("RSV", series(["RSV"]), "orange"),
+            ds("SARS-CoV-2", series(["SARS-CoV-2"]), "purple"),
+        ],
     })
 
 
-# ── 10. Regionální chřipka — aktuální týden (posledních 20 KT) ───────────────
+# ── 9b. Regionální chřipka — týdenní průběh a sezónní součty ─────────────────
+def _load_szu_kraje():
+    path = DATA_DIR / "szu" / "szu_weekly_kraje.csv"
+    return pd.read_csv(path) if path.exists() else pd.DataFrame()
+
+
 def flu_regional_weekly():
-    df = _db_query("""
-        SELECT Year, Week, Region, SUM(Positive_Weekly) as pozitivni
-        FROM lab_tests
-        WHERE Region NOT LIKE '%Celk%'
-          AND Region NOT LIKE '%Vysočina Olomoucký%'
-          AND Region NOT LIKE '%Vysočina Vysočina%'
-        GROUP BY Year, Week, Region
-        ORDER BY Year, Week
-    """)
+    df = _load_szu_kraje()
     if df.empty:
-        print("  [flu_regional_weekly] zadna data"); return
+        print("  [flu_regional] szu_weekly_kraje.csv chybí — přeskakuji")
+        return
+    df["kraj"] = df["kraj"].map(REGION_SHORT).fillna(df["kraj"])
+    df["kt"] = df["rok"].astype(str) + "-" + df["tyden"].astype(str).str.zfill(2)
+    weeks = sorted(df["kt"].unique())
+    labels = [f"KT {int(k[5:])}/{k[2:4]}" for k in weeks]
 
-    df["Region"] = df["Region"].map(REGION_CLEAN).fillna(df["Region"])
-    # Pouze sezóna 2024-2025 (KT40/2024 – KT36/2025)
-    mask = ((df["Year"] == 2024) & (df["Week"] >= 40)) | \
-           ((df["Year"] == 2025) & (df["Week"] <= 36))
-    df = df[mask]
-    df["label"] = df.apply(
-        lambda r: f"KT{int(r.Week):02d}/{int(r.Year)}", axis=1
-    )
-    labels = df["label"].unique().tolist()
-    # Seřaď správně (2024/KT40 → 2025/KT36)
-    labels = sorted(labels, key=lambda x: (
-        int(x.split("/")[1]),
-        int(x.replace("KT","").split("/")[0])
-    ))
-
-    color_cycle = ["blue", "red", "teal", "orange", "green", "purple",
-                   "blue", "red", "teal", "orange", "green"]
+    top = df.groupby("kraj")["pozitivni"].sum().nlargest(6).index.tolist()
+    colors = ["blue", "red", "teal", "orange", "green", "purple"]
     datasets = []
-    top_regions = (df.groupby("Region")["pozitivni"].sum()
-                   .sort_values(ascending=False).head(6).index.tolist())
+    for i, kraj in enumerate(top):
+        sub = df[df["kraj"] == kraj].set_index("kt")["pozitivni"]
+        datasets.append(ds(kraj, [int(sub.get(w, 0)) for w in weeks], colors[i]))
+    save("flu_regional_weekly", {"labels": labels, "datasets": datasets})
 
-    for i, region in enumerate(top_regions):
-        rdf = df[df["Region"] == region].set_index("label")
-        data = [int(rdf.loc[lbl, "pozitivni"]) if lbl in rdf.index else 0
-                for lbl in labels]
-        datasets.append(ds(region, data, color_cycle[i % len(color_cycle)]))
 
-    save("flu_regional_weekly", {
-        "labels": labels,
-        "datasets": datasets,
+def flu_regional_overview():
+    df = _load_szu_kraje()
+    if df.empty:
+        print("  [flu_regional] szu_weekly_kraje.csv chybí — přeskakuji")
+        return
+    df["kraj"] = df["kraj"].map(REGION_SHORT).fillna(df["kraj"])
+    agg = (df.groupby("kraj")[["pozitivni", "vysetreno"]].sum()
+             .sort_values("pozitivni", ascending=False))
+    save("flu_regional_overview", {
+        "labels": agg.index.tolist(),
+        "datasets": [
+            ds("Pozitivní záchyty", agg["pozitivni"].astype(int).tolist(), "red", "bar"),
+            ds("Vyšetřeno vzorků", agg["vysetreno"].astype(int).tolist(), "blue", "bar"),
+        ],
     })
 
 
@@ -421,105 +383,105 @@ def flu_regional_weekly():
 # COVID pacienti — věková a vakcinační analýza
 # ─────────────────────────────────────────────────────────────────────────────
 
-# ── 11. Případy a hospitalizace podle věkové skupiny ─────────────────────────
+# ── 11. Případy a úmrtí podle věkové skupiny ─────────────────────────────────
+# Zdroj: otevřená data MZČR (osoby.csv agregované scraperem, umrti.csv) —
+# náhrada za dřívější nereprodukovatelnou covid.db. Chybějící věk (~0,5 %)
+# se nezahazuje mlčky: počet jde do JSONu, ať ho stránka může uvést.
+
+AGE_BINS = list(range(0, 90, 10))  # 0–9 … 80+
+
+def _age_group(vek: float) -> str:
+    if vek < 0:
+        return "neznámý"
+    lo = min(int(vek) // 10 * 10, 80)
+    return "80+" if lo == 80 else f"{lo}–{lo + 9}"
+
+AGE_LABELS = [f"{lo}–{lo + 9}" for lo in AGE_BINS[:-1]] + ["80+"]
+
+
 def covid_by_age():
-    df = _db_query("""
-        SELECT RokNarozeni as vek_skupina,
-               COUNT(*) as pripady,
-               SUM(CASE WHEN bin_Hospitalizace = 1 THEN 1 ELSE 0 END) as hospitalizace,
-               SUM(CASE WHEN Umrti = '1' THEN 1 ELSE 0 END) as umrti
-        FROM pacienti
-        WHERE RokNarozeni IS NOT NULL AND RokNarozeni != ''
-        GROUP BY RokNarozeni
-        ORDER BY RokNarozeni
-    """)
-    if df.empty:
-        print("  [covid_age] zadna data"); return
+    osoby_path = DATA_DIR / "mzcr" / "covid_osoby_agg.csv"
+    umrti_path = DATA_DIR / "mzcr" / "covid_umrti.csv"
+    if not osoby_path.exists() or not umrti_path.exists():
+        print("  [covid_age] chybí covid_osoby_agg.csv / covid_umrti.csv — přeskakuji")
+        return
 
-    df = df.sort_values("vek_skupina")
+    osoby = pd.read_csv(osoby_path)
+    osoby["skupina"] = osoby["vek"].apply(_age_group)
+    cases = osoby.groupby("skupina")["pripady"].sum()
+    unknown_cases = int(cases.get("neznámý", 0))
 
-    # Dvě vady zdrojových dat, které se nesmí kreslit jako věkové kohorty:
-    #  - "-" = ročník nevyplněn. Není to věková skupina, je to chybějící údaj,
-    #    a je ho hodně (~13 % případů) — jako sloupec vlevo dominoval celému grafu.
-    #  - ročníky před 1900 = zjevné překlepy (narozen 1860 => 160 let). Bylo jich
-    #    dohromady 10 případů, ale zabíraly pětinu vodorovné osy.
-    # Nezahazujeme je mlčky: počty jdou do JSONu, ať je stránka může uvést.
-    def year_of(label: str):
-        head = str(label)[:4]
-        return int(head) if head.isdigit() else None
+    umrti = pd.read_csv(umrti_path)
+    umrti["skupina"] = umrti["vek"].fillna(-1).apply(_age_group)
+    deaths = umrti.groupby("skupina").size()
+    unknown_deaths = int(deaths.get("neznámý", 0))
 
-    unknown = int(df.loc[df["vek_skupina"].map(year_of).isna(), "pripady"].sum())
-    years = df["vek_skupina"].map(year_of)
-    implausible = int(df.loc[years.notna() & (years < 1900), "pripady"].sum())
-
-    df = df[years.notna() & (years >= 1900)].copy()
-    if df.empty:
-        print("  [covid_age] po odfiltrovani nezbyla zadna data"); return
-
-    df["hosp_rate"] = (df["hospitalizace"] / df["pripady"] * 100).round(1)
-    labels = df["vek_skupina"].tolist()
-    excluded = {
-        "neznamy_rocnik": unknown,
-        "implauzibilni_rocnik": implausible,
-    }
-    print(f"  [covid_age] mimo graf: {unknown:,} bez ročníku, {implausible:,} s ročníkem <1900")
+    c = [int(cases.get(g, 0)) for g in AGE_LABELS]
+    d = [int(deaths.get(g, 0)) for g in AGE_LABELS]
+    print(f"  [covid_age] mimo graf: {unknown_cases:,} případů a {unknown_deaths} úmrtí bez věku")
 
     save("covid_by_age", {
-        "labels": labels,
+        "labels": AGE_LABELS,
         "datasets": [
-            ds("Případy", df["pripady"].tolist(), "blue", "bar"),
-            ds("Hospitalizace", df["hospitalizace"].tolist(), "orange", "bar"),
-            ds("Úmrtí", df["umrti"].tolist(), "red", "bar"),
+            ds("Případy", c, "blue", "bar"),
+            ds("Úmrtí", d, "red", "bar"),
         ],
-        **excluded,
+        "neznamy_vek_pripady": unknown_cases,
+        "neznamy_vek_umrti": unknown_deaths,
     })
-    save("covid_hosp_rate_by_age", {
-        "labels": labels,
-        "datasets": [
-            ds("Hospitalizační míra (%)", df["hosp_rate"].tolist(), "orange"),
-        ],
-        **excluded,
+
+    # Smrtnost (CFR) podle věku — úmrtí / případy. Nahrazuje dřívější
+    # hospitalizační míru: hospitalizace s věkem v otevřených datech nejsou.
+    cfr = [round(d[i] / c[i] * 100, 2) if c[i] else None for i in range(len(AGE_LABELS))]
+    save("covid_cfr_by_age", {
+        "labels": AGE_LABELS,
+        "datasets": [ds("Smrtnost (CFR %)", cfr, "red")],
     })
 
 
-# ── 12. Případy a výsledky dle počtu dávek vakcíny ───────────────────────────
+# ── 12. Případy a hospitalizace dle očkování ─────────────────────────────────
+# Zdroj: ockovani-pozitivni.csv + ockovani-hospitalizace.csv (denní počty podle
+# stavu očkování, od ledna 2021 — před začátkem očkování kategorie neexistovaly).
+
+VAX_COLS = [
+    ("bez_ockovani",         "Bez očkování"),
+    ("nedokoncene_ockovani", "Nedokončené očkování"),
+    ("dokoncene_ockovani",   "Dokončené očkování"),
+    ("posilujici_davka",     "Posilující dávka"),
+]
+
+
 def covid_by_vaccination():
-    df = _db_query("""
-        SELECT
-            CASE
-                WHEN Datum_Ctvrta_davka IS NOT NULL THEN '4+ dávky'
-                WHEN Datum_Treti_davka IS NOT NULL  THEN '3 dávky'
-                WHEN Datum_Druha_davka IS NOT NULL  THEN '2 dávky'
-                WHEN Datum_Prvni_davka IS NOT NULL  THEN '1 dávka'
-                ELSE 'Nevakcinován'
-            END as ockovani,
-            COUNT(*) as pripady,
-            SUM(CASE WHEN bin_Hospitalizace = 1 THEN 1 ELSE 0 END) as hospitalizace,
-            SUM(CASE WHEN Umrti = '1' THEN 1 ELSE 0 END) as umrti
-        FROM pacienti
-        GROUP BY ockovani
-    """)
-    if df.empty:
-        print("  [covid_vax] zadna data"); return
+    poz_path = DATA_DIR / "mzcr" / "covid_vax_pozitivni.csv"
+    hosp_path = DATA_DIR / "mzcr" / "covid_vax_hospitalizace.csv"
+    if not poz_path.exists() or not hosp_path.exists():
+        print("  [covid_vax] chybí covid_vax_*.csv — přeskakuji")
+        return
 
-    order = ["Nevakcinován", "1 dávka", "2 dávky", "3 dávky", "4+ dávky"]
-    df["ockovani"] = pd.Categorical(df["ockovani"], categories=order, ordered=True)
-    df = df.sort_values("ockovani")
-    df["hosp_rate"] = (df["hospitalizace"] / df["pripady"] * 100).round(1)
+    poz = pd.read_csv(poz_path)
+    hosp = pd.read_csv(hosp_path)
 
-    labels = df["ockovani"].tolist()
+    labels = [label for _, label in VAX_COLS]
+    cases = [int(poz[f"pozitivni_{col}"].sum()) for col, _ in VAX_COLS]
+    hospit = [int(hosp[f"hospitalizovani_{col}"].sum()) for col, _ in VAX_COLS]
+    period = f"{poz.datum.min()} – {poz.datum.max()}"
+    print(f"  [covid_vax] období {period}")
+
     save("covid_by_vaccination", {
         "labels": labels,
+        "obdobi": period,
         "datasets": [
-            ds("Případy", df["pripady"].tolist(), "blue", "bar"),
-            ds("Hospitalizace", df["hospitalizace"].tolist(), "orange", "bar"),
-            ds("Úmrtí", df["umrti"].tolist(), "red", "bar"),
+            ds("Případy", cases, "blue", "bar"),
+            ds("Hospitalizace", hospit, "orange", "bar"),
         ],
     })
     save("covid_hosp_rate_by_vax", {
         "labels": labels,
+        "obdobi": period,
         "datasets": [
-            ds("Hospitalizační míra (%)", df["hosp_rate"].tolist(), "orange"),
+            ds("Hospitalizační míra (%)",
+               [round(h / c * 100, 2) if c else None for c, h in zip(cases, hospit)],
+               "orange"),
         ],
     })
 
@@ -887,7 +849,7 @@ if __name__ == "__main__":
     covid_summary()
     print("  --- Influenza ---")
     flu_season_overview()
-    flu_weekly_last_season()
+    flu_weekly()
     flu_respiratory_all()
     print("  --- Regionální ---")
     flu_regional_overview()

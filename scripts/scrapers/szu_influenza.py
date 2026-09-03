@@ -245,11 +245,32 @@ def _season_filter(name: str, year1: int, year2: int) -> bool:
     return not (year == year2 and week >= 37)
 
 
+# Uzavřené sezóny, jejichž zdrojové PDF už SZÚ nikde nehostuje: ZIP archiv
+# (BASE_URL) končí sezónou 2021/22 a indexová stránka nese jen běžící sezónu.
+# Data se proto vezou přímo v repu (curated/szu/) — uzavřená sezóna se už
+# nemění, takže „kurátorovaný soubor“ je tu totéž co „reprodukovatelný“.
+# Bez tohoto kroku serverový běh pipeline tyhle sezóny nikdy neměl a graf
+# sezónního přehledu na portálu skákal z 2021/22 rovnou na 2025/26.
+CURATED_DIR = Path(__file__).resolve().parent.parent.parent / "curated" / "szu"
+
+
+def _copy_curated(output_dir: Path) -> list[str]:
+    copied = []
+    for src in sorted(CURATED_DIR.glob("szu_influenza_*.csv")):
+        dst = output_dir / src.name
+        if not dst.exists():
+            dst.write_bytes(src.read_bytes())
+            print(f"  [szu_flu] {src.stem.replace('szu_influenza_', '')} — z curated/ (online zdroj už neexistuje)")
+        copied.append(str(dst))
+    return copied
+
+
 def download(output_dir: Path, seasons: list[str] | None = None) -> list[str]:
-    """Stáhne historické sezóny jako ZIP z webu SZÚ a parsuje PDF."""
+    """Stáhne historické sezóny jako ZIP z webu SZÚ a parsuje PDF;
+    sezóny bez online zdroje doplní z curated/szu/."""
     output_dir.mkdir(parents=True, exist_ok=True)
     seasons = seasons or SEASONS
-    downloaded = []
+    downloaded = _copy_curated(output_dir)
 
     for season in seasons:
         out_path = output_dir / f"szu_influenza_{season}.csv"

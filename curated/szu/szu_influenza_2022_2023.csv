@@ -1,0 +1,25 @@
+sezona,rok,tyden_kt,kategorie,virus,pocet
+2022_2023,2023,0,Detekce viru,Influenza A,2536
+2022_2023,2023,0,Detekce viru,Influenza A/H1N1pdm,187
+2022_2023,2023,0,Detekce viru,Influenza A/H3N2,638
+2022_2023,2023,0,Detekce viru,Influenza B,1103
+2022_2023,2023,0,Detekce viru,RSV,2161
+2022_2023,2023,0,Detekce viru,Adenovirus,346
+2022_2023,2023,0,Detekce viru,Parainfluenza,346
+2022_2023,2023,0,Detekce viru,Herpesvirus,9
+2022_2023,2023,0,Detekce viru,Mycoplasma pneumoniae,14
+2022_2023,2023,0,Detekce viru,Metapneumovirus,227
+2022_2023,2023,0,Detekce viru,Coronavirus (sezónní),214
+2022_2023,2023,0,Detekce viru,Rhinovirus,1422
+2022_2023,2023,0,Detekce viru,Bocavirus,71
+2022_2023,2023,0,Detekce viru,Enterovirus,106
+2022_2023,2023,0,Detekce viru,SARS-CoV-2,1362
+2022_2023,2023,0,Detekce viru,Smíšená infekce,699
+2022_2023,2023,0,Sérologie,Influenza A,111
+2022_2023,2023,0,Sérologie,Influenza A/H1N1pdm,1
+2022_2023,2023,0,Sérologie,Influenza B,20
+2022_2023,2023,0,Sérologie,RSV,91
+2022_2023,2023,0,Sérologie,Adenovirus,66
+2022_2023,2023,0,Sérologie,Parainfluenza,59
+2022_2023,2023,0,Sérologie,Mycoplasma pneumoniae,124
+2022_2023,2023,0,Sérologie,Smíšená infekce,21
