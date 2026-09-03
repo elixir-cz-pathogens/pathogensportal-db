@@ -243,34 +243,13 @@ def flu_season_overview():
     })
 
 
-# ── 7. Týdenní trend chřipky — poslední sezóna ───────────────────────────────
-def flu_weekly_last_season():
-    df = _load_influenza()
-    if df.empty:
-        print("  [flu_weekly] žádná data, přeskakuji")
-        return
-
-    last_season = sorted(df["sezona"].unique())[-1]
-    season_df = df[df["sezona"] == last_season].copy()
-
-    flu_viruses = [v for v in season_df["virus"].unique() if "Influenza" in v]
-    flu_df = season_df[season_df["virus"].isin(flu_viruses)].copy()
-    flu_df["flu_group"] = flu_df["virus"].apply(
-        lambda v: "Influenza B" if "B" in v else "Influenza A (celkem)"
-    )
-
-    by_week = flu_df.groupby(["tyden_kt", "flu_group"])["pocet"].sum().unstack(fill_value=0).reset_index()
-    by_week = by_week.sort_values("tyden_kt")
-    labels = [f"KT {int(w)}" for w in by_week["tyden_kt"]]
-
-    save("flu_weekly", {
-        "season": last_season.replace("_", "/"),
-        "labels": labels,
-        "datasets": [
-            ds("Influenza A", by_week.get("Influenza A (celkem)", pd.Series([0]*len(labels))).tolist(), "blue"),
-            ds("Influenza B", by_week.get("Influenza B", pd.Series([0]*len(labels))).tolist(), "red"),
-        ],
-    })
+# ── 7. Týdenní trend chřipky — ODSTRANĚNO ────────────────────────────────────
+# Bývalý flu_weekly stál na omylu: SZÚ PDF nesou pro sezóny od 2013/14 jen
+# kumulativní souhrn („týden 0“), skutečně týdenní řádky měla jediná sezóna
+# 2012/13. Graf tak vždy vykreslil jediný bod „KT 0“ a tvářil se jako trend.
+# Poctivá týdenní extrakce je možná — indexová stránka SZÚ hostuje PDF každého
+# týdne běžící sezóny a diference kumulativ dají týdenní přírůstky — ale to je
+# samostatná úloha (viz issue #46). Do té doby se soubor negeneruje.
 
 
 # ── 8. Respirační viry — celkový přehled per sezóna ─────────────────────────
@@ -887,7 +866,6 @@ if __name__ == "__main__":
     covid_summary()
     print("  --- Influenza ---")
     flu_season_overview()
-    flu_weekly_last_season()
     flu_respiratory_all()
     print("  --- Regionální ---")
     flu_regional_overview()
