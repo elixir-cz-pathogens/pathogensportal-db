@@ -137,6 +137,63 @@ def load_isin(conn, snapshot: date, dry_run: bool = False) -> int:
     return len(rows)
 
 
+# ── observation: SZÚ týdenní respirační data ─────────────────────────────────
+
+# Krajská PDF hlásí po virologických laboratořích; Praha a Střední Čechy mají
+# společné laboratoře a nejdou rozdělit — kombinovaný kód je menší zlo než
+# vylhané rozpočítání.
+SZU_REGION_NUTS = {
+    "Praha + Středočeský kraj": "CZ010+CZ020",
+    "Jihomoravský kraj": "CZ064", "Jihočeský kraj": "CZ031",
+    "Karlovarský kraj": "CZ041", "Královéhradecký kraj": "CZ052",
+    "Liberecký kraj": "CZ051", "Moravskoslezský kraj": "CZ080",
+    "Olomoucký kraj": "CZ071", "Pardubický kraj": "CZ053",
+    "Plzeňský kraj": "CZ032", "Ústecký kraj": "CZ042", "Vysočina": "CZ063",
+}
+
+
+def _week_span(rok: int, tyden: int):
+    try:
+        start = date.fromisocalendar(int(rok), int(tyden), 1)
+    except ValueError:
+        return None, None
+    return start, start + __import__("datetime").timedelta(days=7)
+
+
+def load_szu_weekly(conn, snapshot: date, dry_run: bool = False) -> int:
+    rows = []
+    viry_path = DATA_DIR / "szu" / "szu_weekly_viry.csv"
+    if viry_path.exists():
+        for r in pd.read_csv(viry_path).itertuples():
+            start, end = _week_span(r.rok, r.tyden)
+            if start is None:
+                continue
+            rows.append(("szu", None, str(r.virus), None, None, None,
+                         start, end, "lab_detections", int(r.pocet), snapshot))
+
+    kraje_path = DATA_DIR / "szu" / "szu_weekly_kraje.csv"
+    if kraje_path.exists():
+        for r in pd.read_csv(kraje_path).itertuples():
+            start, end = _week_span(r.rok, r.tyden)
+            code = SZU_REGION_NUTS.get(str(r.kraj))
+            if start is None or code is None:
+                continue
+            rows.append(("szu", None, "Respirační viry (souhrn)", code, None, None,
+                         start, end, "lab_detections", int(r.pozitivni), snapshot))
+            rows.append(("szu", None, "Respirační viry (souhrn)", code, None, None,
+                         start, end, "tests", int(r.vysetreno), snapshot))
+
+    if not rows:
+        print("  [szu_weekly] žádné soubory — přeskakuji")
+        return 0
+    if dry_run:
+        print(f"  [szu_weekly] {len(rows):,} řádků (dry-run)")
+        return len(rows)
+    _upsert_observations(conn, rows)
+    print(f"  [szu_weekly] {len(rows):,} řádků")
+    return len(rows)
+
+
 def _upsert_observations(conn, rows: list) -> None:
     with conn.cursor() as cur:
         cur.executemany(
@@ -165,12 +222,14 @@ def main() -> int:
     if args.dry_run:
         load_population(None, dry_run=True)
         load_isin(None, snap, dry_run=True)
+        load_szu_weekly(None, snap, dry_run=True)
         return 0
 
     with psycopg.connect(dsn()) as conn:
         ensure_schema(conn)
         load_population(conn)
         load_isin(conn, snap)
+        load_szu_weekly(conn, snap)
         conn.commit()
     print("Hotovo.")
     return 0

@@ -1,0 +1,25 @@
+sezona,rok,tyden_kt,kategorie,virus,pocet
+2023_2024,2024,0,Detekce viru,Influenza A,2869
+2023_2024,2024,0,Detekce viru,Influenza A/H1N1pdm,581
+2023_2024,2024,0,Detekce viru,Influenza A/H3N2,18
+2023_2024,2024,0,Detekce viru,Influenza B,161
+2023_2024,2024,0,Detekce viru,RSV,1620
+2023_2024,2024,0,Detekce viru,Adenovirus,167
+2023_2024,2024,0,Detekce viru,Parainfluenza,477
+2023_2024,2024,0,Detekce viru,Herpesvirus,7
+2023_2024,2024,0,Detekce viru,Mycoplasma pneumoniae,1117
+2023_2024,2024,0,Detekce viru,Metapneumovirus,332
+2023_2024,2024,0,Detekce viru,Coronavirus (sezónní),298
+2023_2024,2024,0,Detekce viru,Rhinovirus,1827
+2023_2024,2024,0,Detekce viru,Bocavirus,36
+2023_2024,2024,0,Detekce viru,Enterovirus,75
+2023_2024,2024,0,Detekce viru,SARS-CoV-2,1759
+2023_2024,2024,0,Detekce viru,Smíšená infekce,631
+2023_2024,2024,0,Sérologie,Influenza A,108
+2023_2024,2024,0,Sérologie,Influenza A/H1,1
+2023_2024,2024,0,Sérologie,Influenza B,16
+2023_2024,2024,0,Sérologie,RSV,206
+2023_2024,2024,0,Sérologie,Adenovirus,156
+2023_2024,2024,0,Sérologie,Parainfluenza,102
+2023_2024,2024,0,Sérologie,Mycoplasma pneumoniae,1232
+2023_2024,2024,0,Sérologie,Smíšená infekce,7
