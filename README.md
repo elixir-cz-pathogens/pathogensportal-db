@@ -12,16 +12,17 @@ portál](#jak-repo-konzumuje-portál).
 
 | Zdroj | Co z něj bereme | Poznámka |
 |---|---|---|
-| **MZČR** — otevřená data COVID-19 | případy, hospitalizace, testy, incidence po krajích | API v2, aktualizace denně |
-| **ÚZIS ISIN** | hlášená infekční onemocnění (114 diagnóz) po krajích, měsících a věkových skupinách | hlavní zdroj pro dashboardy infekčních nemocí |
-| **SZÚ** | týdenní hlášení akutních respiračních infekcí a chřipky | PDF zprávy (historické sezóny) + průběžně aktualizovaná stránka aktuální sezóny |
+| **MZČR** — otevřená data COVID-19 | případy, hospitalizace, testy, incidence; nově i `osoby` (věk+kraj každého případu), `umrti` (věk) a `ockovani-*` (stav očkování) | API v2, denně; `osoby.csv` (~330 MB) se streamem agreguje, surový soubor se nedrží. Nahradilo nereprodukovatelnou covid.db |
+| **ÚZIS ISIN** | hlášená infekční onemocnění (114 diagnóz) po krajích, měsících a věkových skupinách | hlavní zdroj dashboardů i detekce anomálií; otevřený export aktuálně končí 12/2025 |
+| **SZÚ — sezónní archivy** | souhrny sezón chřipky 2012/13+ | PDF archivy; sezóny 2022/23–2024/25 už online nejsou → vezou se v repu (`curated/szu/`) |
+| **SZÚ — týdenní PDF** | týdenní matice virus×týden (2 sezóny v jednom PDF) + krajská hlášení po týdnech | celoročně týdně; extrakce validovaná proti kumulativním součtům v PDF, při nesouladu parser spadne |
 | **ČSÚ** | počty obyvatel po krajích (dataset `PORKR01`) | jmenovatele — bez nich jsou z čísel počty, ne incidence |
 | **ECDC** | historická data COVID-19 pro ČR | zdroj **přestal publikovat na podzim 2022**; scraper zůstává kvůli historické řadě |
 | **Ebola (IMG AV ČR)** | kurátorovaná denní řada aktuální epidemie v DRK + obsah stránek | ZIP balíčky přes Google Drive |
 
 ## Jak to funguje
 
-Pipeline má čtyři fáze, které na sebe navazují přes souborový systém, ne přes sdílený stav:
+Pipeline má pět fází, které na sebe navazují přes souborový systém, ne přes sdílený stav:
 
 ```
 1. stažení      run_all.py ─────────► $DATA_DIR/<zdroj>/*.csv
@@ -34,6 +35,8 @@ Pipeline má čtyři fáze, které na sebe navazují přes souborový systém, n
 4. výstup       generate_json.py ───► $OUTPUT_DIR/*.json      (Chart.js)
                 process_ebola.py ───► $OUTPUT_DIR/*.json
                                     + $CONTENT_DIR/*.md       (Hugo stránky)
+
+5. analytika    detect_anomalies.py ► $OUTPUT_DIR/anomaly_signals.json (stránka Signály)
 ```
 
 Fáze jsou samostatně spustitelné a **idempotentní** — opakovaný běh nic nezduplikuje ani
@@ -70,6 +73,10 @@ Dvě věci na tom schématu stojí za vysvětlení:
   `NULL` nepovažují za shodné, klíč by nikdy nesedl, `ON CONFLICT` by se nespustil a **každý běh
   loaderu by data zduplikoval**. Vyžaduje PostgreSQL 15+.
 
+Kromě měsíčního ISIN se do `observation` sypou i **týdenní** laboratorní záchyty
+SZÚ (nejjemnější granularita v databázi; Praha a Střední Čechy sdílejí laboratoře
+a nesou kombinovaný kód `CZ010+CZ020`).
+
 `load_to_db.py` si schéma zajistí sám — aplikuje `db/init.sql`. Postgres totiž spustí skripty
 z `docker-entrypoint-initdb.d` jen při první inicializaci prázdného svazku, takže na databázi, která
 už jednou běžela, by tabulky přidané později nikdy nevznikly. Schéma se schválně neopisuje do Pythonu:
@@ -85,6 +92,19 @@ a infekční nemoci z ISIN (skupiny diagnóz, krajská incidence, měsíční tr
 `process_ebola.py` je zvláštní případ: rozbalí nejnovější ZIP, vygeneruje z kurátorované časové řady
 grafy a převede přiložené HTML na Hugo stránky.
 
+### Detekce anomálií
+
+`detect_anomalies.py` prochází při každém běhu ~1 200 řad ISIN (diagnóza × kraj)
+metodou **Farrington/Noufaily** — týž algoritmus, kterým UKHSA týdně kontroluje
+tisíce řad laboratorních hlášení. Pro každou řadu spočítá očekávanou endemickou
+hladinu (kvazi-Poissonův GLM se sezónními faktory, minulé epidemie s převáženou
+vahou) a hlásí měsíce nad 99. percentilem predikčního intervalu.
+
+Validace: zpětný test na pertusi 2024 (první signál 3 měsíce před tím, než se
+epidemie stala tématem; 0 planých poplachů v klidu) a simulační studie se známou
+pravdou (`simulate_detection.py`): záchyt epidemie velikosti 3σ/5σ/10σ =
+27/60/96 %, plané poplachy 1,5–3 %. Detaily v docstringu obou skriptů.
+
 ## Struktura repa
 
 ```
@@ -92,8 +112,11 @@ scripts/run_all.py            spustí všechny scrapery, uloží CSV do $DATA_DI
 scripts/snapshot.py           datované gzip snímky staženého se sha256 deduplikací
 scripts/load_to_db.py         ETL: CSV → PostgreSQL (observation, population)
 scripts/generate_json.py      přečte data, vygeneruje Chart.js JSON do $OUTPUT_DIR
+scripts/detect_anomalies.py   detekce anomálií (Farrington/Noufaily) → anomaly_signals.json
+scripts/simulate_detection.py simulační studie detektoru (validace se známou pravdou)
 scripts/process_ebola.py      zpracuje nejnovější Ebola ZIP na chart JSON + Hugo stránky
-scripts/scrapers/             jednotlivé scrapery (MZČR, ECDC, SZÚ, ÚZIS ISIN, ČSÚ, Ebola)
+scripts/scrapers/             jednotlivé scrapery (MZČR, SZÚ ×2, ÚZIS ISIN, ČSÚ, Ebola, ECDC)
+curated/szu/                  uzavřené sezóny SZÚ, jejichž online zdroj už neexistuje
 db/init.sql                   schéma PostgreSQL (portál si ho mountuje do kontejneru pathogen-db)
 Dockerfile                    image `datascrapper` — portál ho staví přímo z tohohle repa
 requirements.txt              Python závislosti (jediný zdroj — nic jiného se nepoužívá)
@@ -148,7 +171,7 @@ docker run --rm \
 ```
 
 `CMD` v Dockerfilu spustí celý řetězec za sebou: `run_all.py` → `gdrive_ebola.py` →
-`generate_json.py` → `process_ebola.py`.
+`generate_json.py` → `detect_anomalies.py` → `process_ebola.py`.
 
 ## Jak repo konzumuje portál
 
@@ -162,6 +185,19 @@ tichý push na `dev`.
 
 Nová data se na portálu objeví až tehdy, když se **submodul přepne na nový tag**. Samotné vydání
 verze tady portálem nehne.
+
+## Změny po v0.2.0 (nadcházející release)
+
+- **Detekce anomálií** — systém včasného varování nad ISIN (Farrington/Noufaily),
+  validovaný zpětným testem i simulační studií; výstup pohání stránku Signály.
+- **Týdenní SZÚ scraper** (`szu_weekly.py`) — matice virus×týden z jednoho PDF
+  + krajská hlášení; oživil týdenní a regionální chřipkové grafy a dal databázi
+  týdenní granularitu.
+- **COVID demografie z otevřených dat MZČR** — náhrada nereprodukovatelné
+  covid.db datasety `osoby`/`umrti`/`ockovani-*`; součty sedí na jednotku na
+  souhrnné karty a chybějící věk klesl z 12,9 % na 0,5 %. `sqlite3` z image pryč.
+- **Kurátorované sezóny** `curated/szu/` — tři uzavřené sezóny bez online zdroje.
+- Poznámky o původu čísel u generovaných ebola grafů; ebola karta s piktogramem.
 
 ## Změny oproti verzi 0.1.0
 
