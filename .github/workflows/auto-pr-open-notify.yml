@@ -19,9 +19,16 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const pr = context.payload.pull_request;
-            const match = pr.title.match(/(\w+-\d+)/);
+            // ⚠️ Číslo issue se hledá podle PROJECT_PREFIX, ne podle `\w+`.
+            // Původní `/(\w+-\d+)/` nemělo kotvu ani omezení na prefix, takže
+            // jakákoliv dvojice slovo-číslo v titulku vypadala jako odkaz na issue.
+            // Datum v titulku (např. "... pro 2026-09-04") se vyložilo jako `2026-09`
+            // a `.split('-')[1]` z toho udělal issue #9 — do kterého pak bot napsal
+            // komentář. Oběť se navíc mění s měsícem: v prosinci by to bylo #12.
+            const prefix = "${{ vars.PROJECT_PREFIX || 'PPDB' }}";
+            const match = pr.title.match(new RegExp(`\\b${prefix}-(\\d+)\\b`));
             if (match) {
-              const issueNumber = match[1].split('-')[1];
+              const issueNumber = match[1];
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
