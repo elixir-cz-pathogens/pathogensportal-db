@@ -18,7 +18,6 @@ portál](#jak-repo-konzumuje-portál).
 | **SZÚ — týdenní PDF** | týdenní matice virus×týden (2 sezóny v jednom PDF) + krajská hlášení po týdnech | celoročně týdně; extrakce validovaná proti kumulativním součtům v PDF, při nesouladu parser spadne |
 | **ČSÚ** | počty obyvatel po krajích (dataset `PORKR01`) | jmenovatele — bez nich jsou z čísel počty, ne incidence |
 | **ECDC** | historická data COVID-19 pro ČR | zdroj **přestal publikovat na podzim 2022**; scraper zůstává kvůli historické řadě |
-| **Ebola (IMG AV ČR)** | kurátorovaná denní řada aktuální epidemie v DRK + obsah stránek | ZIP balíčky přes Google Drive |
 
 ## Jak to funguje
 
@@ -26,18 +25,20 @@ Pipeline má pět fází, které na sebe navazují přes souborový systém, ne 
 
 ```
 1. stažení      run_all.py ─────────► $DATA_DIR/<zdroj>/*.csv
-                gdrive_ebola.py ────► $DATA_DIR/ebola/*.zip
 
 2. archivace    snapshot.py ────────► $DATA_DIR/raw/<datum>/*.gz + manifest.json
 
 3. normalizace  load_to_db.py ──────► PostgreSQL: observation, population
 
 4. výstup       generate_json.py ───► $OUTPUT_DIR/*.json      (Chart.js)
-                process_ebola.py ───► $OUTPUT_DIR/*.json
-                                    + $CONTENT_DIR/*.md       (Hugo stránky)
 
 5. analytika    detect_anomalies.py ► $OUTPUT_DIR/anomaly_signals.json (stránka Signály)
 ```
+
+⚠️ **Pipeline nezapisuje žádné Hugo stránky.** Dřív to dělala ebola větev
+(`gdrive_ebola.py` + `process_ebola.py`); ta byla odstraněna v PPDB-53, protože obsah
+i grafy k ebole nově dodává AI agent jako pull request přímo do portálu. Jediný
+výstup téhle pipeline je JSON.
 
 Fáze jsou samostatně spustitelné a **idempotentní** — opakovaný běh nic nezduplikuje ani
 nerozbije. Každý scraper běží v izolaci: když jeden zdroj spadne (nedostupný web, změněný formát),
@@ -89,9 +90,6 @@ pipeline funguje i bez běžícího Postgresu. Generuje přes dvacet datových s
 hospitalizace, testování, věk, vakcinační status), chřipku a ARI (sezónní i krajské přehledy)
 a infekční nemoci z ISIN (skupiny diagnóz, krajská incidence, měsíční trendy, věkové skupiny).
 
-`process_ebola.py` je zvláštní případ: rozbalí nejnovější ZIP, vygeneruje z kurátorované časové řady
-grafy a převede přiložené HTML na Hugo stránky.
-
 ### Detekce anomálií
 
 `detect_anomalies.py` prochází při každém běhu ~1 200 řad ISIN (diagnóza × kraj)
@@ -114,8 +112,7 @@ scripts/load_to_db.py         ETL: CSV → PostgreSQL (observation, population)
 scripts/generate_json.py      přečte data, vygeneruje Chart.js JSON do $OUTPUT_DIR
 scripts/detect_anomalies.py   detekce anomálií (Farrington/Noufaily) → anomaly_signals.json
 scripts/simulate_detection.py simulační studie detektoru (validace se známou pravdou)
-scripts/process_ebola.py      zpracuje nejnovější Ebola ZIP na chart JSON + Hugo stránky
-scripts/scrapers/             jednotlivé scrapery (MZČR, SZÚ ×2, ÚZIS ISIN, ČSÚ, Ebola, ECDC)
+scripts/scrapers/             jednotlivé scrapery (MZČR, SZÚ ×2, ÚZIS ISIN, ČSÚ, ECDC)
 curated/szu/                  uzavřené sezóny SZÚ, jejichž online zdroj už neexistuje
 db/init.sql                   schéma PostgreSQL (portál si ho mountuje do kontejneru pathogen-db)
 Dockerfile                    image `datascrapper` — portál ho staví přímo z tohohle repa
@@ -129,7 +126,6 @@ requirements.txt              Python závislosti (jediný zdroj — nic jiného 
 |---|---|---|
 | `DATA_DIR` | `./data` | kam scrapery ukládají stažená data a odkud je čtou další fáze |
 | `OUTPUT_DIR` | `./site/static/data/charts` | kam se píše vygenerovaný chart JSON |
-| `CONTENT_DIR` | `./site/content/cs/dashboards` | kam `process_ebola.py` píše Hugo stránky (česky) |
 | `DB_HOST` | `localhost` | databáze pro `load_to_db.py` a čtení v `generate_json.py` |
 | `DB_PORT` | `5432` | |
 | `POSTGRES_DB` | `pathogens` | |
@@ -145,10 +141,9 @@ výchozí hodnoty výše (relativně ke kořeni repa).
 pip install -r requirements.txt
 
 python scripts/run_all.py                # stáhne CSV do $DATA_DIR (a udělá snímek)
-python scripts/scrapers/gdrive_ebola.py  # stáhne nejnovější Ebola ZIP do $DATA_DIR/ebola
 python scripts/load_to_db.py             # naplní PostgreSQL (volitelné, viz níže)
 python scripts/generate_json.py          # vygeneruje chart JSON do $OUTPUT_DIR
-python scripts/process_ebola.py          # Ebola grafy do $OUTPUT_DIR + stránky do $CONTENT_DIR
+python scripts/detect_anomalies.py       # signály do $OUTPUT_DIR/anomaly_signals.json
 ```
 
 Krok s databází je volitelný — bez něj `generate_json.py` čte CSV napřímo. Databáze je potřeba
@@ -170,18 +165,23 @@ docker run --rm \
   pathogensportal-db
 ```
 
-`CMD` v Dockerfilu spustí celý řetězec za sebou: `run_all.py` → `gdrive_ebola.py` →
-`generate_json.py` → `detect_anomalies.py` → `process_ebola.py`.
+`CMD` v Dockerfilu spustí celý řetězec za sebou: `run_all.py` → `generate_json.py` →
+`detect_anomalies.py`.
 
 ## Jak repo konzumuje portál
 
 Portál (`pathogensportal`) si tenhle repo bere jako **git submodule pinnutý na release tag**
 (ne na branch — jinak by každý push sem měnil to, co běží v produkci) a staví z něj image
 `datascrapper`. Praktický důsledek: **jména skriptů (`run_all.py`, `generate_json.py`,
-`process_ebola.py`), `CMD` v Dockerfilu, jména proměnných (`DATA_DIR`/`OUTPUT_DIR`/`CONTENT_DIR`)
+`detect_anomalies.py`), `CMD` v Dockerfilu, jména proměnných (`DATA_DIR`/`OUTPUT_DIR`)
 a cesta `db/init.sql` jsou veřejné API tohohle repa vůči portálu.** Jejich změna je breaking
 change, ne interní úprava — vyžaduje novou verzi (release) a poznámku v release notes, ne
 tichý push na `dev`.
+
+⚠️ **PPDB-53 je přesně takový breaking change:** zmizel `process_ebola.py`, `gdrive_ebola.py`
+a proměnná `CONTENT_DIR`. Portál to snese bez úpravy — jeho pipeline kopíruje stránky jen
+`if [ "$staged_content" -gt 0 ]`, takže se ten krok prostě přeskočí — ale pin se musí zvednout
+na release, který tohle obsahuje, ne na branch.
 
 Nová data se na portálu objeví až tehdy, když se **submodul přepne na nový tag**. Samotné vydání
 verze tady portálem nehne.
