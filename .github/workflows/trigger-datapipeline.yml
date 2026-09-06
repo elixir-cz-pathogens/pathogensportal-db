@@ -30,7 +30,7 @@ jobs:
   trigger:
     if: ${{ vars.PIPELINE_TRIGGER_ENABLED == 'true' }}
     runs-on: ubuntu-latest
-    # The full pipeline (scrape -> charts -> ebola -> hugo) takes several minutes;
+    # The full pipeline (scrape -> charts -> anomaly signals) takes several minutes;
     # this is a ceiling, not an expectation.
     timeout-minutes: 30
 
