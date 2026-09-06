@@ -35,20 +35,27 @@ Použití:
     python scripts/detect_anomalies.py                  # oskóruje poslední měsíc, zapíše JSON
     python scripts/detect_anomalies.py --backtest       # oskóruje celou historii do CSV
     python scripts/detect_anomalies.py --backtest --diagnoza "Dávivý kašel [pertussis]"
+    python scripts/detect_anomalies.py --as-of 2026-09-01   # nad archivovaným snapshotem,
+                                                            # bit-identický výstup
+    python scripts/detect_anomalies.py --alpha 0.05         # hladina bayesovské FDR
 
 Proměnné prostředí: DATA_DIR (vstupní CSV), OUTPUT_DIR (kam psát JSON) —
 stejný kontrakt jako generate_json.py.
 """
 
 import argparse
+import gzip
+import hashlib
 import json
 import os
+import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = Path(os.environ.get("DATA_DIR", str(ROOT / "data")))
@@ -65,6 +72,12 @@ RARE_ALERT = 2          # u vzácné řady se hlásí ≥ 2 případy v měsíci
 RECENT_SKIP = 6         # plný model: posledních 6 měsíců mimo baseline (rozjíždějící se
                         # epidemie nesmí zvednout vlastní práh — Noufaily vynechává 26 týdnů)
 FULL_MIN_POINTS = 42    # plný model má 13 parametrů; pod ~3 body na parametr → okna
+
+PI_DRAWS = 500          # vzorků parametrů pro π (pravděpodobnost překročení prahu)
+PI_SEED = 20260906      # pevný seed → deterministický výstup (reprodukovatelnost)
+FDR_ALPHA = 0.10        # default hladiny bayesovské FDR (viz --alpha)
+
+REGISTRY_FILE = ROOT / "methodology_changes.yaml"
 
 REGION_UNKNOWN = "CZ999"  # „neuvedeno“ — patří do součtu ČR, samostatně se neskóruje
 
@@ -127,11 +140,38 @@ def _anscombe(y: np.ndarray, mu: np.ndarray, phi: float, hat: np.ndarray) -> np.
     return r / np.sqrt(phi * (1 - hat))
 
 
+def _pi_bootstrap(y0: float, beta: np.ndarray, cov: np.ndarray,
+                  x0: np.ndarray, phi: float, rng) -> float:
+    """
+    π = Pr(pozorování > práh) při zohlednění nejistoty odhadu parametrů.
+
+    Dnešní binární pravidlo `y0 > U` se tváří, že práh známe přesně — ale U je
+    spočítané z konečné historie. Vzorkujeme proto koeficienty z N(β̂, Σ̂)
+    a práh počítáme pro každý vzorek zvlášť. Pozor na dvojí započtení: per-vzorkový
+    práh nese už JEN šum pozorování (φμ) — člen Var(μ̂₀) z bodového vzorce tu
+    nahrazuje samo vzorkování.
+    """
+    p = len(beta)
+    jitter = 1e-10 * np.eye(p)
+    try:
+        L = np.linalg.cholesky(cov[:p, :p] + jitter)
+    except np.linalg.LinAlgError:
+        vals, vecs = np.linalg.eigh(cov[:p, :p])
+        L = vecs @ np.diag(np.sqrt(np.clip(vals, 0, None)))
+    draws = beta + rng.standard_normal((PI_DRAWS, p)) @ L.T
+    mu0 = np.exp(np.clip(draws @ x0, -30, 30))
+    V = phi * mu0
+    U = mu0 * (1 + (2 / 3) * Z_QUANTILE * np.sqrt(V) / np.maximum(mu0, 1e-9)) ** 1.5
+    U = np.maximum(U, 1.0)
+    return float(np.mean(y0 > U))
+
+
 # ── skórování jedné řady ─────────────────────────────────────────────────────
 
 def farrington_score(counts: np.ndarray, t0: int,
                      exclude_t: frozenset = frozenset(),
-                     model: str = "plny", phase: int = 0) -> dict | None:
+                     model: str = "plny", phase: int = 0,
+                     rng=None) -> dict | None:
     """
     Oskóruje měsíc t0 řady `counts` (kompletní měsíční mřížka, index = pořadí
     měsíce od začátku dat). Vrací dict s výsledkem, nebo None, když řadu nelze
@@ -181,13 +221,15 @@ def farrington_score(counts: np.ndarray, t0: int,
     history_total = float(counts[:t0].sum())
     if history_total <= RARE_TOTAL:
         # GLM nad samými nulami nedává smysl — vzácná nemoc, hlásí se shluk.
+        sig = y0 >= RARE_ALERT
         return {
             "type": "rare",
             "observed": y0,
             "expected": 0.0,
             "threshold": float(RARE_ALERT - 0.5),
             "score": None,
-            "signal": y0 >= RARE_ALERT,
+            "pi": 1.0 if sig else 0.0,  # pravidlová řada — π definičně
+            "signal": sig,
             "n_baseline": len(idx),
         }
 
@@ -196,13 +238,15 @@ def farrington_score(counts: np.ndarray, t0: int,
         # nemoc, která se začala vykazovat až v průběhu období, nebo silně
         # mimosezónní výskyt. GLM nad samými nulami je singulární; chová se to
         # tedy jako sporadická řada s prahem jednoho případu.
+        sig = y0 >= MIN_CASES_GLM
         return {
             "type": "sporadic",
             "observed": y0,
             "expected": 0.0,
             "threshold": 1.0,
             "score": round(y0, 2),
-            "signal": y0 >= MIN_CASES_GLM,
+            "pi": 1.0 if sig else 0.0,
+            "signal": sig,
             "n_baseline": len(idx),
         }
 
@@ -269,9 +313,15 @@ def farrington_score(counts: np.ndarray, t0: int,
 
     score = (y0 - mu0) / (U - mu0) if U > mu0 else None
     signal = bool(score is not None and score > 1 and y0 >= MIN_CASES_GLM)
+    pi = None
+    if rng is not None:
+        pi = round(_pi_bootstrap(y0, beta, cov, x0, phi, rng), 4)
+        if y0 < MIN_CASES_GLM:
+            pi = 0.0  # minimum případů platí i pro pravděpodobnostní cestu
     return {
         "type": "glm",
         "observed": y0,
+        "pi": pi,
         "expected": round(mu0, 2),
         "threshold": round(float(U), 2),
         "score": round(float(score), 2) if score is not None else None,
@@ -282,14 +332,14 @@ def farrington_score(counts: np.ndarray, t0: int,
 
 # ── data ─────────────────────────────────────────────────────────────────────
 
-def load_series() -> tuple[pd.DataFrame, list[str], int]:
+def load_series(src_path: Path | None = None) -> tuple[pd.DataFrame, list[str], int]:
     """
     Vrátí (long tabulka diagnóza×kraj×měsíc, seznam period 'YYYY-MM', počet měsíců).
     Kraj 'CZ' je celostátní součet (včetně CZ999 „neuvedeno“, které se jinak
     samostatně neskóruje — případ bez kraje pořád je případ v ČR).
     """
-    path = DATA_DIR / "isin" / "isin_infekcni_nemoci.csv"
-    df = pd.read_csv(path, encoding="utf-8-sig")
+    path = src_path or (DATA_DIR / "isin" / "isin_infekcni_nemoci.csv")
+    df = pd.read_csv(path, encoding="utf-8-sig")  # pandas čte .gz transparentně
     df.columns = df.columns.str.strip()
 
     grouped = (df.groupby(["diagnoza", "diagnoza_nazev", "kraj_kod", "kraj_nazev",
@@ -326,64 +376,246 @@ def build_grid(long: pd.DataFrame, n_months: int):
                "kraj_kod": kraj, "kraj_nazev": kraj_name}, counts
 
 
+# ── reprodukovatelnost ───────────────────────────────────────────────────────
+
+def resolve_snapshot(as_of: str) -> Path:
+    """Najde nejnovější archivovanou verzi ISIN ≤ danému datu. Archiv ukládá
+    soubor jen v den, kdy se změnil — hledá se tedy poslední starší den."""
+    rel = Path("isin") / "isin_infekcni_nemoci.csv.gz"
+    days = sorted(d.name for d in (DATA_DIR / "raw").iterdir()
+                  if d.is_dir() and d.name <= as_of and (d / rel).exists())
+    if not days:
+        raise FileNotFoundError(f"V archivu není žádný snapshot ISIN ≤ {as_of}")
+    return DATA_DIR / "raw" / days[-1] / rel
+
+
+def _sha256_file(path: Path) -> str:
+    data = path.read_bytes()
+    if path.suffix == ".gz":
+        data = gzip.decompress(data)  # hash obsahu, ne komprese — srovnatelný s manifestem
+    return hashlib.sha256(data).hexdigest()
+
+
+def _code_version() -> str:
+    try:
+        return subprocess.run(["git", "describe", "--tags", "--always", "--dirty"],
+                              capture_output=True, text=True, cwd=ROOT,
+                              timeout=10).stdout.strip() or "unknown"
+    except Exception:
+        return "unknown"  # v Docker image .git není (.dockerignore)
+
+
+def build_provenance(input_path: Path, as_of: str | None, alpha: float) -> dict:
+    return {
+        "input": str(input_path),
+        "input_sha256": _sha256_file(input_path),
+        "as_of": as_of,
+        "code_version": _code_version(),
+        "params": {
+            "z_quantile": Z_QUANTILE, "reweight_limit": REWEIGHT_LIMIT,
+            "recent_skip": RECENT_SKIP, "full_min_points": FULL_MIN_POINTS,
+            "min_years": MIN_YEARS, "min_cases_glm": MIN_CASES_GLM,
+            "rare_total": RARE_TOTAL, "rare_alert": RARE_ALERT,
+            "pi_draws": PI_DRAWS, "pi_seed": PI_SEED, "fdr_alpha": alpha,
+        },
+    }
+
+
+# ── registr metodických změn ─────────────────────────────────────────────────
+
+def load_registry() -> list[dict]:
+    if not REGISTRY_FILE.exists():
+        return []
+    return yaml.safe_load(REGISTRY_FILE.read_text(encoding="utf-8")) or []
+
+
+def registry_masks(meta: dict, periods: list[str], rules: list[dict]):
+    """
+    Přeloží záznamy registru na (extra_exclude: set[int], aktivní pravidla).
+
+    break   → z baseline vypadne VŠE před datem změny (úroveň řady se změnila,
+              stará historie o nové realitě lže)
+    exclude → z baseline vypadne období od–do
+    flag / poznamka → baseline se nemění; flag jen označuje výsledky
+    """
+    def period_t(p, default):
+        if p is None:
+            return default
+        if p < periods[0]:
+            return 0
+        for i, q in enumerate(periods):
+            if q >= p:
+                return i
+        return len(periods)
+
+    static_exclude: set[int] = set()
+    breaks: list[int] = []   # od_t break-pravidel — aplikují se až od data změny
+    active: list[dict] = []
+    for r in rules:
+        if r.get("akce") == "poznamka":
+            continue
+        scope = r.get("rozsah") or {}
+        dgs = scope.get("diagnozy")
+        if dgs is not None and meta["diagnoza_nazev"] not in dgs:
+            continue
+        kraje = scope.get("kraje")
+        if kraje is not None and meta["kraj_kod"] not in kraje and meta["kraj_kod"] != "CZ":
+            continue
+        od_t = period_t(str(r["od"]), 0)
+        do_t = period_t(str(r["do"]), len(periods)) if r.get("do") else len(periods)
+        if r["akce"] == "break":
+            # Neaplikuje se staticky: pro t0 PŘED změnou byla stará baseline
+            # platná — jinak by break smazal řadu i z retrospektivy.
+            breaks.append(od_t)
+        elif r["akce"] == "exclude":
+            static_exclude.update(range(od_t, do_t))  # vadná data jsou vadná pro každé t0
+        active.append({**r, "_od_t": od_t, "_do_t": do_t})
+    return static_exclude, breaks, active
+
+
+def masks_for_t0(static_exclude: set, breaks: list[int], t0: int) -> set:
+    out = set(static_exclude)
+    for od_t in breaks:
+        if t0 >= od_t:
+            out.update(range(0, od_t))
+    return out
+
+
+def registry_annotation(active: list[dict], t0: int) -> str | None:
+    hits = [r["id"] for r in active if r["_od_t"] <= t0 < r["_do_t"]]
+    return "; ".join(hits) if hits else None
+
+
+# ── FDR napříč řadami ────────────────────────────────────────────────────────
+
+def apply_fdr(records: list[dict], alpha: float) -> tuple[int, int]:
+    """
+    Bayesovská FDR: seřaď π sestupně, vezmi největší k, pro které průměr
+    (1−π) horních k nepřekročí α — tedy očekávaný podíl falešných mezi
+    ohlášenými ≤ α. Vedle toho Benjamini–Hochberg (p ≈ 1−π) pro srovnání.
+    Označí records in-place polem fdr_pass; vrací (k_bayes, k_bh).
+    """
+    scored = [r for r in records if r.get("pi") is not None]
+    order = sorted(scored, key=lambda r: -r["pi"])
+    cum, k = 0.0, 0
+    for j, r in enumerate(order, 1):
+        cum += 1.0 - r["pi"]
+        if cum / j <= alpha:
+            k = j
+    for j, r in enumerate(order, 1):
+        r["fdr_pass"] = j <= k
+
+    n = len(order)
+    pvals = sorted(1.0 - r["pi"] for r in order)
+    k_bh = max((j for j in range(1, n + 1) if pvals[j - 1] <= alpha * j / n), default=0)
+    return k, k_bh
+
+
 # ── běhy ─────────────────────────────────────────────────────────────────────
 
 def run_current(long, periods, n_months, exclude_t=frozenset(),
-                model="plny", phase=0) -> int:
+                model="plny", phase=0, alpha=FDR_ALPHA, provenance=None) -> int:
     t0 = n_months - 1
-    signals, scored, skipped = [], 0, 0
+    rng = np.random.default_rng(PI_SEED)
+    rules = load_registry()
+    records, skipped, prebaselining = [], 0, []
+
     for meta, counts in build_grid(long, n_months):
-        res = farrington_score(counts, t0, exclude_t, model, phase)
+        static_ex, breaks, active = registry_masks(meta, periods, rules)
+        extra = masks_for_t0(static_ex, breaks, t0)
+        res = farrington_score(counts, t0, frozenset(exclude_t | extra),
+                               model, phase, rng=rng)
         if res is None:
             skipped += 1
+            # break-pravidlo mohlo řadu připravit o historii — to není chyba,
+            # ale stav „přebaselinovává se“, a uživatel o něm musí vědět.
+            brk = [r for r in active if r["akce"] == "break"]
+            if brk and counts[t0] > 0:
+                prebaselining.append({**meta, "observed": float(counts[t0]),
+                                      "zmena": brk[0]["id"], "od": str(brk[0]["od"])})
             continue
-        scored += 1
-        if res["signal"]:
-            signals.append({**meta, **{k: v for k, v in res.items() if k != "signal"}})
+        note = registry_annotation(active, t0)
+        if note:
+            res["metodicka_zmena"] = note
+        records.append({**meta, **res})
 
+    k_fdr, k_bh = apply_fdr(records, alpha)
+    signals = [
+        {k: v for k, v in r.items() if k != "signal"}
+        for r in records if r["signal"]
+    ]
     signals.sort(key=lambda s: (s["score"] is None, -(s["score"] or 0), -s["observed"]))
+
     out = {
-        "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "generated_at": (provenance or {}).get("as_of")
+                        or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "target_period": periods[t0],
-        "method": "Farrington–Noufaily, kvazi-Poisson GLM, 99. percentil",
-        "n_series_scored": scored,
+        "method": "Farrington–Noufaily, kvazi-Poisson GLM, 99. percentil, "
+                  "π parametrickým bootstrapem, bayesovská FDR",
+        "n_series_scored": len(records),
         "n_series_skipped": skipped,
         "n_signals": len(signals),
+        "fdr": {"alpha": alpha, "n_tested": len(records),
+                "n_pass": k_fdr, "n_pass_bh": k_bh},
+        "prebaselining": prebaselining,
         "signals": signals,
     }
+    if provenance:
+        out["provenance"] = provenance
     CHARTS_OUT.mkdir(parents=True, exist_ok=True)
     path = CHARTS_OUT / "anomaly_signals.json"
     path.write_text(json.dumps(out, ensure_ascii=False), encoding="utf-8")
-    print(f"[{periods[t0]}] oskórováno {scored} řad ({skipped} přeskočeno), "
-          f"signálů {len(signals)} → {path}")
-    for s in signals[:15]:
-        print(f"  {s['diagnoza_nazev'][:45]:<45} {s['kraj_nazev']:<22} "
-              f"{s['observed']:>6.0f} (oček. {s['expected']:>7.1f}, práh {s['threshold']:>7.1f}, "
-              f"skóre {s['score'] if s['score'] is not None else '—'})")
+    n_sig_fdr = sum(1 for r in signals if r.get("fdr_pass"))
+    print(f"[{periods[t0]}] oskórováno {len(records)} řad ({skipped} přeskočeno), "
+          f"signálů {len(signals)} (po FDR α={alpha}: {n_sig_fdr}; BH: {k_bh}) → {path}")
+    for r in prebaselining:
+        print(f"  ⚠ přebaselinovává se po metodické změně: {r['diagnoza_nazev']} "
+              f"/ {r['kraj_nazev']} (od {r['od']}, {r['zmena']})")
+    for sg in signals[:15]:
+        print(f"  {sg['diagnoza_nazev'][:42]:<42} {sg['kraj_nazev']:<20} "
+              f"{sg['observed']:>6.0f} (oček. {sg['expected']:>7.1f}, práh {sg['threshold']:>7.1f}, "
+              f"π={sg.get('pi')}, FDR={'✓' if sg.get('fdr_pass') else '✗'})")
     return 0
 
 
 def run_backtest(long, periods, n_months, diagnoza: str | None,
-                 exclude_t=frozenset(), model="plny", phase=0) -> int:
+                 exclude_t=frozenset(), model="plny", phase=0,
+                 alpha=FDR_ALPHA) -> int:
     if diagnoza:
         long = long[long.diagnoza_nazev == diagnoza]
         if long.empty:
             print(f"Diagnóza „{diagnoza}“ v datech není.", file=sys.stderr)
             return 1
+    rng = np.random.default_rng(PI_SEED)
+    rules = load_registry()
     rows = []
     start = 12 * MIN_YEARS  # skórovat lze až s MIN_YEARS lety historie
     for meta, counts in build_grid(long, n_months):
+        static_ex, breaks, active = registry_masks(meta, periods, rules)
         for t0 in range(start, n_months):
-            res = farrington_score(counts, t0, exclude_t, model, phase)
+            merged = frozenset(exclude_t | masks_for_t0(static_ex, breaks, t0))
+            res = farrington_score(counts, t0, merged, model, phase, rng=rng)
             if res is None:
                 continue
+            note = registry_annotation(active, t0)
+            if note:
+                res["metodicka_zmena"] = note
             rows.append({**meta, "period": periods[t0], **res})
+
+    # FDR se aplikuje průřezově v rámci každého období — tak, jak by běžela naživo.
+    by_period: dict = {}
+    for r in rows:
+        by_period.setdefault(r["period"], []).append(r)
+    for period_rows in by_period.values():
+        apply_fdr(period_rows, alpha)
+
     out_dir = DATA_DIR / "analysis"
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / "anomaly_backtest.csv"
     pd.DataFrame(rows).to_csv(path, index=False)
     n_sig = sum(r["signal"] for r in rows)
-    print(f"Backtest: {len(rows)} skóre, {n_sig} signálů → {path}")
+    n_fdr = sum(1 for r in rows if r.get("fdr_pass"))
+    print(f"Backtest: {len(rows)} skóre, {n_sig} signálů, {n_fdr} po FDR (α={alpha}) → {path}")
     return 0
 
 
@@ -397,17 +629,31 @@ def main() -> int:
                     help="zda covidovou éru 2020–21 zahrnout do baseline (default: ponechat)")
     ap.add_argument("--model", choices=["okna", "plny"], default="plny",
                     help="plny = Noufaily 2012, celá historie (default; v simulaci vyšší záchyt při srovnatelných planých poplaších), okna = Farrington 1996 (±1 měsíc)")
+    ap.add_argument("--as-of", default=None, metavar="YYYY-MM-DD",
+                    help="běh nad archivovaným snapshotem místo živého CSV — "
+                         "reprodukovatelný, bit-identický výstup")
+    ap.add_argument("--alpha", type=float, default=FDR_ALPHA,
+                    help=f"hladina bayesovské FDR (default {FDR_ALPHA})")
     args = ap.parse_args()
 
-    long, periods, n_months = load_series()
+    src = None
+    if args.as_of:
+        src = resolve_snapshot(args.as_of)
+        print(f"Vstup ze snapshotu: {src}")
+    long, periods, n_months = load_series(src)
+    provenance = build_provenance(
+        src or (DATA_DIR / "isin" / "isin_infekcni_nemoci.csv"),
+        args.as_of, args.alpha)
+
     exclude_t = frozenset()
     if args.covid_baseline == "vynechat":
         exclude_t = frozenset(i for i, p in enumerate(periods) if "2020-01" <= p <= "2021-12")
     phase = int(periods[0][5:7]) - 1  # kalendářní měsíc indexu t=0 (0 = leden)
     if args.backtest:
         return run_backtest(long, periods, n_months, args.diagnoza, exclude_t,
-                            args.model, phase)
-    return run_current(long, periods, n_months, exclude_t, args.model, phase)
+                            args.model, phase, args.alpha)
+    return run_current(long, periods, n_months, exclude_t, args.model, phase,
+                       args.alpha, provenance)
 
 
 if __name__ == "__main__":

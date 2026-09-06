@@ -1,0 +1,65 @@
+# Registr metodických změn ve zdrojových systémech.
+#
+# Proč existuje: změna způsobu vykazování vypadá v datech přesně jako epidemie
+# a detektor ji bez téhle znalosti ohlásí jako ohnisko. Jedna taková falešná
+# detekce zdiskredituje nástroj u epidemiologů natrvalo — registr je proto
+# BLOKUJÍCÍ součást systému, ne dokumentační pomůcka.
+#
+# Formát záznamu:
+#   id:      stabilní identifikátor
+#   od:      YYYY-MM, začátek platnosti změny
+#   do:      YYYY-MM nebo null (změna trvá)
+#   akce:    break    – historie PŘED datem změny se pro postižené řady
+#                       nepoužije jako baseline (úroveň řady se změnila);
+#                       dokud nenaroste nová historie, řada se nehodnotí
+#                       a hlásí se jako „přebaselinovává se“
+#            exclude  – období od–do se z baseline vyřízne (dočasná deformace,
+#                       např. výpadek hlášení), řada se jinak hodnotí normálně
+#            flag     – nic se nemění, signály v okolí jen nesou upozornění
+#            poznamka – informační záznam bez vlivu na výpočet
+#   rozsah:  diagnozy: [přesné názvy dle ISIN] nebo null = všechny
+#            kraje:    [kódy NUTS3] nebo null = všechny
+#   zdroj:   odkud o změně víme (dokument, jednání, vlastní měření)
+#   popis:   co se stalo
+#   dopad:   očekávaný směr a velikost vlivu na počty
+
+- id: zoster-vykazovani-2025-07
+  od: 2025-07
+  do: null
+  akce: break
+  rozsah:
+    diagnozy: ["Pásový opar [herpes zoster]"]
+    kraje: null
+  zdroj: "vlastní měření detektoru (09/2026); charakter změny k ověření u ÚZIS"
+  popis: >-
+    Skoková změna úrovně vykazování pásového oparu: měsíční počty vzrostly
+    z ~330 na 860–1 260, ve všech krajích současně a trvale. Synchronnost
+    napříč kraji ukazuje na změnu vykazování, ne na biologický jev.
+  dopad: "~3× vyšší hlášené počty od 7/2025; stará baseline je pro novou úroveň nepoužitelná"
+
+- id: szu-retro-korekce
+  od: 2012-10
+  do: null
+  akce: poznamka
+  rozsah:
+    diagnozy: null
+    kraje: null
+  zdroj: "změřeno porovnáním týdenních PDF SZÚ s ročním souhrnem (09/2026: HRV +1, SARS-CoV-2 +17)"
+  popis: >-
+    SZÚ zpětně tiše koriguje historické laboratorní počty. Snapshoty vstupů
+    proto nejsou paranoia, ale nutnost — bez nich nejde doložit, z čeho vznikl
+    dřívější výstup.
+  dopad: "jednotky až desítky případů na virus a sezónu"
+
+- id: isin-horizont-2025-12
+  od: 2025-12
+  do: null
+  akce: poznamka
+  rozsah:
+    diagnozy: null
+    kraje: null
+  zdroj: "ověřeno přímo u zdroje (datanzis.uzis.gov.cz, 09/2026)"
+  popis: >-
+    Otevřený export ISIN končí prosincem 2025 — „poslední měsíc“ v detekci je
+    proto starý; ticho v novějších obdobích není důkaz klidu, ale chybějící data.
+  dopad: "žádný vliv na výpočet; zásadní pro interpretaci čerstvosti signálů"
