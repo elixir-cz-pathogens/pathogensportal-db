@@ -35,6 +35,7 @@ Pipeline má pět fází, které na sebe navazují přes souborový systém, ne 
 4. výstup       generate_json.py ───► $OUTPUT_DIR/*.json      (Chart.js)
 
 5. analytika    detect_anomalies.py ► $OUTPUT_DIR/anomaly_signals.json (stránka Signály)
+                compute_mem.py ─────► $OUTPUT_DIR/flu_mem.json (sezónní prahy chřipky)
 ```
 
 ⚠️ **Pipeline nezapisuje žádné Hugo stránky.** Dřív to dělala ebola větev
@@ -105,6 +106,23 @@ epidemie stala tématem; 0 planých poplachů v klidu) a simulační studie se z
 pravdou (`simulate_detection.py`): záchyt epidemie velikosti 3σ/5σ/10σ =
 27/60/96 %, plané poplachy 1,5–3 %. Detaily v docstringu obou skriptů.
 
+### Sezónní prahy chřipky (MEM)
+
+`compute_mem.py` počítá **Moving Epidemic Method** (Vega et al. 2013, 2015 — standard
+ECDC a WHO PISA) nad týdenní mírou ILI na 100 tis.: epidemický práh („sezóna začala")
+a tři prahy intenzity (střední / vysoká / velmi vysoká). Historii dává WHO FluID,
+nejčerstvější týdny ECDC ERVISS — tatáž řada dvěma cestami (205 společných týdnů,
+největší rozdíl 1,4 %). Laboratorní záchyty se jako vstup nehodí: s objemem testování
+vzrostly řádově, takže práh z minulých sezón by dnes svítil trvale.
+
+Do odhadu jde posledních 10 platných sezón; vyřazené sezóny (pandemie 2009/10,
+covidové 2020/21 a 2021/22, neověřená 2025/26) jsou i s důvodem v `EXCLUDED_SEASONS`
+a ve výstupním JSON. Parametr δ se volí leave-one-season-out podle Youdenova indexu.
+
+Validace: jádro (`mem.py`, čisté numpy) je reimplementace R balíku `mem` a golden
+test ho drží na shodě s ním na 8+ platných míst — prahy i začátky a konce epidemií,
+na českých datech i na syntetice (`tests/test_mem_golden.py`).
+
 ## Struktura repa
 
 ```
@@ -114,6 +132,8 @@ scripts/load_to_db.py         ETL: CSV → PostgreSQL (observation, population)
 scripts/generate_json.py      přečte data, vygeneruje Chart.js JSON do $OUTPUT_DIR
 scripts/detect_anomalies.py   detekce anomálií (Farrington/Noufaily) → anomaly_signals.json
 scripts/simulate_detection.py simulační studie detektoru (validace se známou pravdou)
+scripts/mem.py                Moving Epidemic Method — jádro výpočtu, bez I/O
+scripts/compute_mem.py        sezónní prahy chřipky nad ILI → flu_mem.json
 scripts/scrapers/             jednotlivé scrapery (MZČR, SZÚ ×2, ÚZIS ISIN, ČSÚ, ECDC ×2, WHO)
 curated/szu/                  uzavřené sezóny SZÚ, jejichž online zdroj už neexistuje
 db/init.sql                   schéma PostgreSQL (portál si ho mountuje do kontejneru pathogen-db)
@@ -146,6 +166,7 @@ python scripts/run_all.py                # stáhne CSV do $DATA_DIR (a udělá s
 python scripts/load_to_db.py             # naplní PostgreSQL (volitelné, viz níže)
 python scripts/generate_json.py          # vygeneruje chart JSON do $OUTPUT_DIR
 python scripts/detect_anomalies.py       # signály do $OUTPUT_DIR/anomaly_signals.json
+python scripts/compute_mem.py            # sezónní prahy chřipky do $OUTPUT_DIR/flu_mem.json
 ```
 
 Krok s databází je volitelný — bez něj `generate_json.py` čte CSV napřímo. Databáze je potřeba
@@ -168,7 +189,7 @@ docker run --rm \
 ```
 
 `CMD` v Dockerfilu spustí celý řetězec za sebou: `run_all.py` → `generate_json.py` →
-`detect_anomalies.py`.
+`detect_anomalies.py` → `compute_mem.py`.
 
 ## Jak repo konzumuje portál
 
