@@ -18,6 +18,8 @@ portál](#jak-repo-konzumuje-portál).
 | **SZÚ — týdenní PDF** | týdenní matice virus×týden (2 sezóny v jednom PDF) + krajská hlášení po týdnech | celoročně týdně; extrakce validovaná proti kumulativním součtům v PDF, při nesouladu parser spadne |
 | **ČSÚ** | počty obyvatel po krajích (dataset `PORKR01`) | jmenovatele — bez nich jsou z čísel počty, ne incidence |
 | **ECDC** | historická data COVID-19 pro ČR | zdroj **přestal publikovat na podzim 2022**; scraper zůstává kvůli historické řadě |
+| **WHO FluNet + FluID** | týdenní laboratorní záchyty chřipky **včetně počtu vyšetřených vzorků** (od 1997) a ILI/ARI případy s pokrytou populací (souvisle od 2009/10) | FluNet nonsentinel jsou tatáž čísla jako týdenní PDF SZÚ, ale s jmenovatelem pozitivity a se sezónami 2022/23–2023/24, které SZÚ už online nemá. FluID dává míru srovnatelnou napříč roky — vstup pro sezónní prahy (MEM) |
+| **ECDC ERVISS** | ILI/ARI na 100 tis. po věkových skupinách + laboratorní hlášení, řádky za ČR (od 2022-W25) | čerstvější než FluID (ten se mimo sezónu zpožďuje); živá náhrada za mrtvý ECDC COVID zdroj |
 
 ## Jak to funguje
 
@@ -112,7 +114,7 @@ scripts/load_to_db.py         ETL: CSV → PostgreSQL (observation, population)
 scripts/generate_json.py      přečte data, vygeneruje Chart.js JSON do $OUTPUT_DIR
 scripts/detect_anomalies.py   detekce anomálií (Farrington/Noufaily) → anomaly_signals.json
 scripts/simulate_detection.py simulační studie detektoru (validace se známou pravdou)
-scripts/scrapers/             jednotlivé scrapery (MZČR, SZÚ ×2, ÚZIS ISIN, ČSÚ, ECDC)
+scripts/scrapers/             jednotlivé scrapery (MZČR, SZÚ ×2, ÚZIS ISIN, ČSÚ, ECDC ×2, WHO)
 curated/szu/                  uzavřené sezóny SZÚ, jejichž online zdroj už neexistuje
 db/init.sql                   schéma PostgreSQL (portál si ho mountuje do kontejneru pathogen-db)
 Dockerfile                    image `datascrapper` — portál ho staví přímo z tohohle repa
