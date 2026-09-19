@@ -21,4 +21,4 @@ ENV DATA_DIR=/data \
 # process_ebola.py) byla odstraněna v PPDB-53 — obsah i grafy k ebole nově dodává
 # AI agent jako pull request přímo do portálu. Proto tu není ani CONTENT_DIR:
 # nic do něj nezapisuje. Portál ho může dál mountovat, kontejner si ho nevšimne.
-CMD ["sh", "-c", "python scripts/run_all.py && python scripts/generate_json.py && python scripts/detect_anomalies.py"]
+CMD ["sh", "-c", "python scripts/run_all.py && python scripts/generate_json.py && python scripts/detect_anomalies.py && python scripts/compute_mem.py"]

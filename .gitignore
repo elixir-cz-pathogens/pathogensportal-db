@@ -7,3 +7,6 @@ __pycache__/
 
 # Kurátorovaná data vezená v repu — uzavřené sezóny bez online zdroje
 !curated/**
+
+# Testovací fixtures — bez nich golden testy v CI spadnou na chybějícím souboru
+!tests/fixtures/**

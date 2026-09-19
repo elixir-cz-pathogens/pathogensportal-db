@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS observation (
     period_start   DATE         NOT NULL,
     period_end     DATE         NOT NULL,
     metric         VARCHAR(64)  NOT NULL,   -- cases | deaths | tests | hospitalizations | lab_detections
+                                            -- | population_covered | rate_per_100k
     value          NUMERIC      NOT NULL,
     snapshot_date  DATE         NOT NULL,
     ingested_at    TIMESTAMPTZ  DEFAULT NOW(),

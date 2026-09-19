@@ -194,6 +194,95 @@ def load_szu_weekly(conn, snapshot: date, dry_run: bool = False) -> int:
     return len(rows)
 
 
+# ── observation: WHO FluNet/FluID + ECDC ERVISS ──────────────────────────────
+
+# FluNet hlásí za týž týden dva nezávislé systémy (sentinel ~50 vzorků,
+# nonsentinel ~2 000). Unikátní klíč `observation` pro ně nemá dimenzi, a sečíst
+# je by smíchalo dvě různé populace — proto každý dostane vlastní source_id.
+FLUNET_SOURCE = {
+    "SENTINEL": "who_flunet_sentinel",
+    "NONSENTINEL": "who_flunet_nonsentinel",
+    "NOTDEFINED": "who_flunet",
+}
+FLUNET_SERIES = {"inf_celkem": "Influenza", "inf_a": "Influenza A",
+                 "inf_b": "Influenza B", "rsv": "RSV"}
+
+
+def _age(value) -> str | None:
+    """'All'/'total' = nerozlišeno podle věku → NULL (konvence tabulky)."""
+    return None if str(value) in ("All", "total") else str(value)
+
+
+def load_who_flu(conn, snapshot: date, dry_run: bool = False) -> int:
+    rows = []
+    flunet_path = DATA_DIR / "who" / "who_flunet_cz.csv"
+    if flunet_path.exists():
+        for r in pd.read_csv(flunet_path).itertuples():
+            start, end = _week_span(r.rok, r.tyden)
+            source = FLUNET_SOURCE.get(str(r.zdroj))
+            if start is None or source is None:
+                continue
+            for col, name in FLUNET_SERIES.items():
+                val = getattr(r, col)
+                if pd.notna(val):
+                    rows.append((source, None, name, None, None, None,
+                                 start, end, "lab_detections", int(val), snapshot))
+            # Jmenovatel FluNet jsou vzorky vyšetřené na chřipku — k RSV nepatří.
+            if pd.notna(r.vysetreno):
+                rows.append((source, None, "Influenza", None, None, None,
+                             start, end, "tests", int(r.vysetreno), snapshot))
+
+    fluid_path = DATA_DIR / "who" / "who_fluid_cz.csv"
+    if fluid_path.exists():
+        for r in pd.read_csv(fluid_path).itertuples():
+            start, end = _week_span(r.rok, r.tyden)
+            if start is None:
+                continue
+            for name, cases, pop in (("ILI", r.ili_pripady, r.ili_populace),
+                                     ("ARI", r.ari_pripady, r.ari_populace)):
+                # Populace 0 = věková skupina, kterou ČR v tom období nehlásila.
+                if pd.isna(cases) or pd.isna(pop) or int(pop) == 0:
+                    continue
+                rows.append(("who_fluid", None, name, None, _age(r.vek), None,
+                             start, end, "cases", int(cases), snapshot))
+                rows.append(("who_fluid", None, name, None, _age(r.vek), None,
+                             start, end, "population_covered", int(pop), snapshot))
+
+    if not rows:
+        print("  [who_flu] žádné soubory — přeskakuji")
+        return 0
+    if dry_run:
+        print(f"  [who_flu] {len(rows):,} řádků (dry-run)")
+        return len(rows)
+    _upsert_observations(conn, rows)
+    print(f"  [who_flu] {len(rows):,} řádků")
+    return len(rows)
+
+
+def load_erviss(conn, snapshot: date, dry_run: bool = False) -> int:
+    # Jen míry ILI/ARI. Laboratorní část ERVISS (erviss_nonsentinel_cz.csv) jsou
+    # tatáž hlášení jako FluNet nonsentinel — do DB by šla dvakrát.
+    path = DATA_DIR / "ecdc" / "erviss_ili_ari_cz.csv"
+    if not path.exists():
+        print(f"  [erviss] {path} neexistuje — přeskakuji")
+        return 0
+
+    rows = []
+    for r in pd.read_csv(path).itertuples():
+        start, end = _week_span(r.tyden_iso[:4], r.tyden_iso[6:])
+        if start is None or pd.isna(r.mira_na_100k):
+            continue
+        rows.append(("ecdc_erviss", None, str(r.ukazatel), None, _age(r.vek), None,
+                     start, end, "rate_per_100k", float(r.mira_na_100k), snapshot))
+
+    if dry_run:
+        print(f"  [erviss] {len(rows):,} řádků (dry-run)")
+        return len(rows)
+    _upsert_observations(conn, rows)
+    print(f"  [erviss] {len(rows):,} řádků")
+    return len(rows)
+
+
 def _upsert_observations(conn, rows: list) -> None:
     with conn.cursor() as cur:
         cur.executemany(
@@ -223,6 +312,8 @@ def main() -> int:
         load_population(None, dry_run=True)
         load_isin(None, snap, dry_run=True)
         load_szu_weekly(None, snap, dry_run=True)
+        load_who_flu(None, snap, dry_run=True)
+        load_erviss(None, snap, dry_run=True)
         return 0
 
     with psycopg.connect(dsn()) as conn:
@@ -230,6 +321,8 @@ def main() -> int:
         load_population(conn)
         load_isin(conn, snap)
         load_szu_weekly(conn, snap)
+        load_who_flu(conn, snap)
+        load_erviss(conn, snap)
         conn.commit()
     print("Hotovo.")
     return 0
