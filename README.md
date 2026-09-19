@@ -131,6 +131,17 @@ virů: zachytí jen 47 % týdnů. Výstup proto u každého ukazatele nese `inte
 (Youdenův index ≥ 0,7) — u ARI je `false` a portál u ní kreslí jen křivku s prahem,
 bez pásem intenzity, která by předstírala přesnost, již data nemají.
 
+K prahům přidává `flu_mem.json` dvě věci. **Trend** (`trend.py`): tempo růstu z posledních
+tří týdnů a kategorie roste / pravděpodobně roste / beze změny / pravděpodobně klesá /
+klesá podle pravděpodobnosti růstu — po vzoru CDC, jen nad tempem růstu místo Rt (ILI a ARI
+jsou směs patogenů bez jednoho generačního intervalu). Délku okna rozhodl zpětný test,
+jehož výsledek je ve výstupu. **Předpověď** (`forecast.py`, scraper `ecdc_respicast`):
+ensemble evropského hubu ECDC RespiCast na čtyři týdny, z kvantilů spočítaná
+pravděpodobnost překročení našeho epidemického prahu a poctivé vyhodnocení minulých
+předpovědí pro ČR — relativní WIS proti referenčnímu modelu hubu (ILI 0,85) a skutečné
+pokrytí intervalů („95%" pás zachytil 85 %). Předpověď se ukazuje tak, jak je, vedle
+své historické úspěšnosti; roztažení intervalů jsme zkoušeli a na druhou sezónu se nepřeneslo.
+
 Validace: jádro (`mem.py`, čisté numpy) je reimplementace R balíku `mem` a golden
 test ho drží na shodě s ním na 8+ platných míst — prahy i začátky a konce epidemií,
 na českých datech i na syntetice (`tests/test_mem_golden.py`).

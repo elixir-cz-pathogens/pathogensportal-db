@@ -46,6 +46,7 @@ import pandas as pd
 
 import forecast
 import mem
+import trend
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = Path(os.environ.get("DATA_DIR", str(ROOT / "data")))
@@ -99,7 +100,9 @@ def load_series(indicator: str) -> pd.DataFrame:
     fluid = fluid[(fluid["vek"] == "All") & (fluid[spec["population"]] > 0)]
     series = pd.DataFrame({
         "rok": fluid["rok"], "tyden": fluid["tyden"],
-        "mira": fluid[spec["cases"]] / fluid[spec["population"]] * 1e5, "zdroj": "WHO FluID",
+        "mira": fluid[spec["cases"]] / fluid[spec["population"]] * 1e5,
+        "pripady": fluid[spec["cases"]].astype(float),
+        "populace": fluid[spec["population"]].astype(float), "zdroj": "WHO FluID",
     })
 
     erviss_path = DATA_DIR / "ecdc" / "erviss_ili_ari_cz.csv"
@@ -108,12 +111,23 @@ def load_series(indicator: str) -> pd.DataFrame:
         e = e[(e["ukazatel"] == spec["erviss"]) & (e["vek"] == "total")]
         erviss = pd.DataFrame({
             "rok": e["tyden_iso"].str[:4].astype(int), "tyden": e["tyden_iso"].str[6:].astype(int),
-            "mira": e["mira_na_100k"], "zdroj": "ECDC ERVISS",
+            "mira_erviss": e["mira_na_100k"].to_numpy(),
         })
-        series = pd.concat([series, erviss]).drop_duplicates(["rok", "tyden"], keep="last")
+        # Míra z ERVISS má přednost (je čerstvější), ale počty případů a pokrytou
+        # populaci zná jen FluID — proto spojení, ne nahrazení řádků.
+        series = series.merge(erviss, on=["rok", "tyden"], how="outer")
+        from_erviss = series["mira_erviss"].notna()
+        series.loc[from_erviss, "mira"] = series.loc[from_erviss, "mira_erviss"]
+        series.loc[from_erviss, "zdroj"] = "ECDC ERVISS"
+        series = series.drop(columns="mira_erviss")
 
     series["sezona"] = np.where(series["tyden"] >= 27, series["rok"], series["rok"] - 1)
-    return series.sort_values(["rok", "tyden"]).reset_index(drop=True)
+    series = series.sort_values(["rok", "tyden"]).reset_index(drop=True)
+    # ERVISS dává jen míru. Počet případů (váha pro trend) se u těch týdnů dopočítá
+    # z poslední známé pokryté populace — ta se týden od týdne mění o promile.
+    series["populace"] = series["populace"].ffill()
+    series["pripady"] = series["pripady"].fillna(series["mira"] * series["populace"] / 1e5)
+    return series
 
 
 def season_matrix(series: pd.DataFrame) -> pd.DataFrame:
@@ -192,6 +206,55 @@ def optimize_delta(matrix: np.ndarray, seasons: list[str]) -> tuple[float, list[
                         "specificity": round(spec, 4), "youden": round(sens + spec - 1, 4)})
     best = max(results, key=lambda r: (r["youden"], -abs(r["delta"] - mem.DELTA)))
     return best["delta"], results
+
+
+def trend_blocks(series: pd.DataFrame, wide_index: list[int]) -> dict:
+    """
+    Trend pro každý týden řady (klouzavé okno), aktuální stav, průběh po sezónách
+    pro portál a zpětný test: jak často po dané kategorii míra další týden
+    opravdu vzrostla. Sváteční týdny se do testu nepočítají (viz trend.HOLIDAY_WEEKS).
+    """
+    s = series.reset_index(drop=True)
+    monday = pd.to_datetime([pd.Timestamp.fromisocalendar(int(r), int(w), 1)
+                             for r, w in zip(s["rok"], s["tyden"])])
+    results = []
+    for i in range(len(s)):
+        lo = i - trend.WINDOW + 1
+        # okno musí být úplné a bez děr — trend přes chybějící týden by byl sklon odjinud
+        complete = lo >= 0 and (monday[i] - monday[lo]).days == 7 * (trend.WINDOW - 1)
+        results.append(trend.growth(s["pripady"].iloc[lo: i + 1], s["populace"].iloc[lo: i + 1])
+                       if complete else None)
+    s["trend"] = results
+    s["holiday"] = [bool(set(s["tyden"].iloc[max(0, i - trend.WINDOW + 1): i + 1]) & set(trend.HOLIDAY_WEEKS))
+                    for i in range(len(s))]
+
+    def public(r: dict | None, holiday: bool) -> dict | None:
+        if r is None:
+            return None
+        return {"category": r["category"], "p_growth": round(r["p_growth"], 2),
+                "weekly_change": round(r["weekly_change"], 3),
+                "doubling_weeks": None if r["doubling_weeks"] is None else round(r["doubling_weeks"], 1),
+                "holiday_effect": holiday}
+
+    # zpětný test: kategorie v týdnu t vs. míra v t+1 proti t
+    s["next_up"] = s["mira"].shift(-1) > s["mira"]
+    test = s[s["trend"].notna() & ~s["holiday"] & s["tyden"].isin(SEASON_WEEKS)
+             & ~s["sezona"].isin(EXCLUDED_SEASONS)].iloc[:-1]
+    backtest = {}
+    for _, name in trend.CATEGORIES:
+        g = test[test["trend"].map(lambda r: r["category"]) == name]
+        if len(g):
+            backtest[name] = {"n": int(len(g)), "next_week_up": round(float(g["next_up"].mean()), 2)}
+
+    by_season: dict[str, list] = {}
+    for year, g in s.groupby("sezona"):
+        if year not in wide_index:
+            continue
+        per_week = {int(w): public(r, h) for w, r, h in zip(g["tyden"], g["trend"], g["holiday"])}
+        by_season[season_label(int(year))] = [per_week.get(w) for w in SEASON_WEEKS]
+
+    return {"window_weeks": trend.WINDOW, "current": public(s["trend"].iloc[-1], bool(s["holiday"].iloc[-1])),
+            "by_season": by_season, "backtest": backtest}
 
 
 def load_forecasts(indicator: str) -> pd.DataFrame | None:
@@ -345,6 +408,7 @@ def compute_indicator(indicator: str, delta: float, optimize: bool) -> dict:
             "epidemic_week": epidemic_week,
             "source": latest["zdroj"],
         },
+        "trend": trend_blocks(series, [y for y in wide.columns if y >= usable[0]]),
         "forecast": forecast_blocks(indicator, series, model.epidemic_threshold),
         "history": {season_label(y): [None if pd.isna(v) else round(float(v), 2) for v in wide[y]]
                     for y in wide.columns if y >= usable[0]},
