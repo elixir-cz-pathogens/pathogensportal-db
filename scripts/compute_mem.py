@@ -428,7 +428,7 @@ def main() -> int:
 
     out = {
         "method": "Moving Epidemic Method (Vega et al. 2013, 2015)",
-        "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "season_weeks": SEASON_WEEKS,
         "indicators": {k: compute_indicator(k, args.delta, args.optimize_delta) for k in INDICATORS},
     }
