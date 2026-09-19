@@ -194,6 +194,48 @@ def load_szu_weekly(conn, snapshot: date, dry_run: bool = False) -> int:
     return len(rows)
 
 
+# ── observation: registry ÚZIS mimo ISIN (pohlavní nemoci, tuberkulóza) ─────
+
+def load_uzis_registries(conn, snapshot: date, dry_run: bool = False) -> int:
+    """
+    Roční řady. Kraj u RPN = prvních pět znaků kódu okresu bydliště; u RTBC kraj
+    dispenzarizace, jak ho dává zdroj. Rodná země u TBC se do `observation` nevejde
+    (tabulka pro ni nemá dimenzi) — zůstává jen v CSV a v grafech.
+    """
+    rows = []
+    sti = DATA_DIR / "uzis" / "uzis_pohlavni_nemoci.csv"
+    if sti.exists():
+        df = pd.read_csv(sti, encoding="utf-8-sig")
+        df["kraj"] = df["okres_kod"].str[:5]
+        grouped = (df.groupby(["rok", "kraj", "vek_nazev", "pohlavi", "diagnoza_kod", "diagnoza_nazev"],
+                              dropna=False)["pocet_pripadu"].sum().reset_index())
+        for r in grouped.itertuples():
+            rows.append(("uzis_rpn", str(r.diagnoza_kod), str(r.diagnoza_nazev), str(r.kraj),
+                         str(r.vek_nazev), {"M": "male", "Z": "female"}.get(r.pohlavi),
+                         date(int(r.rok), 1, 1), date(int(r.rok) + 1, 1, 1), "cases",
+                         int(r.pocet_pripadu), snapshot))
+
+    tbc = DATA_DIR / "uzis" / "uzis_tuberkuloza.csv"
+    if tbc.exists():
+        df = pd.read_csv(tbc, encoding="utf-8-sig")
+        grouped = (df.groupby(["rok_incidence", "kraj_kod", "vek_nazev"], dropna=False)["pripady"]
+                     .sum().reset_index())
+        for r in grouped.itertuples():
+            rows.append(("uzis_rtbc", "A15-A19", "Tuberkulóza", str(r.kraj_kod), str(r.vek_nazev), None,
+                         date(int(r.rok_incidence), 1, 1), date(int(r.rok_incidence) + 1, 1, 1),
+                         "cases", int(r.pripady), snapshot))
+
+    if not rows:
+        print("  [uzis_registries] žádné soubory — přeskakuji")
+        return 0
+    if dry_run:
+        print(f"  [uzis_registries] {len(rows):,} řádků (dry-run)")
+        return len(rows)
+    _upsert_observations(conn, rows)
+    print(f"  [uzis_registries] {len(rows):,} řádků")
+    return len(rows)
+
+
 # ── observation: WHO FluNet/FluID + ECDC ERVISS ──────────────────────────────
 
 # FluNet hlásí za týž týden dva nezávislé systémy (sentinel ~50 vzorků,
@@ -312,6 +354,7 @@ def main() -> int:
         load_population(None, dry_run=True)
         load_isin(None, snap, dry_run=True)
         load_szu_weekly(None, snap, dry_run=True)
+        load_uzis_registries(None, snap, dry_run=True)
         load_who_flu(None, snap, dry_run=True)
         load_erviss(None, snap, dry_run=True)
         return 0
@@ -321,6 +364,7 @@ def main() -> int:
         load_population(conn)
         load_isin(conn, snap)
         load_szu_weekly(conn, snap)
+        load_uzis_registries(conn, snap)
         load_who_flu(conn, snap)
         load_erviss(conn, snap)
         conn.commit()

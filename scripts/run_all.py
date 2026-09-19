@@ -14,7 +14,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from scrapers import (mzcr_covid, ecdc_covid, ecdc_erviss, ecdc_respicast, szu_influenza,
-                      szu_weekly, uzis_isin, csu_population, who_flu)
+                      szu_weekly, uzis_isin, uzis_registries, csu_population, who_flu)
 from snapshot import snapshot
 
 DATA_ROOT = Path(os.getenv("DATA_DIR") or Path(__file__).resolve().parents[1] / "data")
@@ -28,6 +28,7 @@ def run() -> int:
         ("SZÚ chřipka (aktuál.)", szu_influenza.download_current, DATA_ROOT / "szu"),
         ("SZÚ týdenní PDF",       szu_weekly.download,          DATA_ROOT / "szu"),
         ("ÚZIS ISIN inf. nem.",   uzis_isin.download,          DATA_ROOT / "isin"),
+        ("ÚZIS registry RPN+TBC", uzis_registries.download,    DATA_ROOT / "uzis"),
         ("ČSÚ populace",          csu_population.download,     DATA_ROOT / "csu"),
         ("WHO FluNet + FluID",    who_flu.download,            DATA_ROOT / "who"),
         ("ECDC ERVISS (CZ)",      ecdc_erviss.download,        DATA_ROOT / "ecdc"),
