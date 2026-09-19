@@ -115,9 +115,21 @@ nejčerstvější týdny ECDC ERVISS — tatáž řada dvěma cestami (205 spole
 největší rozdíl 1,4 %). Laboratorní záchyty se jako vstup nehodí: s objemem testování
 vzrostly řádově, takže práh z minulých sezón by dnes svítil trvale.
 
-Do odhadu jde posledních 10 platných sezón; vyřazené sezóny (pandemie 2009/10,
-covidové 2020/21 a 2021/22, neověřená 2025/26) jsou i s důvodem v `EXCLUDED_SEASONS`
-a ve výstupním JSON. Parametr δ se volí leave-one-season-out podle Youdenova indexu.
+Do odhadu jde posledních 10 platných sezón. Ručně vyřazené (pandemie 2009/10, covidové
+2020/21 a 2021/22, neověřená 2025/26) jsou v `EXCLUDED_SEASONS`; navíc se automaticky
+vyřazují **sezóny bez epidemie** — vrchol pod epidemickým prahem z ostatních sezón
+(dnes jen 2013/14: data jsou úplná, chřipka tu zimu prostě skoro nebyla; v odhadu by
+ale sama zvedla práh „vysoké" intenzity nad všechno, co kdy bylo naměřeno). Všechna
+vyřazení jsou i s důvodem ve výstupním JSON. δ je pevně na standardních 2,8 kvůli
+srovnatelnosti s ECDC; citlivost na δ (leave-one-season-out) se zapisuje do výstupu.
+
+Počítají se dva ukazatele. **ILI** (chřipce podobné onemocnění — úzká definice, vlna ji
+zvedne ~15× nad podzimní klid) je hlavní: zpětný test zachytí 92 % epidemických týdnů.
+**ARI** (jakákoli akutní respirační infekce — číslo, ve kterém tradičně mluví česká
+hygiena) se počítá také, ale chřipková vlna se v ní ztrácí v celoročním pozadí jiných
+virů: zachytí jen 47 % týdnů. Výstup proto u každého ukazatele nese `intensity_reliable`
+(Youdenův index ≥ 0,7) — u ARI je `false` a portál u ní kreslí jen křivku s prahem,
+bez pásem intenzity, která by předstírala přesnost, již data nemají.
 
 Validace: jádro (`mem.py`, čisté numpy) je reimplementace R balíku `mem` a golden
 test ho drží na shodě s ním na 8+ platných míst — prahy i začátky a konce epidemií,
