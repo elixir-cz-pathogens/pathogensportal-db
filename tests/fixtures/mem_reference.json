@@ -1,0 +1,9 @@
+{
+  "_comment": "Referenční výstupy R balíku mem 2.19 (memmodel/memtiming, výchozí parametry, i.type.other=1 — ten ovlivňuje jen typickou křivku, ne prahy). Období jsou 1-based včetně, jak je vrací R.",
+  "cases": [
+    {"file":"mem_ili_cz.csv","delta":2.8,"n_values":3,"epidemic":42.6167483776,"intensity":[134.0625874111,344.3177976439,522.4228766076],"periods":[[15,26],[17,25],[17,27],[12,21],[17,26],[17,24],[16,24],[11,25],[15,23],[16,25]]},
+    {"file":"mem_ili_cz.csv","delta":3.9,"n_values":3,"epidemic":58.0583289054,"intensity":[134.0625874111,344.3177976439,522.4228766076],"periods":[[18,21],[18,24],[17,25],[14,21],[17,25],[17,23],[17,23],[11,18],[16,22],[17,24]]},
+    {"file":"mem_synthetic.csv","delta":2.8,"n_values":5,"epidemic":38.2303481380,"intensity":[147.9180154693,313.3796540787,436.6988597679],"periods":[[17,29],[9,21],[10,18],[18,27],[14,26],[9,17]]},
+    {"file":"mem_synthetic.csv","delta":2.0,"n_values":5,"epidemic":30.3553415099,"intensity":[147.9180154693,313.3796540787,436.6988597679],"periods":[[15,29],[9,23],[9,18],[18,28],[13,27],[8,17]]}
+  ]
+}

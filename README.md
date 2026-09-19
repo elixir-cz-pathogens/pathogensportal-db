@@ -19,6 +19,8 @@ portál](#jak-repo-konzumuje-portál).
 | **ÚZIS — registry RPN a RTBC** | pohlavní nemoci (syfilis, kapavka, LGV; od 1994, okres × pohlaví × věk) a tuberkulóza (od 2000, čtvrtletí × kraj × věk × rodná země) | **v ISIN tyhle nemoci nejsou** — mají vlastní povinné registry. Roční aktualizace (soubory z 2/2026 nesou rok 2025, resp. 2024) |
 | **ČSÚ** | počty obyvatel po krajích (dataset `PORKR01`) | jmenovatele — bez nich jsou z čísel počty, ne incidence |
 | **ECDC** | historická data COVID-19 pro ČR | zdroj **přestal publikovat na podzim 2022**; scraper zůstává kvůli historické řadě |
+| **WHO FluNet + FluID** | týdenní laboratorní záchyty chřipky **včetně počtu vyšetřených vzorků** (od 1997) a ILI/ARI případy s pokrytou populací (souvisle od 2009/10) | FluNet nonsentinel jsou tatáž čísla jako týdenní PDF SZÚ, ale s jmenovatelem pozitivity a se sezónami 2022/23–2023/24, které SZÚ už online nemá. FluID dává míru srovnatelnou napříč roky — vstup pro sezónní prahy (MEM) |
+| **ECDC ERVISS** | ILI/ARI na 100 tis. po věkových skupinách + laboratorní hlášení, řádky za ČR (od 2022-W25) | čerstvější než FluID (ten se mimo sezónu zpožďuje); živá náhrada za mrtvý ECDC COVID zdroj |
 
 ## Jak to funguje
 
@@ -34,6 +36,7 @@ Pipeline má pět fází, které na sebe navazují přes souborový systém, ne 
 4. výstup       generate_json.py ───► $OUTPUT_DIR/*.json      (Chart.js)
 
 5. analytika    detect_anomalies.py ► $OUTPUT_DIR/anomaly_signals.json (stránka Signály)
+                compute_mem.py ─────► $OUTPUT_DIR/flu_mem.json (sezónní prahy chřipky)
 ```
 
 ⚠️ **Pipeline nezapisuje žádné Hugo stránky.** Dřív to dělala ebola větev
@@ -104,6 +107,46 @@ epidemie stala tématem; 0 planých poplachů v klidu) a simulační studie se z
 pravdou (`simulate_detection.py`): záchyt epidemie velikosti 3σ/5σ/10σ =
 27/60/96 %, plané poplachy 1,5–3 %. Detaily v docstringu obou skriptů.
 
+### Sezónní prahy chřipky (MEM)
+
+`compute_mem.py` počítá **Moving Epidemic Method** (Vega et al. 2013, 2015 — standard
+ECDC a WHO PISA) nad týdenní mírou ILI na 100 tis.: epidemický práh („sezóna začala")
+a tři prahy intenzity (střední / vysoká / velmi vysoká). Historii dává WHO FluID,
+nejčerstvější týdny ECDC ERVISS — tatáž řada dvěma cestami (205 společných týdnů,
+největší rozdíl 1,4 %). Laboratorní záchyty se jako vstup nehodí: s objemem testování
+vzrostly řádově, takže práh z minulých sezón by dnes svítil trvale.
+
+Do odhadu jde posledních 10 platných sezón. Ručně vyřazené (pandemie 2009/10, covidové
+2020/21 a 2021/22, neověřená 2025/26) jsou v `EXCLUDED_SEASONS`; navíc se automaticky
+vyřazují **sezóny bez epidemie** — vrchol pod epidemickým prahem z ostatních sezón
+(dnes jen 2013/14: data jsou úplná, chřipka tu zimu prostě skoro nebyla; v odhadu by
+ale sama zvedla práh „vysoké" intenzity nad všechno, co kdy bylo naměřeno). Všechna
+vyřazení jsou i s důvodem ve výstupním JSON. δ je pevně na standardních 2,8 kvůli
+srovnatelnosti s ECDC; citlivost na δ (leave-one-season-out) se zapisuje do výstupu.
+
+Počítají se dva ukazatele. **ILI** (chřipce podobné onemocnění — úzká definice, vlna ji
+zvedne ~15× nad podzimní klid) je hlavní: zpětný test zachytí 92 % epidemických týdnů.
+**ARI** (jakákoli akutní respirační infekce — číslo, ve kterém tradičně mluví česká
+hygiena) se počítá také, ale chřipková vlna se v ní ztrácí v celoročním pozadí jiných
+virů: zachytí jen 47 % týdnů. Výstup proto u každého ukazatele nese `intensity_reliable`
+(Youdenův index ≥ 0,7) — u ARI je `false` a portál u ní kreslí jen křivku s prahem,
+bez pásem intenzity, která by předstírala přesnost, již data nemají.
+
+K prahům přidává `flu_mem.json` dvě věci. **Trend** (`trend.py`): tempo růstu z posledních
+tří týdnů a kategorie roste / pravděpodobně roste / beze změny / pravděpodobně klesá /
+klesá podle pravděpodobnosti růstu — po vzoru CDC, jen nad tempem růstu místo Rt (ILI a ARI
+jsou směs patogenů bez jednoho generačního intervalu). Délku okna rozhodl zpětný test,
+jehož výsledek je ve výstupu. **Předpověď** (`forecast.py`, scraper `ecdc_respicast`):
+ensemble evropského hubu ECDC RespiCast na čtyři týdny, z kvantilů spočítaná
+pravděpodobnost překročení našeho epidemického prahu a poctivé vyhodnocení minulých
+předpovědí pro ČR — relativní WIS proti referenčnímu modelu hubu (ILI 0,85) a skutečné
+pokrytí intervalů („95%" pás zachytil 85 %). Předpověď se ukazuje tak, jak je, vedle
+své historické úspěšnosti; roztažení intervalů jsme zkoušeli a na druhou sezónu se nepřeneslo.
+
+Validace: jádro (`mem.py`, čisté numpy) je reimplementace R balíku `mem` a golden
+test ho drží na shodě s ním na 8+ platných míst — prahy i začátky a konce epidemií,
+na českých datech i na syntetice (`tests/test_mem_golden.py`).
+
 ## Struktura repa
 
 ```
@@ -113,7 +156,9 @@ scripts/load_to_db.py         ETL: CSV → PostgreSQL (observation, population)
 scripts/generate_json.py      přečte data, vygeneruje Chart.js JSON do $OUTPUT_DIR
 scripts/detect_anomalies.py   detekce anomálií (Farrington/Noufaily) → anomaly_signals.json
 scripts/simulate_detection.py simulační studie detektoru (validace se známou pravdou)
-scripts/scrapers/             jednotlivé scrapery (MZČR, SZÚ ×2, ÚZIS ISIN, ÚZIS registry, ČSÚ, ECDC)
+scripts/mem.py                Moving Epidemic Method — jádro výpočtu, bez I/O
+scripts/compute_mem.py        sezónní prahy chřipky nad ILI → flu_mem.json
+scripts/scrapers/             jednotlivé scrapery (MZČR, SZÚ ×2, ÚZIS ISIN, ÚZIS registry, ČSÚ, ECDC ×2, WHO)
 curated/szu/                  uzavřené sezóny SZÚ, jejichž online zdroj už neexistuje
 db/init.sql                   schéma PostgreSQL (portál si ho mountuje do kontejneru pathogen-db)
 Dockerfile                    image `datascrapper` — portál ho staví přímo z tohohle repa
@@ -145,6 +190,7 @@ python scripts/run_all.py                # stáhne CSV do $DATA_DIR (a udělá s
 python scripts/load_to_db.py             # naplní PostgreSQL (volitelné, viz níže)
 python scripts/generate_json.py          # vygeneruje chart JSON do $OUTPUT_DIR
 python scripts/detect_anomalies.py       # signály do $OUTPUT_DIR/anomaly_signals.json
+python scripts/compute_mem.py            # sezónní prahy chřipky do $OUTPUT_DIR/flu_mem.json
 ```
 
 Krok s databází je volitelný — bez něj `generate_json.py` čte CSV napřímo. Databáze je potřeba
@@ -167,7 +213,7 @@ docker run --rm \
 ```
 
 `CMD` v Dockerfilu spustí celý řetězec za sebou: `run_all.py` → `generate_json.py` →
-`detect_anomalies.py`.
+`detect_anomalies.py` → `compute_mem.py`.
 
 ## Jak repo konzumuje portál
 
