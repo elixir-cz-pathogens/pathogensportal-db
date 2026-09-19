@@ -103,6 +103,16 @@ epidemie stala tématem; 0 planých poplachů v klidu) a simulační studie se z
 pravdou (`simulate_detection.py`): záchyt epidemie velikosti 3σ/5σ/10σ =
 27/60/96 %, plané poplachy 1,5–3 %. Detaily v docstringu obou skriptů.
 
+**Nový kanál hlášení (EWS).** ÚZIS od července 2025 přijímá případy i přes hlášení EWS
+a sloupec `EWS` ve zdrojových datech říká, kolik jich tudy přišlo — za druhé pololetí 2025
+přes 25 tisíc, u pásového oparu 62 % případů, u boreliózy 59 %, u mononukleózy 51 %. Řada
+tím vzroste, aniž by nemocných přibylo. Odečíst EWS nestačí (část hlášení se do nového
+kanálu přelila ze starého), takže srovnatelný počet leží někde mezi „nahlášeno − EWS"
+a „nahlášeno". Detektor proto u každého signálu rozhoduje: je-li nad prahem i dolní mez,
+signál platí (`reporting_channel.robust`); jinak je **nerozhodnutelný** a ve výstupu se
+řadí až za signály, o kterých rozhodnout jde. V prosinci 2025 tak z 56 signálů zůstává
+24 rozhodnutelných a 32 nerozhodnutelných.
+
 ## Struktura repa
 
 ```
