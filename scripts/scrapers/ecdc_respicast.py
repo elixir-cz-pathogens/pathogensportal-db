@@ -6,9 +6,10 @@ Licence: repozitář ŽÁDNOU licenci neuvádí — před zobrazením na portál
          hubu (European.Modelling.Hub@ecdc.europa.eu) na podmínky a znění atribuce
 Aktualizace: týdně (čtvrtek), soubor za každé kolo předpovědí od 10/2024
 
-Bereme jen ensemble hubu (`respicast-hubEnsemble`), ne jednotlivé modely: deset
-let vyhodnocování předpovědních hubů ukazuje, že ensemble je spolehlivější než
-kterýkoli jeho člen. Předpovídá se stejná řada, nad kterou počítáme MEM (ILI a ARI
+Bereme ensemble hubu (`respicast-hubEnsemble`), ne jednotlivé modely — ensemble
+bývá spolehlivější než kterýkoli jeho člen. K němu referenční model hubu
+(`respicast-quantileBaseline`, „bude to jako minulý týden“ s nejistotou
+z minulých změn): bez něj nejde říct, jestli předpověď vůbec něco přidává. Předpovídá se stejná řada, nad kterou počítáme MEM (ILI a ARI
 na 100 tis. z ERVISS), takže jde předpověď rovnou porovnat s našimi prahy.
 
 Horizont 1 není budoucnost, ale právě uplynulý týden, za který ještě nejsou
@@ -19,8 +20,9 @@ krajská PDF v szu_weekly). Držíme celou historii kol, ne jen poslední: bez n
 nejde zpětně změřit, jak se předpovědi pro ČR trefovaly.
 
 Výstup:
-  respicast_cz.csv — kolo (origin_date), ukazatel (ILI/ARI), tyden_do
-                     (target_end_date, neděle), horizont, kvantil, hodnota
+  respicast_cz.csv — model (ensemble/baseline), kolo (origin_date), ukazatel
+                     (ILI/ARI), tyden_do (target_end_date, neděle), horizont,
+                     kvantil, hodnota
 """
 
 import io
@@ -32,23 +34,23 @@ import pandas as pd
 import requests
 
 REPO = "european-modelling-hubs/RespiCast-SyndromicIndicators"
-MODEL = "respicast-hubEnsemble"
-LISTING_URL = f"https://api.github.com/repos/{REPO}/contents/model-output/{MODEL}"
-RAW_URL = f"https://raw.githubusercontent.com/{REPO}/main/model-output/{MODEL}"
+MODELS = {"ensemble": "respicast-hubEnsemble", "baseline": "respicast-quantileBaseline"}
+LISTING_URL = f"https://api.github.com/repos/{REPO}/contents/model-output"
+RAW_URL = f"https://raw.githubusercontent.com/{REPO}/main/model-output"
 LOCATION = "CZ"
 TARGETS = {"ILI incidence": "ILI", "ARI incidence": "ARI"}
 MAX_AGE_DAYS = 45
 
 
-def _list_rounds() -> list[str]:
+def _list_rounds(model: str) -> list[str]:
     headers = {"Accept": "application/vnd.github+json"}
     if os.environ.get("GITHUB_TOKEN"):      # v CI; bez tokenu platí limit 60 dotazů/h na IP
         headers["Authorization"] = f"Bearer {os.environ['GITHUB_TOKEN']}"
-    resp = requests.get(LISTING_URL, headers=headers, timeout=60)
+    resp = requests.get(f"{LISTING_URL}/{model}", headers=headers, timeout=60)
     resp.raise_for_status()
-    names = sorted(f["name"] for f in resp.json() if f["name"].endswith(f"-{MODEL}.csv"))
+    names = sorted(f["name"] for f in resp.json() if f["name"].endswith(f"-{model}.csv"))
     if not names:
-        raise ValueError(f"{LISTING_URL}: žádný soubor *-{MODEL}.csv — hub změnil strukturu")
+        raise ValueError(f"{LISTING_URL}/{model}: žádný soubor *-{model}.csv — hub změnil strukturu")
     return names
 
 
@@ -75,27 +77,31 @@ def download(output_dir: Path) -> list[str]:
     cache = output_dir / "respicast_cache"
     cache.mkdir(exist_ok=True)
 
-    names = _list_rounds()
-    print(f"  [ecdc_respicast] {len(names)} kol předpovědí ({names[0][:10]} – {names[-1][:10]})")
-
-    newest = date.fromisoformat(names[-1][:10])
-    if newest < date.today() - timedelta(days=MAX_AGE_DAYS):
-        raise ValueError(f"poslední kolo předpovědí je {newest} — hub přestal přibývat")
-
     fetched = 0
     frames = []
-    for name in names:
-        cached = cache / name
-        if not cached.exists():
-            resp = requests.get(f"{RAW_URL}/{name}", timeout=120)
-            resp.raise_for_status()
-            cached.write_bytes(resp.content)
-            fetched += 1
-        frames.append(_parse(cached.read_bytes(), name))
+    for label, model in MODELS.items():
+        names = _list_rounds(model)
+        print(f"  [ecdc_respicast] {label}: {len(names)} kol ({names[0][:10]} – {names[-1][:10]})")
 
-    out = pd.concat(frames).sort_values(["kolo", "ukazatel", "horizont", "kvantil"])
-    if out[out["kolo"] == names[-1][:10]].empty:
-        raise ValueError(f"poslední kolo {names[-1][:10]} nemá žádnou předpověď pro {LOCATION}")
+        newest = date.fromisoformat(names[-1][:10])
+        if label == "ensemble" and newest < date.today() - timedelta(days=MAX_AGE_DAYS):
+            raise ValueError(f"poslední kolo předpovědí je {newest} — hub přestal přibývat")
+
+        for name in names:
+            cached = cache / name
+            if not cached.exists():
+                resp = requests.get(f"{RAW_URL}/{model}/{name}", timeout=120)
+                resp.raise_for_status()
+                cached.write_bytes(resp.content)
+                fetched += 1
+            frame = _parse(cached.read_bytes(), name)
+            frame.insert(0, "model", label)
+            frames.append(frame)
+
+    out = pd.concat(frames).sort_values(["model", "kolo", "ukazatel", "horizont", "kvantil"])
+    ensemble = out[out["model"] == "ensemble"]
+    if ensemble[ensemble["kolo"] == ensemble["kolo"].max()].empty:
+        raise ValueError(f"poslední kolo ensemble nemá žádnou předpověď pro {LOCATION}")
 
     out_path = output_dir / "respicast_cz.csv"
     out.to_csv(out_path, index=False, encoding="utf-8")

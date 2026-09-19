@@ -34,8 +34,9 @@ class _Resp:
 def _serve(monkeypatch, origins, calls):
     def fake_get(url, **kwargs):
         calls.append(url)
-        if url == rc.LISTING_URL:
-            return _Resp(payload=[{"name": f"{o}-{rc.MODEL}.csv"} for o in origins] + [{"name": "Readme.md"}])
+        if url.startswith(rc.LISTING_URL):
+            model = url.rsplit("/", 1)[1]
+            return _Resp(payload=[{"name": f"{o}-{model}.csv"} for o in origins] + [{"name": "Readme.md"}])
         return _Resp(content=_round_csv(url.rsplit("/", 1)[1][:10]))
     monkeypatch.setattr(rc.requests, "get", fake_get)
 
@@ -46,12 +47,13 @@ def test_keeps_czech_quantiles_only_and_caches_rounds(monkeypatch, tmp_path):
     _serve(monkeypatch, ["2025-01-08", recent], calls)
 
     out = pd.read_csv(rc.download(tmp_path)[0])
-    assert set(out["ukazatel"]) == {"ILI"} and len(out) == 4          # 2 kola × 2 kvantily, bez "median"
+    assert set(out["ukazatel"]) == {"ILI"} and set(out["model"]) == {"ensemble", "baseline"}
+    assert len(out) == 8                                               # 2 modely × 2 kola × 2 kvantily, bez "median"
     assert sorted(out["kvantil"].unique()) == [0.5, 0.975]
 
     calls.clear()
     rc.download(tmp_path)
-    assert calls == [rc.LISTING_URL]                                   # kola z cache, stahuje se jen výpis
+    assert all(c.startswith(rc.LISTING_URL) for c in calls) and len(calls) == 2   # kola z cache, jen výpisy
 
 
 def test_fails_when_hub_stops_publishing(monkeypatch, tmp_path):

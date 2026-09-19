@@ -44,6 +44,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+import forecast
 import mem
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -72,6 +73,11 @@ NO_EPIDEMIC = "sezóna bez epidemie — vrchol {peak:.0f} nedosáhl epidemickéh
 MIN_YOUDEN_FOR_INTENSITY = 0.7
 
 DELTA_GRID = np.round(np.arange(2.0, 4.01, 0.1), 1)   # rozsah doporučený autory metody
+
+
+# Kvantily, které stačí na vykreslení vějíře (medián, 50% a 95% pás).
+FAN_QUANTILES = (0.025, 0.25, 0.5, 0.75, 0.975)
+FORECAST_LEADS = (0, 1, 2, 3)   # 0 = právě uplynulý týden bez konsolidovaných dat, 1–3 = výhled
 
 
 def season_label(start_year: int) -> str:
@@ -188,6 +194,101 @@ def optimize_delta(matrix: np.ndarray, seasons: list[str]) -> tuple[float, list[
     return best["delta"], results
 
 
+def load_forecasts(indicator: str) -> pd.DataFrame | None:
+    """
+    Předpovědi RespiCast pro ČR. `lead` se počítá z dat, ne z `horizont`: hub
+    číslování horizontů mezi sezónami změnil (−1…2 → 1…4), rozdíl mezi dnem kola
+    a koncem cílového týdne ne.
+    """
+    path = DATA_DIR / "ecdc" / "respicast_cz.csv"
+    if not path.exists():
+        return None
+    f = pd.read_csv(path, parse_dates=["kolo", "tyden_do"])
+    f = f[f["ukazatel"] == INDICATORS[indicator]["erviss"]].copy()
+    f["lead"] = np.ceil((f["tyden_do"] - f["kolo"]).dt.days / 7).astype(int)
+    return f[f["lead"].isin(FORECAST_LEADS)]
+
+
+def _iso_week(day: pd.Timestamp) -> str:
+    y, w, _ = day.isocalendar()
+    return f"{y}-W{w:02d}"
+
+
+def _round_block(rows: pd.DataFrame, threshold: float) -> dict:
+    """Jedno kolo předpovědi → týdny s vějířem a pravděpodobností překročení prahu."""
+    weeks = []
+    for (week_end, lead), g in rows.groupby(["tyden_do", "lead"]):
+        g = g.sort_values("kvantil")
+        q = dict(zip(g["kvantil"].round(3), g["hodnota"]))
+        weeks.append({
+            "week": _iso_week(week_end), "lead": int(lead),
+            **{f"q{int(round(k * 1000)):03d}": round(float(q[k]), 2) for k in FAN_QUANTILES},
+            "p_epidemic": round(forecast.prob_at_least(g["kvantil"], g["hodnota"], threshold), 2),
+        })
+    return {"round": rows["kolo"].iloc[0].date().isoformat(), "weeks": weeks}
+
+
+def forecast_blocks(indicator: str, series: pd.DataFrame, threshold: float) -> dict | None:
+    """
+    Poslední předpověď, všechna minulá kola (pro zpětné přehrání na portálu)
+    a vyhodnocení: relativní WIS proti referenčnímu modelu hubu a pokrytí intervalů.
+
+    Intervaly ensemble jsou pro ČR příliš úzké („95%“ pás zachytil 77–88 %
+    případů). Konformní roztažení jsme zkoušeli a zavrhli: škála odhadnutá na
+    jedné sezóně se na druhou nepřenáší (ILI 2,8× vs. 1,1×), protože ensemble
+    se mezi sezónami sám zlepšil. Proto se předpověď ukazuje tak, jak je,
+    a vedle ní její skutečná historická úspěšnost.
+    """
+    f = load_forecasts(indicator)
+    if f is None or f.empty:
+        return None
+
+    truth = pd.Series(series["mira"].to_numpy(), index=[
+        pd.Timestamp.fromisocalendar(int(r), int(t), 7) for r, t in zip(series["rok"], series["tyden"])])
+
+    ens = f[f["model"] == "ensemble"]
+    rounds = {k.date().isoformat(): _round_block(g, threshold) for k, g in ens.groupby("kolo")}
+    # Kolo se na portálu páruje s posledním týdnem, který v té době měl data:
+    # týden před prvním cílovým týdnem předpovědi.
+    by_last_observed = {}
+    for k, g in ens.groupby("kolo"):
+        by_last_observed[_iso_week(g["tyden_do"].min() - pd.Timedelta(days=7))] = rounds[k.date().isoformat()]
+
+    scored = []
+    for (model, kolo, week_end, lead), g in f.groupby(["model", "kolo", "tyden_do", "lead"]):
+        if week_end not in truth.index:
+            continue
+        y = float(truth[week_end])
+        q = dict(zip(g["kvantil"].round(3), g["hodnota"]))
+        scored.append({"model": model, "kolo": kolo, "week_end": week_end, "lead": lead,
+                       "wis": forecast.weighted_interval_score(g["kvantil"], g["hodnota"], y),
+                       "in50": q[0.25] <= y <= q[0.75], "in95": q[0.025] <= y <= q[0.975]})
+    scored = pd.DataFrame(scored)
+    paired = scored[scored["model"] == "ensemble"].merge(
+        scored[scored["model"] == "baseline"], on=["kolo", "week_end", "lead"], suffixes=("", "_base"))
+    paired["season"] = np.where(paired["week_end"].dt.month >= 7,
+                                paired["week_end"].dt.year, paired["week_end"].dt.year - 1)
+
+    def summary(g: pd.DataFrame) -> dict:
+        return {"n": int(len(g)),
+                "relative_wis": round(float(g["wis"].mean() / g["wis_base"].mean()), 2),
+                "coverage_50": round(float(g["in50"].mean()), 2),
+                "coverage_95": round(float(g["in95"].mean()), 2)}
+
+    latest_round = max(rounds)
+    return {
+        "source": "ECDC RespiCast — ensemble hubu",
+        "latest": rounds[latest_round],
+        "by_last_observed_week": by_last_observed,
+        "evaluation": {
+            "overall": summary(paired),
+            "by_lead": {int(l): summary(g) for l, g in paired.groupby("lead")},
+            "by_season": {season_label(int(s)): summary(g) for s, g in paired.groupby("season")},
+            "note": "relative_wis < 1 = lepší než referenční model hubu (respicast-quantileBaseline)",
+        },
+    }
+
+
 def compute_indicator(indicator: str, delta: float, optimize: bool) -> dict:
     series = load_series(indicator)
     wide = season_matrix(series)
@@ -244,6 +345,7 @@ def compute_indicator(indicator: str, delta: float, optimize: bool) -> dict:
             "epidemic_week": epidemic_week,
             "source": latest["zdroj"],
         },
+        "forecast": forecast_blocks(indicator, series, model.epidemic_threshold),
         "history": {season_label(y): [None if pd.isna(v) else round(float(v), 2) for v in wide[y]]
                     for y in wide.columns if y >= usable[0]},
     }

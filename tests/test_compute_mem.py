@@ -57,3 +57,33 @@ def test_delta_grid_skips_values_unusable_on_flat_series():
     best, grid = compute_mem.optimize_delta(wide.to_numpy(), [str(y) for y in wide.columns])
     assert 0 < len(grid) < len(compute_mem.DELTA_GRID)
     assert best in [g["delta"] for g in grid]
+
+
+def _forecast_csv(path, rounds):
+    rows = []
+    for model, shift in (("ensemble", 0.0), ("baseline", 15.0)):      # baseline vedle o 15
+        for kolo, first_week_end in rounds:
+            for lead in range(4):
+                end = pd.Timestamp(first_week_end) + pd.Timedelta(days=7 * lead)
+                for q, v in ((0.025, 30), (0.25, 45), (0.5, 50), (0.75, 55), (0.975, 70)):
+                    rows.append((model, kolo, "ILI", end.date().isoformat(), lead + 1, q, v + shift))
+    pd.DataFrame(rows, columns=["model", "kolo", "ukazatel", "tyden_do", "horizont",
+                                "kvantil", "hodnota"]).to_csv(path, index=False)
+
+
+def test_forecast_block_pairs_round_with_last_observed_week(tmp_path, monkeypatch):
+    (tmp_path / "ecdc").mkdir()
+    # kolo ve středu 15. 1. 2025, první cílový týden končí v neděli 12. 1. (týden 2)
+    _forecast_csv(tmp_path / "ecdc" / "respicast_cz.csv", [("2025-01-15", "2025-01-12")])
+    monkeypatch.setattr(compute_mem, "DATA_DIR", tmp_path)
+    series = _series([(2025, w, 50.0) for w in range(1, 6)])
+
+    out = compute_mem.forecast_blocks("ili", series, threshold=50.0)
+
+    assert list(out["by_last_observed_week"]) == ["2025-W01"]
+    weeks = out["latest"]["weeks"]
+    assert [w["week"] for w in weeks] == ["2025-W02", "2025-W03", "2025-W04", "2025-W05"]
+    assert [w["lead"] for w in weeks] == [0, 1, 2, 3]                 # z dat, ne ze sloupce horizont
+    assert weeks[0]["p_epidemic"] == 0.5 and weeks[0]["q975"] == 70.0
+    ev = out["evaluation"]["overall"]
+    assert ev["n"] == 4 and ev["coverage_95"] == 1.0 and ev["relative_wis"] < 1

@@ -34,3 +34,18 @@ def interval_coverage(lower, upper, observed) -> float:
     """Podíl případů, kdy skutečnost padla do intervalu [lower, upper]."""
     lower, upper, observed = (np.asarray(a, dtype=float) for a in (lower, upper, observed))
     return float(((observed >= lower) & (observed <= upper)).mean())
+
+
+def weighted_interval_score(quantile_levels, quantile_values, observed: float) -> float:
+    """
+    WIS — standardní skóre předpovědních hubů (Bracher et al. 2021); menší = lepší.
+    Počítá se jako dvojnásobek průměrné kvantilové (pinball) ztráty přes všechny
+    hladiny, což je se symetrickou sadou kvantilů včetně mediánu totéž jako součet
+    intervalových skóre. Trestá zároveň šířku intervalů i to, když skutečnost
+    padne mimo ně — úzký a špatný interval vyjde hůř než široký a správný.
+    """
+    q = np.asarray(quantile_levels, dtype=float)
+    v = np.asarray(quantile_values, dtype=float)
+    diff = observed - v
+    return float(2.0 * np.mean(np.where(diff >= 0, q * diff, (q - 1.0) * diff)))
+

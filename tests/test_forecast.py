@@ -30,3 +30,13 @@ def test_handles_non_monotone_and_tied_quantiles():
 
 def test_interval_coverage():
     assert forecast.interval_coverage([0, 0, 0, 0], [10, 10, 10, 10], [5, 11, 10, -1]) == 0.5
+
+
+def test_wis_of_perfect_point_forecast_is_zero():
+    assert forecast.weighted_interval_score(LEVELS, [40.0] * 5, 40.0) == 0.0
+
+
+def test_wis_punishes_narrow_wrong_more_than_wide_right():
+    narrow_wrong = forecast.weighted_interval_score(LEVELS, [38, 39, 40, 41, 42], 80.0)
+    wide_right = forecast.weighted_interval_score(LEVELS, [10, 30, 40, 50, 90], 80.0)
+    assert wide_right < narrow_wrong
