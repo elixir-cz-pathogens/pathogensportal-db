@@ -16,6 +16,7 @@ portál](#jak-repo-konzumuje-portál).
 | **ÚZIS ISIN** | hlášená infekční onemocnění (114 diagnóz) po krajích, měsících a věkových skupinách | hlavní zdroj dashboardů i detekce anomálií; otevřený export aktuálně končí 12/2025 |
 | **SZÚ — sezónní archivy** | souhrny sezón chřipky 2012/13+ | PDF archivy; sezóny 2022/23–2024/25 už online nejsou → vezou se v repu (`curated/szu/`) |
 | **SZÚ — týdenní PDF** | týdenní matice virus×týden (2 sezóny v jednom PDF) + krajská hlášení po týdnech | celoročně týdně; extrakce validovaná proti kumulativním součtům v PDF, při nesouladu parser spadne |
+| **ÚZIS — registry RPN a RTBC** | pohlavní nemoci (syfilis, kapavka, LGV; od 1994, okres × pohlaví × věk) a tuberkulóza (od 2000, čtvrtletí × kraj × věk × rodná země) | **v ISIN tyhle nemoci nejsou** — mají vlastní povinné registry. Roční aktualizace (soubory z 2/2026 nesou rok 2025, resp. 2024) |
 | **ČSÚ** | počty obyvatel po krajích (dataset `PORKR01`) | jmenovatele — bez nich jsou z čísel počty, ne incidence |
 | **ECDC** | historická data COVID-19 pro ČR | zdroj **přestal publikovat na podzim 2022**; scraper zůstává kvůli historické řadě |
 
@@ -112,7 +113,7 @@ scripts/load_to_db.py         ETL: CSV → PostgreSQL (observation, population)
 scripts/generate_json.py      přečte data, vygeneruje Chart.js JSON do $OUTPUT_DIR
 scripts/detect_anomalies.py   detekce anomálií (Farrington/Noufaily) → anomaly_signals.json
 scripts/simulate_detection.py simulační studie detektoru (validace se známou pravdou)
-scripts/scrapers/             jednotlivé scrapery (MZČR, SZÚ ×2, ÚZIS ISIN, ČSÚ, ECDC)
+scripts/scrapers/             jednotlivé scrapery (MZČR, SZÚ ×2, ÚZIS ISIN, ÚZIS registry, ČSÚ, ECDC)
 curated/szu/                  uzavřené sezóny SZÚ, jejichž online zdroj už neexistuje
 db/init.sql                   schéma PostgreSQL (portál si ho mountuje do kontejneru pathogen-db)
 Dockerfile                    image `datascrapper` — portál ho staví přímo z tohohle repa

@@ -840,6 +840,157 @@ def isin_disease_groups():
         print(f"  [isin_groups] other: {len(other['diagnoza_nazev'].unique())} diagnóz, {other['pocet_pripadu'].sum():,.0f} případů celkem")
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+#  REGISTRY ÚZIS MIMO ISIN — pohlavní nemoci (RPN) a tuberkulóza (RTBC)
+# ─────────────────────────────────────────────────────────────────────────────
+# Syfilis, kapavka a TBC mají vlastní povinné registry a v ISIN nejsou; bez nich
+# by na portálu chyběly úplně (viz scrapers/uzis_registries.py).
+
+STI_FILE = DATA_DIR / "uzis" / "uzis_pohlavni_nemoci.csv"
+TBC_FILE = DATA_DIR / "uzis" / "uzis_tuberkuloza.csv"
+
+# MKN-10 → řada v grafu. Čtyři kódy syfilis (vrozená, časná, pozdní, jiná) se
+# sčítají: pro trend je podstatná nemoc, ne stadium, ve kterém byla zachycena.
+STI_SERIES = {"A50": "Syfilis", "A51": "Syfilis", "A52": "Syfilis", "A53": "Syfilis",
+              "A54": "Kapavka", "A55": "Venerický lymfogranulom"}
+STI_MAIN = ["Syfilis", "Kapavka"]           # LGV jsou jednotky případů ročně
+STI_AGE_ORDER = ["18 let a méně", "19–24 let", "25–34 let", "35–44 let",
+                 "45–54 let", "55–64 let", "65 let a více"]
+TBC_AGE_ORDER = ["18 let a méně", "19–64 let", "65 let a více"]
+TBC_MAP_YEARS = 3    # mapa TBC = průměr posledních let; ~30 případů na kraj a rok je samý šum
+
+
+def _national_population(sex: str = "Celkem") -> pd.Series:
+    pop = _load_population()
+    if pop.empty:
+        return pd.Series(dtype=float)
+    cz = pop[(pop["kraj_kod"] == "CZ") & (pop["pohlavi"] == sex)]
+    return cz.set_index("rok")["pocet"]
+
+
+def _per_100k(cases: pd.Series, population: pd.Series) -> pd.Series:
+    """Incidence na 100 tis.; roky bez jmenovatele vypadnou, nedopočítávají se."""
+    years = [y for y in cases.index if y in population.index]
+    return (cases.loc[years] / population.loc[years] * 100_000).round(2)
+
+
+def _regional_incidence(cases_by_region: pd.Series, year: int, per_year: int = 1) -> tuple[dict, int]:
+    pop = _load_population()
+    pop_total = pop[pop["pohlavi"] == "Celkem"]
+    pop_year = year if year in set(pop_total["rok"]) else int(pop_total["rok"].max())
+    denom = pop_total[pop_total["rok"] == pop_year].set_index("kraj_kod")["pocet"]
+    regions = {str(code): round(n / per_year / denom[code] * 100_000, 1)
+               for code, n in cases_by_region.items() if code in NUTS3_NAMES and code in denom.index}
+    return regions, pop_year
+
+
+# ── 18. Pohlavní nemoci — Registr pohlavních nemocí ──────────────────────────
+def sti_registry():
+    if not STI_FILE.exists():
+        print("  [sti] chybí data/uzis/uzis_pohlavni_nemoci.csv — přeskakuji"); return
+    df = pd.read_csv(STI_FILE, encoding="utf-8-sig")
+    df["rada"] = df["diagnoza_kod"].map(STI_SERIES)
+    df = df.dropna(subset=["rada"])
+    last_year = int(df["rok"].max())
+
+    by_year = df.groupby(["rok", "rada"])["pocet_pripadu"].sum().unstack(fill_value=0)
+    save("sti_registry_trend", {
+        "labels": [str(y) for y in by_year.index], "x_title": "Rok hlášení",
+        "datasets": [ds(name, by_year[name].astype(int).tolist(), color)
+                     for name, color in zip(["Syfilis", "Kapavka", "Venerický lymfogranulom"],
+                                            ["blue", "orange", "teal"]) if name in by_year.columns],
+    })
+
+    population = _national_population()
+    if population.empty:
+        print("  [sti] chybí populace ČSÚ — incidence a mapa se přeskakují")
+    else:
+        incidence = {name: _per_100k(by_year[name], population) for name in STI_MAIN}
+        years = incidence[STI_MAIN[0]].index
+        save("sti_registry_incidence", {
+            "labels": [str(y) for y in years], "x_title": "Rok hlášení", "unit": "na 100 000 obyvatel",
+            "datasets": [ds(name, incidence[name].tolist(), color)
+                         for name, color in zip(STI_MAIN, ["blue", "orange"])],
+        })
+
+        # Muži vs. ženy: každé pohlaví vlastním jmenovatelem, jinak by rozdíl v počtu
+        # obyvatel (žen je o ~3 % víc) šel na účet nemoci.
+        main = df[df["rada"].isin(STI_MAIN)]
+        by_sex = main.groupby(["rok", "pohlavi"])["pocet_pripadu"].sum().unstack(fill_value=0)
+        sexes = [("M", "Muži", "blue"), ("Z", "Ženy", "red")]
+        rates = {label: _per_100k(by_sex[code], _national_population(label)) for code, label, _ in sexes}
+        save("sti_registry_sex", {
+            "labels": [str(y) for y in rates["Muži"].index], "x_title": "Rok hlášení",
+            "unit": "na 100 000 mužů / žen",
+            "datasets": [ds(label, rates[label].tolist(), color) for _, label, color in sexes],
+        })
+
+        # Kraj = prvních pět znaků kódu okresu (CZ0642 → CZ064). CZ099 jsou případy
+        # bez okresu bydliště v ČR — do mapy nepatří, v celostátních součtech zůstávají.
+        latest = main[main["rok"] == last_year].copy()
+        latest["kraj_kod"] = latest["okres_kod"].str[:5]
+        regions, pop_year = _regional_incidence(latest.groupby("kraj_kod")["pocet_pripadu"].sum(), last_year)
+        save("sti_registry_map", {
+            "year": last_year, "population_year": pop_year,
+            "unit": "případů na 100 000 obyvatel", "regions": regions, "labels": NUTS3_NAMES,
+        })
+
+    recent = df[(df["rok"] > last_year - 5) & df["rada"].isin(STI_MAIN)]
+    by_age = recent.groupby(["vek_nazev", "rada"])["pocet_pripadu"].sum().unstack(fill_value=0)
+    by_age = by_age.reindex([a for a in STI_AGE_ORDER if a in by_age.index])
+    save("sti_registry_age", {
+        "labels": by_age.index.tolist(), "x_title": f"Věková skupina ({last_year - 4}–{last_year})",
+        "datasets": [ds(name, by_age[name].astype(int).tolist(), color, "bar")
+                     for name, color in zip(STI_MAIN, ["blue", "orange"])],
+    })
+    print(f"  [sti] {by_year.index.min()}–{last_year}; {last_year}: "
+          + ", ".join(f"{n} {int(by_year.loc[last_year, n])}" for n in by_year.columns))
+
+
+# ── 19. Tuberkulóza — Registr tuberkulózy ────────────────────────────────────
+def tbc_registry():
+    if not TBC_FILE.exists():
+        print("  [tbc] chybí data/uzis/uzis_tuberkuloza.csv — přeskakuji"); return
+    df = pd.read_csv(TBC_FILE, encoding="utf-8-sig")
+    # Rok incidence = první potvrzené datum onemocnění; před rokem 2000 jde o pár
+    # případů dohlášených zpětně, registr jako celek začíná rokem 2000.
+    df = df[df["rok_incidence"] >= 2000]
+    last_year = int(df["rok_incidence"].max())
+
+    by_year = df.groupby("rok_incidence")["pripady"].sum()
+    population = _national_population()
+    if not population.empty:
+        rate = _per_100k(by_year, population)
+        save("tbc_incidence", {
+            "labels": [str(y) for y in rate.index], "x_title": "Rok incidence", "unit": "na 100 000 obyvatel",
+            "datasets": [ds("Tuberkulóza (A15–A19)", rate.tolist(), "blue")],
+        })
+        window = df[df["rok_incidence"] > last_year - TBC_MAP_YEARS]
+        regions, pop_year = _regional_incidence(window.groupby("kraj_kod")["pripady"].sum(),
+                                                last_year, per_year=TBC_MAP_YEARS)
+        save("tbc_map", {
+            "year": last_year, "years_averaged": TBC_MAP_YEARS, "population_year": pop_year,
+            "unit": "případů na 100 000 obyvatel ročně", "regions": regions, "labels": NUTS3_NAMES,
+        })
+
+    by_origin = df.groupby(["rok_incidence", "CZ"])["pripady"].sum().unstack(fill_value=0)
+    save("tbc_origin", {
+        "labels": [str(y) for y in by_origin.index], "x_title": "Rok incidence",
+        "datasets": [ds("Narození v ČR", by_origin[1].astype(int).tolist(), "blue", "bar"),
+                     ds("Narození v zahraničí", by_origin[0].astype(int).tolist(), "orange", "bar")],
+    })
+
+    by_age = df.groupby(["rok_incidence", "vek_nazev"])["pripady"].sum().unstack(fill_value=0)
+    save("tbc_age", {
+        "labels": [str(y) for y in by_age.index], "x_title": "Rok incidence",
+        "datasets": [ds(age, by_age[age].astype(int).tolist(), color)
+                     for age, color in zip(TBC_AGE_ORDER, ["teal", "blue", "orange"]) if age in by_age.columns],
+    })
+    abroad = by_origin[0].loc[last_year] / by_year.loc[last_year]
+    print(f"  [tbc] 2000–{last_year}; {last_year}: {int(by_year.loc[last_year])} případů, "
+          f"{abroad:.0%} narozených v zahraničí")
+
+
 if __name__ == "__main__":
     print("Generuji Chart.js JSON data...")
     covid_cases_weekly()
@@ -864,4 +1015,7 @@ if __name__ == "__main__":
     isin_monthly_trend()
     isin_age_groups()
     isin_disease_groups()
+    print("  --- Registry ÚZIS mimo ISIN ---")
+    sti_registry()
+    tbc_registry()
     print("Hotovo.")
