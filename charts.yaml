@@ -1,0 +1,65 @@
+# Co který graf měří — mapa chart JSON → zdroj, metrika, jednotka, zrno.
+#
+# Proč existuje: vygenerovaný chart JSON je jen `labels` + `datasets`, tedy
+# holá čísla s českými popisky. Člověk u grafu dočte z nadpisu stránky, co
+# vidí; stroj ne. AI vrstva nad portálem, která má odpovídat „kolik bylo
+# případů“, musí u každé řady znát metriku, JEDNOTKU (počet vs. na 100 tis.
+# jsou dvě různá čísla) a zrno období — jinak sebevědomě sečte procenta nebo
+# porovná měsíce s roky. Tenhle soubor to doplňuje, aniž by se sahalo do
+# třiceti generujících funkcí.
+#
+# `save()` v generate_json.py si sem sáhne podle jména grafu a výsledek zapíše
+# do bloku `meta`. Graf bez záznamu se pozná (varování při generování + test
+# test_chart_meta.py), takže mapa nemůže tiše zaostat za kódem.
+#
+# Klíče:
+#   source   id ze sources.yaml; seznam, když graf kombinuje víc zdrojů
+#            (typicky počty + populace ČSÚ pro přepočet na 100 000)
+#   metric   cases | deaths | tests | hospitalizations | lab_detections
+#            | positivity | case_fatality | hospitalization_rate | forecast
+#            | intensity_threshold | anomaly_score — shodné s `metric`
+#            v tabulce observation (db/init.sql), ať se dá spojit s DB
+#   unit     count | per_100k | percent | score — STROJOVÁ jednotka.
+#            Lidský popisek si grafy nesou vlastní v `unit`/`x_title`.
+#   grain    zrno osy X: day | week | month | year | age_group | region
+#            | vaccination_status | cumulative
+#   region   CZ = celá republika jako jedno číslo; NUTS3 = rozpad na kraje
+#
+# Zápis `isin_group_*` platí pro všechny grafy s tím prefixem (tematické
+# skupiny nemocí se generují dynamicky podle obsahu dat).
+
+covid_cases_weekly:      { source: mzcr-covid, metric: cases, unit: count, grain: week, region: CZ }
+covid_hospitalization:   { source: mzcr-covid, metric: hospitalizations, unit: count, grain: week, region: CZ }
+covid_testing:           { source: mzcr-covid, metric: positivity, unit: percent, grain: week, region: CZ }
+covid_incidence:         { source: mzcr-covid, metric: cases, unit: per_100k, grain: day, region: CZ }
+covid_summary:           { source: mzcr-covid, metric: cases, unit: count, grain: cumulative, region: CZ }
+covid_by_age:            { source: mzcr-covid, metric: cases, unit: count, grain: age_group, region: CZ }
+covid_cfr_by_age:        { source: mzcr-covid, metric: case_fatality, unit: percent, grain: age_group, region: CZ }
+covid_by_vaccination:    { source: mzcr-covid, metric: cases, unit: count, grain: vaccination_status, region: CZ }
+covid_hosp_rate_by_vax:  { source: mzcr-covid, metric: hospitalization_rate, unit: percent, grain: vaccination_status, region: CZ }
+
+flu_season_overview:     { source: szu-respiratory, metric: lab_detections, unit: count, grain: week, region: CZ }
+flu_weekly:              { source: szu-respiratory, metric: lab_detections, unit: count, grain: week, region: CZ }
+flu_respiratory_all:     { source: szu-respiratory, metric: lab_detections, unit: count, grain: week, region: CZ }
+flu_regional_weekly:     { source: szu-respiratory, metric: lab_detections, unit: count, grain: week, region: NUTS3 }
+flu_regional_overview:   { source: szu-respiratory, metric: lab_detections, unit: count, grain: region, region: NUTS3 }
+flu_mem:                 { source: [who-fluid-flunet, ecdc-erviss], metric: intensity_threshold, unit: per_100k, grain: week, region: CZ }
+
+isin_top_diseases:       { source: uzis-isin, metric: cases, unit: count, grain: year, region: CZ }
+isin_monthly_trend:      { source: uzis-isin, metric: cases, unit: count, grain: month, region: CZ }
+isin_age_groups:         { source: uzis-isin, metric: cases, unit: count, grain: age_group, region: CZ }
+isin_regional_map:       { source: uzis-isin, metric: cases, unit: count, grain: region, region: NUTS3 }
+isin_regional_incidence: { source: [uzis-isin, csu-population], metric: cases, unit: per_100k, grain: region, region: NUTS3 }
+isin_group_*:            { source: uzis-isin, metric: cases, unit: count, grain: year, region: CZ }
+anomaly_signals:         { source: uzis-isin, metric: anomaly_score, unit: score, grain: month, region: NUTS3 }
+
+sti_registry_trend:      { source: uzis-rpn, metric: cases, unit: count, grain: year, region: CZ }
+sti_registry_incidence:  { source: [uzis-rpn, csu-population], metric: cases, unit: per_100k, grain: year, region: CZ }
+sti_registry_sex:        { source: [uzis-rpn, csu-population], metric: cases, unit: per_100k, grain: year, region: CZ }
+sti_registry_map:        { source: [uzis-rpn, csu-population], metric: cases, unit: per_100k, grain: region, region: NUTS3 }
+sti_registry_age:        { source: uzis-rpn, metric: cases, unit: count, grain: age_group, region: CZ }
+
+tbc_incidence:           { source: [uzis-rtbc, csu-population], metric: cases, unit: per_100k, grain: year, region: CZ }
+tbc_map:                 { source: [uzis-rtbc, csu-population], metric: cases, unit: per_100k, grain: region, region: NUTS3 }
+tbc_origin:              { source: uzis-rtbc, metric: cases, unit: count, grain: year, region: CZ }
+tbc_age:                 { source: uzis-rtbc, metric: cases, unit: count, grain: age_group, region: CZ }

@@ -1,0 +1,169 @@
+# Registr datových zdrojů — technická provenience.
+#
+# Proč existuje: pipeline stahuje data z deseti různých míst a dosud nikde
+# nebylo zapsáno, KDE se o každém z nich dají zjistit metadata (kdo ho vydal,
+# pod jakou licencí, kdy ho naposledy změnil). `source_metadata.py` podle
+# tohohle registru metadata stáhne, `generate_json.py` je přibalí ke grafům
+# a MCP/AI vrstva tak u každého čísla ví, odkud pochází a jak je staré.
+#
+# ⚠️ POZOR na záměnu se stejnojmenným souborem v portálu.
+#   pathogensportal/frontend/data/sources.yaml = REDAKČNÍ popis pro čtenáře
+#       (názvy cs/en, `limits` = co z dat nejde vyčíst, `grain`, `pages`).
+#   tenhle soubor                              = TECHNICKÁ provenience
+#       (kde leží metadata, co se stahuje, do jakých souborů to padá).
+# Společné mají jen `id` a `publisher` — a ta se musí shodovat, protože přes
+# `id` se obě strany spojují. Redakční texty sem nepatří a naopak; jinak
+# vzniknou dvě pravdy o jednom zdroji a jedna z nich začne tiše zastarávat.
+#
+# Formát záznamu:
+#   id          stabilní identifikátor, shodný s portálovým katalogem
+#   publisher   vydavatel tak, jak se uvádí sám
+#   landing     stránka pro člověka (ne soubor)
+#   licence     name (+ url), psát tak, jak ji uvádí ZDROJ; když ji neuvádí,
+#               napsat "neuvedena" — domyšlená licence je horší než mezera
+#   files       cesty relativní k $DATA_DIR, které z tohohle zdroje vznikají;
+#               přes ně se k metadatům dohledá datum snapshotu z raw/manifest.json
+#   methodology id záznamů z methodology_changes.yaml, které se tohohle zdroje
+#               týkají — odtud se plní `caveats` v metadatech grafu
+#   discovery   jak zjistit metadata u vydavatele; klíče jsou nepovinné a
+#               kombinovatelné, každý se zkouší samostatně:
+#     csvw:       URL CSVW popisu (`*.csv-metadata.json`) — dc:title, dc:license,
+#                 dc:modified, dc:publisher, seznam sloupců. Nejbohatší zdroj.
+#     nkod:       IRI datové sady v Národním katalogu otevřených dat
+#                 (data.gov.cz) — accrualPeriodicity, témata, trvalý odkaz
+#     http_head:  URL, na které stačí HEAD — Last-Modified, ETag, velikost
+#     github:     "owner/repo", datum posledního commitu přes GitHub API
+#     manual:     ručně zjištěné datum poslední změny (YYYY-MM-DD) pro zdroje,
+#                 které nezveřejňují nic strojového — vždy s `manual_note`,
+#                 ať je poznat, že je to naše tvrzení, ne tvrzení zdroje
+#
+# Pořadí = česká surveillance nejdřív, pak mezinárodní kontext.
+
+- id: uzis-isin
+  publisher: "ÚZIS ČR"
+  landing: "https://www.nzip.cz/data/2621-infekcni-nemoci-otevrena-data"
+  licence:
+    name: "volný přístup (otevřená data ÚZIS)"
+    url: "https://data.gov.cz/podmínky-užití/volný-přístup/"
+  files: ["isin/isin_infekcni_nemoci.csv"]
+  methodology: ["isin-horizont-2025-12", "zoster-vykazovani-2025-07"]
+  discovery:
+    csvw: "https://datanzis.uzis.gov.cz/data/NR-27-ISIN/NR-27-01/Otevrena-data-NR-27-01-infekcni-nemoci.csv-metadata.json"
+    nkod: "https://data.gov.cz/zdroj/datové-sady/00024341/c117b2588a0d1ffb022f9d63912e9663"
+    http_head: "https://datanzis.uzis.gov.cz/data/NR-27-ISIN/NR-27-01/Otevrena-data-NR-27-01-infekcni-nemoci.csv"
+
+- id: uzis-rpn
+  publisher: "ÚZIS ČR"
+  landing: "https://www.nzip.cz/data/2639-pohlavni-nemoci-otevrena-data"
+  licence:
+    name: "volný přístup (otevřená data ÚZIS)"
+    url: "https://data.gov.cz/podmínky-užití/volný-přístup/"
+  files: ["uzis/uzis_pohlavni_nemoci.csv"]
+  methodology: []
+  discovery:
+    csvw: "https://datanzis.uzis.gov.cz/data/NR-29-RPN/NR-29-01/Otevrena-data-NR-29-01-pohlavni-nemoci.csv-metadata.json"
+    nkod: "https://data.gov.cz/zdroj/datové-sady/00024341/37e6c297d0aec879b621cb196d3124ca"
+    http_head: "https://datanzis.uzis.gov.cz/data/NR-29-RPN/NR-29-01/Otevrena-data-NR-29-01-pohlavni-nemoci.csv"
+
+- id: uzis-rtbc
+  publisher: "ÚZIS ČR"
+  landing: "https://www.nzip.cz/data/2671-tuberkuloza-epidemiologie-otevrena-data"
+  licence:
+    name: "volný přístup (otevřená data ÚZIS)"
+    url: "https://data.gov.cz/podmínky-užití/volný-přístup/"
+  files: ["uzis/uzis_tuberkuloza.csv"]
+  methodology: []
+  discovery:
+    csvw: "https://datanzis.uzis.gov.cz/data/NR-30-RTBC/NR-30-01/Otevrena-data-NR-30-01-tuberkuloza-epidemiologie.csv-metadata.json"
+    nkod: "https://data.gov.cz/zdroj/datové-sady/00024341/2db27e1310d6c8b7aa81ac87e0ac1f51"
+    http_head: "https://datanzis.uzis.gov.cz/data/NR-30-RTBC/NR-30-01/Otevrena-data-NR-30-01-tuberkuloza-epidemiologie.csv"
+
+- id: mzcr-covid
+  publisher: "MZČR / ÚZIS ČR"
+  landing: "https://onemocneni-aktualne.mzcr.cz/api/v2/covid-19"
+  licence:
+    name: "otevřená data MZČR"
+    url: "https://onemocneni-aktualne.mzcr.cz/api/v2/covid-19"
+  files:
+    - "mzcr/covid_pripady.csv"
+    - "mzcr/covid_hospitalizace.csv"
+    - "mzcr/covid_testy.csv"
+    - "mzcr/covid_incidence.csv"
+    - "mzcr/covid_ockovani.csv"
+    - "mzcr/covid_osoby_agg.csv"
+    - "mzcr/covid_umrti.csv"
+    - "mzcr/covid_vax_pozitivni.csv"
+    - "mzcr/covid_vax_hospitalizace.csv"
+  methodology: []
+  discovery:
+    http_head: "https://onemocneni-aktualne.mzcr.cz/api/v2/covid-19/nakazeni-vyleceni-umrti-testy.csv"
+
+- id: szu-respiratory
+  publisher: "SZÚ — Národní referenční laboratoř pro chřipku"
+  landing: "https://szu.gov.cz/publikace-szu/data/akutni-respiracni-infekce-chripka/"
+  licence:
+    name: "neuvedena — zveřejněné zprávy SZÚ, uvádíme zdroj"
+  files: ["szu/szu_influenza_2025_2026.csv", "szu/szu_weekly_viry.csv", "szu/szu_weekly_kraje.csv"]
+  methodology: ["szu-retro-korekce"]
+  # SZÚ publikuje týdenní PDF na měnících se URL — HEAD na stabilní adresu
+  # neexistuje a datum vydání se čte až z obsahu PDF (szu_weekly.py).
+  # Čerstvost se proto u tohohle zdroje bere z data snapshotu, ne od vydavatele.
+  discovery:
+    manual: "2026-09-24"
+    manual_note: >-
+      Zdroj nezveřejňuje strojová metadata ani stabilní URL souboru. Datum je
+      poslední ověření, že stránka s týdenními zprávami žije, ne datum dat.
+
+- id: who-fluid-flunet
+  publisher: "WHO"
+  landing: "https://www.who.int/tools/flunet"
+  licence:
+    name: "neuvedena u datové sady — podmínky WHO, uvádíme zdroj"
+  files: ["who/who_flunet_cz.csv", "who/who_fluid_cz.csv"]
+  methodology: []
+  discovery:
+    http_head: "https://xmart-api-public.who.int/FLUMART/VIW_FNT?$top=1&$filter=COUNTRY_CODE%20eq%20%27CZE%27"
+
+- id: ecdc-erviss
+  publisher: "ECDC / WHO Europe"
+  landing: "https://erviss.org/"
+  licence:
+    name: "neuvedena v repozitáři — podmínky ECDC, uvádíme zdroj"
+  files: ["ecdc/erviss_ili_ari_cz.csv", "ecdc/erviss_nonsentinel_cz.csv"]
+  methodology: []
+  discovery:
+    github: "EU-ECDC/Respiratory_viruses_weekly_data"
+
+- id: ecdc-respicast
+  publisher: "ECDC, ISI Foundation, LSHTM"
+  landing: "https://respicast.ecdc.europa.eu/"
+  licence:
+    name: "neuvedena — před veřejným použitím ověřit u provozovatele hubu"
+  files: ["ecdc/respicast_cz.csv"]
+  methodology: []
+  discovery:
+    github: "european-modelling-hubs/RespiCast-SyndromicIndicators"
+
+- id: csu-population
+  publisher: "ČSÚ"
+  landing: "https://data.csu.gov.cz/"
+  licence:
+    name: "otevřená data ČSÚ"
+    url: "https://csu.gov.cz/otevrena-data"
+  files: ["csu/population.csv"]
+  methodology: []
+  discovery:
+    http_head: "https://data.csu.gov.cz/api/dotaz/v1/data/sady/PORKR01?format=CSV"
+
+- id: ecdc-covid
+  publisher: "ECDC"
+  landing: "https://www.ecdc.europa.eu/en/covid-19/data"
+  licence:
+    name: "ECDC — volné použití s uvedením zdroje"
+  files: ["ecdc/ecdc_covid_cz.csv"]
+  methodology: []
+  # Uzavřená řada — zdroj přestal publikovat v říjnu 2022. `manual` je tu
+  # proto, aby se čerstvost nezkoušela dohledávat u něčeho, co se už nehne.
+  discovery:
+    manual: "2022-10-01"
+    manual_note: "Zdroj přestal datovou sadu aktualizovat; držíme ji jen kvůli historii."

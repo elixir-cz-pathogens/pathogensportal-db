@@ -6,8 +6,12 @@ Výstup: site/static/data/charts/*.json
 
 import json
 import os
+import sys
 import pandas as pd
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import chart_meta
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = Path(os.environ.get("DATA_DIR",  str(ROOT / "data")))
@@ -47,6 +51,9 @@ def to_weekly(df: pd.DataFrame, date_col="datum") -> pd.DataFrame:
 
 def save(name: str, obj: dict):
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    # Ke grafu se přibalí blok `meta` (metrika, jednotka, zdroj, čerstvost,
+    # upozornění) — viz chart_meta.py. Frontend ho ignoruje, čte ho MCP/AI vrstva.
+    obj = chart_meta.attach(name, obj)
     path = OUTPUT_DIR / f"{name}.json"
     path.write_text(json.dumps(obj, ensure_ascii=False, default=str), encoding="utf-8")
     print(f"  [{name}] → {path}")

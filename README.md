@@ -31,9 +31,11 @@ Pipeline má pět fází, které na sebe navazují přes souborový systém, ne 
 
 2. archivace    snapshot.py ────────► $DATA_DIR/raw/<datum>/*.gz + manifest.json
 
+2b. metadata    source_metadata.py ─► $DATA_DIR/meta/source_metadata.json
+
 3. normalizace  load_to_db.py ──────► PostgreSQL: observation, population
 
-4. výstup       generate_json.py ───► $OUTPUT_DIR/*.json      (Chart.js)
+4. výstup       generate_json.py ───► $OUTPUT_DIR/*.json      (Chart.js + blok `meta`)
 
 5. analytika    detect_anomalies.py ► $OUTPUT_DIR/anomaly_signals.json (stránka Signály)
                 compute_mem.py ─────► $OUTPUT_DIR/flu_mem.json (sezónní prahy chřipky)
@@ -54,6 +56,58 @@ ostatní doběhnou a `run_all.py` na konci vypíše, co se nepovedlo.
 který se od minule nezměnil, se neukládá znovu. Důvod není úspora místa, ale **reprodukovatelnost**:
 bez archivu nejde zpětně říct, jaká data stála za grafem publikovaným v minulosti, a otevřené zdroje
 svá historická čísla běžně tiše opravují.
+
+### Metadata o zdrojích a grafech
+
+Vedle dat se stahuje i to, co o datech tvrdí jejich **vydavatel**: název sady, licence, datum
+poslední změny, periodicita vydávání, seznam sloupců. Dřív se tyhle údaje psaly ručně do katalogu
+na webu a zastarávaly — věta „soubor z ledna 2026 končí prosincem 2025“ platí jen do dalšího
+vydání a nikdo ji neopraví, dokud si toho někdo nevšimne. Vydavatelé přitom čerstvost publikují
+sami, jen každý jinak.
+
+`sources.yaml` říká, kde metadata hledat; `source_metadata.py` je stáhne čtyřmi cestami:
+
+| cesta | co dá | kdo to má |
+|---|---|---|
+| `csvw` | název, popis, licence, `dc:modified`, sloupce | ISIN, RPN, RTBC (ÚZIS) |
+| `nkod` | periodicita vydávání, témata, trvalé IRI sady | sady v [data.gov.cz](https://data.gov.cz) |
+| `http_head` | `Last-Modified`, `ETag`, velikost | MZČR, ČSÚ, WHO |
+| `github` | datum posledního commitu | ERVISS, RespiCast |
+
+Zdroje bez strojových metadat (SZÚ — PDF na měnících se URL) mají `manual` + povinné `manual_note`,
+aby šlo poznat, že datum tvrdíme my, ne zdroj.
+
+⚠️ **Selhání zjišťování nikdy neshodí pipeline.** Metadata jsou doprovodná informace; když ÚZIS
+zrovna neodpovídá, data se stáhnou dál a u zdroje se zapíše `errors`. Opak by znamenal, že portál
+přijde o data kvůli tomu, že nestáhl popisek.
+
+Generátor pak ke **každému grafu** přibalí blok `meta` — co se měří, v jaké jednotce, za jaké období,
+z jakého zdroje, jak je ten zdroj čerstvý a jaká upozornění k datům platí:
+
+```jsonc
+"meta": {
+  "chart_id": "isin_monthly_trend",
+  "metric": "cases", "unit": "count", "grain": "month", "region": "CZ",
+  "period": { "start": "2018-01", "end": "2025-12", "points": 96 },
+  "sources": [ { "id": "uzis-isin", "publisher": "ÚZIS ČR", "licence": { … },
+                 "modified_at_publisher": "2026-01-22T09:09:17Z",
+                 "periodicity": "annual", "snapshot_date": "2026-09-01" } ],
+  "caveats": [ { "id": "zoster-vykazovani-2025-07", "action": "break", "description": "…" } ]
+}
+```
+
+Co který graf měří, je v `charts.yaml`; `caveats` se **nekopírují**, berou se z
+`methodology_changes.yaml`, aby existoval jeden zdroj pravdy. Frontend blok ignoruje (Chart.js
+čte jen `labels`/`datasets`) — je pro `/api/charts`, MCP a AI vrstvu nad portálem. Právě jednotka
+a caveaty jsou to, bez čeho model vydá zlom v hlášení (EWS od 7/2025) za epidemii nebo sečte
+procenta s počty.
+
+Graf, který v `charts.yaml` chybí, projde ven bez metadat a `test_source_metadata.py` to ohlásí —
+mapa tak nemůže tiše zaostat za kódem.
+
+> `sources.yaml` tady je **technická provenience**. Stejnojmenný soubor v portálu
+> (`frontend/data/sources.yaml`) je **redakční popis** pro čtenáře (`limits`, `grain`, cs/en názvy).
+> Společné mají jen `id` a `publisher` — přes `id` se obě strany spojují.
 
 ### Datová vrstva
 
@@ -162,6 +216,8 @@ na českých datech i na syntetice (`tests/test_mem_golden.py`).
 ```
 scripts/run_all.py            spustí všechny scrapery, uloží CSV do $DATA_DIR
 scripts/snapshot.py           datované gzip snímky staženého se sha256 deduplikací
+scripts/source_metadata.py    metadata od vydavatelů (licence, čerstvost) → data/meta/
+scripts/chart_meta.py         blok `meta` ke grafům — sdílí ho všechny tři generátory
 scripts/load_to_db.py         ETL: CSV → PostgreSQL (observation, population)
 scripts/generate_json.py      přečte data, vygeneruje Chart.js JSON do $OUTPUT_DIR
 scripts/detect_anomalies.py   detekce anomálií (Farrington/Noufaily) → anomaly_signals.json
@@ -169,6 +225,9 @@ scripts/simulate_detection.py simulační studie detektoru (validace se známou 
 scripts/mem.py                Moving Epidemic Method — jádro výpočtu, bez I/O
 scripts/compute_mem.py        sezónní prahy chřipky nad ILI → flu_mem.json
 scripts/scrapers/             jednotlivé scrapery (MZČR, SZÚ ×2, ÚZIS ISIN, ÚZIS registry, ČSÚ, ECDC ×2, WHO)
+sources.yaml                  registr zdrojů — kde zjistit metadata (≠ redakční katalog v portálu)
+charts.yaml                   co který graf měří: zdroj, metrika, jednotka, zrno
+methodology_changes.yaml      registr metodických změn; zdroj `caveats` v metadatech grafů
 curated/szu/                  uzavřené sezóny SZÚ, jejichž online zdroj už neexistuje
 db/init.sql                   schéma PostgreSQL (portál si ho mountuje do kontejneru pathogen-db)
 Dockerfile                    image `datascrapper` — portál ho staví přímo z tohohle repa
@@ -245,6 +304,10 @@ verze tady portálem nehne.
 
 ## Změny po v0.2.0 (nadcházející release)
 
+- **Metadata o zdrojích** (`source_metadata.py`, `sources.yaml`, `charts.yaml`) — čerstvost,
+  licence a periodicita se stahují od vydavatelů (CSVW, NKOD, HTTP hlavičky, GitHub), ne
+  přepisují ručně. Každý graf veze blok `meta` s metrikou, jednotkou, obdobím, zdrojem
+  a upozorněními — podklad pro `/api/charts`, MCP a AI vrstvu nad portálem.
 - **Detekce anomálií** — systém včasného varování nad ISIN (Farrington/Noufaily),
   validovaný zpětným testem i simulační studií; výstup pohání stránku Signály.
 - **Týdenní SZÚ scraper** (`szu_weekly.py`) — matice virus×týden z jednoho PDF
