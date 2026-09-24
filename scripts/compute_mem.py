@@ -44,6 +44,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+import chart_meta
 import forecast
 import mem
 import trend
@@ -435,7 +436,10 @@ def main() -> int:
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     path = OUTPUT_DIR / "flu_mem.json"
-    path.write_text(json.dumps(out, ensure_ascii=False), encoding="utf-8")
+    # Prahy MEM jsou v jednotce ILI/ARI na 100 000 — bez `meta` by si je stroj
+    # mohl splést s počty případů, což jsou u intenzity chřipky dvě různá čísla.
+    path.write_text(json.dumps(chart_meta.attach("flu_mem", out), ensure_ascii=False),
+                    encoding="utf-8")
     for key, ind in out["indicators"].items():
         t, c = ind["thresholds"], ind["current"]
         print(f"  [flu_mem] {key.upper()}: {len(ind['seasons_used'])} sezón, δ={ind['delta']}; "

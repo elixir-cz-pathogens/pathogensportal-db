@@ -63,6 +63,22 @@ def run() -> int:
         for rel in result["new"]:
             print(f"    + {rel}")
 
+    # Metadata o zdrojích až po snapshotu — čtou z manifestu datum posledního
+    # stažení. Selhání se nepřipisuje ke `failures`: bez popisku zdroje je
+    # pipeline ochuzená, ale funkční, a shazovat kvůli tomu celý běh by
+    # znamenalo přijít i o data, která se stáhla v pořádku.
+    print(f"\n{'='*50}")
+    print("  Metadata o zdrojích")
+    print(f"{'='*50}")
+    try:
+        from source_metadata import collect, write
+        meta = collect()
+        path = write(meta)
+        broken = [sid for sid, s in meta["sources"].items() if s.get("errors")]
+        print(f"  {len(meta['sources']) - len(broken)}/{len(meta['sources'])} zdrojů → {path}")
+    except Exception as e:
+        print(f"  CHYBA (data tím nejsou dotčena): {type(e).__name__}: {e}")
+
     if failures:
         print(f"\n  SELHALO {len(failures)}/{len(jobs)} zdrojů:")
         for label, e in failures:

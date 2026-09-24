@@ -57,6 +57,9 @@ import numpy as np
 import pandas as pd
 import yaml
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import chart_meta
+
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = Path(os.environ.get("DATA_DIR", str(ROOT / "data")))
 CHARTS_OUT = Path(os.environ.get("OUTPUT_DIR", str(ROOT / "site" / "static" / "data" / "charts")))
@@ -617,7 +620,11 @@ def run_current(long, periods, n_months, exclude_t=frozenset(),
         out["provenance"] = provenance
     CHARTS_OUT.mkdir(parents=True, exist_ok=True)
     path = CHARTS_OUT / "anomaly_signals.json"
-    path.write_text(json.dumps(out, ensure_ascii=False), encoding="utf-8")
+    # `meta` nese mimo jiné caveaty ze stejného registru metodických změn, se
+    # kterým pracuje detektor. U signálů je to nejpotřebnější: kdo je čte bez
+    # vědomí o zlomu v hlášení (EWS od 7/2025), vydá změnu kanálu za epidemii.
+    path.write_text(json.dumps(chart_meta.attach("anomaly_signals", out), ensure_ascii=False),
+                    encoding="utf-8")
     n_sig_fdr = sum(1 for r in signals if r.get("fdr_pass"))
     print(f"[{periods[t0]}] oskórováno {len(records)} řad ({skipped} přeskočeno), "
           f"signálů {len(signals)} (po FDR α={alpha}: {n_sig_fdr}; BH: {k_bh}; "
