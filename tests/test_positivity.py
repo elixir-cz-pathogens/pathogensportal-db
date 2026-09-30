@@ -1,4 +1,4 @@
-"""Pozitivita chřipky a RSV (FluNet, ERVISS) — generátory nad malými vzorky dat.
+"""Pozitivita chřipky, RSV a SARS-CoV-2 (FluNet, ERVISS, MZČR) — generátory nad malými vzorky dat.
 
 Hlídá to, co se v těchhle řadách rozbije potichu: prázdné pole místo nuly,
 poslední týdny bez výsledků, díru ve jmenovateli a procento z hrstky vzorků.
@@ -190,3 +190,82 @@ def test_weekly_uses_total_rows_only(workspace):
     g.flu_positivity_weekly()
     series = {d["label"]: d["data"] for d in _read(workspace, "flu_positivity_weekly")["datasets"]}
     assert series["Chřipka"] == [10.0, 10.0]
+
+
+def _sars(week, tests, det):
+    rows = [(week, "SARS-CoV-2", "SARS-CoV-2", "tests", tests)]
+    if det is not None:
+        rows.append((week, "SARS-CoV-2", "SARS-CoV-2", "detections", det))
+    return rows
+
+
+def test_weekly_sars_cov_2_stops_at_the_denominator_break(workspace, monkeypatch):
+    """Za zlomem má SARS-CoV-2 jiný jmenovatel — neuvádí se, ale chřipku a RSV neusekne."""
+    monkeypatch.setattr(g, "ERVISS_POSITIVITY_SERIES", [
+        ("Chřipka", "Influenza", "total", "blue", None),
+        ("RSV", "RSV", "RSV", "orange", None),
+        ("SARS-CoV-2", "SARS-CoV-2", "SARS-CoV-2", "red", "2025-W02")])
+    rows = (_both("2025-W01", 1000, 100, 1000, 50) + _sars("2025-W01", 20000, 2000)
+            + _both("2025-W02", 1000, 100, 1000, 50) + _sars("2025-W02", 20000, 1000)
+            + _both("2025-W03", 1000, 100, 1000, 50) + _sars("2025-W03", 1000, 1)
+            + _both("2025-W04", 1000, 100, 1000, 50))                     # za zlomem už ani testy
+    _erviss(workspace, rows)
+    g.flu_positivity_weekly()
+    out = _read(workspace, "flu_positivity_weekly")
+
+    assert out["first_week"] == "2025-W01" and out["last_week"] == "2025-W04"
+    series = {d["label"]: d["data"] for d in out["datasets"]}
+    assert series["SARS-CoV-2"] == [10.0, 5.0, None, None]
+    assert out["tests"]["SARS-CoV-2"] == [20000, 20000, None, None]
+    assert series["Chřipka"] == [10.0] * 4
+
+
+def test_weekly_skips_a_virus_missing_from_the_source(workspace, capsys):
+    _erviss(workspace, _both("2025-W01", 1000, 100, 1000, 50) + _both("2025-W02", 1000, 100, 1000, 50))
+    g.flu_positivity_weekly()
+    labels = [d["label"] for d in _read(workspace, "flu_positivity_weekly")["datasets"]]
+    assert labels == ["Chřipka", "RSV"]
+    assert "SARS-CoV-2 — řada vynechána" in capsys.readouterr().out
+
+
+# ── COVID-19: testy MZČR ─────────────────────────────────────────────────────
+
+MZCR_COLS = ["datum", "pocet_PCR_testy", "pocet_AG_testy", "incidence_pozitivni",
+             "PCR_pozit_sympt", "PCR_pozit_asymp", "AG_pozit_symp", "AG_pozit_asymp_PCR_conf"]
+
+
+def _mzcr(ws, monkeypatch, days):
+    """days: (datum, pcr, ag, pcr_pozit, ag_pozit) — pozitivní rozdělené mezi sympt./asympt."""
+    rows = [(d, pcr, ag, pp + ap + 5, pp - pp // 2, pp // 2, ap - ap // 2, ap // 2)
+            for d, pcr, ag, pp, ap in days]
+    (ws / "mzcr").mkdir()
+    pd.DataFrame(rows, columns=MZCR_COLS).to_csv(ws / "mzcr" / "covid_testy.csv", index=False)
+    monkeypatch.setattr(g, "DATA_DIR", ws)
+
+
+def test_covid_positivity_uses_each_test_type_with_its_own_denominator(workspace, monkeypatch):
+    """Dřív: všechny pozitivní / PCR testy — při 10 PCR a 1000 AG testech přes 100 %."""
+    week = pd.date_range("2026-08-17", periods=7).strftime("%Y-%m-%d")
+    _mzcr(workspace, monkeypatch, [(d, 10, 1000, 0, 30) for d in week])
+    g.covid_testing()
+    out = _read(workspace, "covid_testing")
+
+    series = {d["label"]: d["data"] for d in out["datasets"]}
+    assert series == {"PCR testy": [0.0], "Antigenní testy": [3.0]}
+    assert out["tests"] == {"PCR testy": [70], "Antigenní testy": [7000]}
+    assert out["detections"]["Antigenní testy"] == [210]
+
+
+def test_covid_positivity_drops_the_unfinished_last_week(workspace, monkeypatch):
+    days = pd.date_range("2026-08-17", periods=9).strftime("%Y-%m-%d")    # týden + pondělí a úterý
+    _mzcr(workspace, monkeypatch, [(d, 100, 1000, 10, 10) for d in days])
+    g.covid_testing()
+    assert _read(workspace, "covid_testing")["labels"] == ["2026-08-17"]
+
+
+def test_covid_positivity_needs_enough_tests(workspace, monkeypatch):
+    week = pd.date_range("2026-08-17", periods=7).strftime("%Y-%m-%d")
+    _mzcr(workspace, monkeypatch, [(d, 4, 1000, 1, 10) for d in week])   # 28 PCR testů za týden
+    g.covid_testing()
+    series = {d["label"]: d["data"] for d in _read(workspace, "covid_testing")["datasets"]}
+    assert series["PCR testy"] == [None]

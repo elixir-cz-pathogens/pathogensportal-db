@@ -123,3 +123,33 @@
     uvádí 4–29 záchytů chřipky týdně, zatímco FluNet za tytéž týdny a tentýž
     počet vzorků 0–2; od týdne 37/2022 se oba zdroje shodují.
   dopad: "týdenní řada pozitivity chřipky a RSV začíná až posledním souvislým obdobím s oběma jmenovateli (dnes od 1/2025)"
+
+- id: mzcr-pcr-testy-2026-08
+  od: 2026-08
+  do: null
+  akce: poznamka
+  rozsah:
+    diagnozy: null
+    kraje: null
+  zdroj: "vlastní měření nad otevřenými daty MZČR testy-pcr-antigenni (09/2026)"
+  popis: >-
+    COVID-19, testy MZČR: od týdne 17. 8. 2026 klesl počet hlášených PCR testů
+    z 300–650 na 70–190 týdně, antigenních testů se hlásí tisíce. Pozitivní
+    záchyty pocházejí převážně z antigenních testů. Pozitivita PCR z desítek
+    testů je proto nestabilní; spolehlivější obraz dává pozitivita antigenních testů.
+  dopad: "pozitivita se počítá zvlášť pro PCR a antigenní testy; dřívější podíl všech pozitivních na PCR testech dával od 8/2026 přes 100 %"
+
+- id: erviss-sars-cov-2-jmenovatel-2026-08
+  od: 2026-08
+  do: null
+  akce: poznamka
+  rozsah:
+    diagnozy: null
+    kraje: null
+  zdroj: "vlastní měření nad daty ECDC ERVISS (09/2026)"
+  popis: >-
+    Laboratorní část ERVISS za ČR: do týdne 33/2026 uvádí u SARS-CoV-2 tisíce
+    až desetitisíce vyšetřených vzorků týdně (plošné testování), od týdne
+    34/2026 počet shodný se vzorky vyšetřenými na chřipku (kolem 300) a 0–1
+    záchyt týdně. Ve stejném týdnu klesl počet PCR testů v datech MZČR.
+  dopad: "týdenní pozitivita SARS-CoV-2 z ERVISS končí týdnem 33/2026; novější týdny nejsou s řadou srovnatelné"

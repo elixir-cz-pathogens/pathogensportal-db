@@ -137,21 +137,39 @@ def covid_hospitalization():
     })
 
 
-# ── 3. Testování — PCR pozitivita % ──────────────────────────────────────────
+# ── 3. Testování — pozitivita PCR a antigenních testů % ───────────────────────
 def covid_testing():
-    df = pd.read_csv(DATA_DIR / "mzcr" / "covid_testy.csv")
-    df = to_weekly(df)
+    # Pozitivita zvlášť pro PCR a pro antigenní testy, každá s vlastním
+    # jmenovatelem. Do 09/2026 se tu dělily VŠECHNY pozitivní záchyty
+    # (`incidence_pozitivni`, převážně z antigenních testů) jen počtem PCR testů
+    # — od 17. 8. 2026, kdy PCR testů spadlo na desítky týdně, z toho vycházelo
+    # 70–240 % a graf to ořízl na 100 %.
+    df = to_weekly(pd.read_csv(DATA_DIR / "mzcr" / "covid_testy.csv"))
     w = df.groupby("week").agg(
+        dny=("datum", "nunique"),
         pcr=("pocet_PCR_testy", "sum"),
-        pozit=("incidence_pozitivni", "sum"),
+        pcr_pozit=("PCR_pozit_sympt", "sum"),
+        pcr_asymp=("PCR_pozit_asymp", "sum"),
+        ag=("pocet_AG_testy", "sum"),
+        ag_pozit=("AG_pozit_symp", "sum"),
+        ag_asymp=("AG_pozit_asymp_PCR_conf", "sum"),
     ).reset_index()
-    w["pozitivita"] = (w["pozit"] / w["pcr"] * 100).round(1).clip(0, 100)
-    labels = w["week"].dt.strftime("%Y-%m-%d").tolist()
+    # Rozběhnutý poslední týden (data jen za pár dní) by ukázal procento
+    # z hrstky testů — pryč s ním.
+    if len(w) and w["dny"].iloc[-1] < 7:
+        w = w.iloc[:-1]
+    w["pcr_pozit"] += w.pop("pcr_asymp")
+    w["ag_pozit"] += w.pop("ag_asymp")
+
+    series = [("PCR testy", "pcr_pozit", "pcr", "green"),
+              ("Antigenní testy", "ag_pozit", "ag", "purple")]
     save("covid_testing", {
-        "labels": labels,
-        "datasets": [
-            ds("PCR pozitivita (%)", w["pozitivita"].tolist(), "green"),
-        ],
+        "labels": w["week"].dt.strftime("%Y-%m-%d").tolist(),
+        "unit": "% pozitivních testů",
+        "min_tests": POSITIVITY_MIN_TESTS,
+        "datasets": [ds(label, _percent(w[det], w[tests]), color) for label, det, tests, color in series],
+        "tests": {label: _counts(w[tests]) for label, _, tests, _ in series},
+        "detections": {label: _counts(w[det]) for label, det, _, _ in series},
     })
 
 
@@ -505,21 +523,29 @@ def flu_positivity_seasons():
     print(f"  [flu_positivity] {len(datasets)} sezón ({datasets[0][0]}–{label}); {label}: vrchol {peak} %")
 
 
-# ── 10b. Týdenní pozitivita chřipky a RSV — souvislá řada ────────────────────
-# ERVISS dává pro oba viry počet vyšetřených i záchytů (řádky `total`), každý
+# ── 10b. Týdenní pozitivita chřipky, RSV a SARS-CoV-2 — souvislá řada ───────
+# ERVISS dává pro každý virus počet vyšetřených i záchytů (řádky `total`), každý
 # s vlastním jmenovatelem. Dvě věci, kvůli kterým řada nezačíná rokem 2022:
 #
 #   - počet vzorků vyšetřených na RSV ERVISS za ČR uvádí jen v některých
 #     obdobích (25–36/2022, 1–30/2024 a souvisle od 1/2025). Díru by graf
 #     přemostil rovnou čarou přes celou zimu, proto se bere jen poslední
-#     souvislé období, kde mají jmenovatel obě řady;
+#     souvislé období, kde mají jmenovatel všechny řady;
 #   - v týdnech 25–36/2022 uvádí ERVISS 4–29 záchytů chřipky týdně, FluNet za
 #     tytéž týdny a tentýž počet vzorků 0–2 (od týdne 37/2022 se oba zdroje
 #     shodují na kus). Těm dvanácti týdnům nevěříme; spodní mez je pojistka pro
 #     případ, že by ERVISS jmenovatele RSV zpětně doplnil.
-ERVISS_POSITIVITY_SERIES = [          # popisek, typ, subtyp, barva
-    ("Chřipka", "Influenza", "total", "blue"),
-    ("RSV", "RSV", "RSV", "orange"),
+#
+# SARS-CoV-2 má jmenovatel souvislý od 2022, ale do týdne 33/2026 šlo o celé
+# plošné testování (tisíce až desetitisíce vzorků týdně). Od týdne 34/2026 ERVISS
+# uvádí počet vyšetřených shodný s chřipkou a 0–1 záchyt týdně — ve stejném týdnu
+# MZČR hlásí propad PCR testů na desítky týdně. Dvě různá měření nejsou jedna
+# řada, proto se SARS-CoV-2 od zlomu neuvádí (viz methodology_changes.yaml,
+# erviss-sars-cov-2-jmenovatel-2026-08).
+ERVISS_POSITIVITY_SERIES = [          # popisek, typ, subtyp, barva, poslední srovnatelný týden
+    ("Chřipka", "Influenza", "total", "blue", None),
+    ("RSV", "RSV", "RSV", "orange", None),
+    ("SARS-CoV-2", "SARS-CoV-2", "SARS-CoV-2", "red", "2026-W33"),
 ]
 ERVISS_POSITIVITY_FROM = "2022-W37"
 
@@ -532,20 +558,34 @@ def flu_positivity_weekly():
     df = df[(df["vek"] == "total") & (df["tyden_iso"] >= ERVISS_POSITIVITY_FROM)]
     weeks = sorted(df.loc[df["ukazatel"] == "tests", "tyden_iso"].unique())   # "2026-W07" se řadí správně
 
-    wide = {}
-    for label, typ, subtyp, _ in ERVISS_POSITIVITY_SERIES:
+    # Řada se zlomem (`until`) má za zlomem jiný jmenovatel — do „posledního
+    # souvislého období“ se proto počítá jen do zlomu a za ním se neuvádí.
+    # Virus, který ve zdroji chybí úplně, se vynechá; graf ostatních zůstane.
+    wide, until = {}, {}
+    for label, typ, subtyp, _, last in ERVISS_POSITIVITY_SERIES:
         rows = df[(df["typ"] == typ) & (df["subtyp"] == subtyp)]
-        wide[label] = (rows.pivot_table(index="tyden_iso", columns="ukazatel", values="hodnota", aggfunc="sum")
-                           .reindex(index=weeks, columns=["detections", "tests"]))
+        if rows.empty:
+            print(f"  [flu_positivity] ERVISS nemá {label} — řada vynechána")
+            continue
+        w = (rows.pivot_table(index="tyden_iso", columns="ukazatel", values="hodnota", aggfunc="sum")
+                 .reindex(index=weeks, columns=["detections", "tests"]))
+        if last:
+            w.loc[w.index > last] = float("nan")
+        wide[label], until[label] = w, last
 
     # Poslední souvislé období, kde mají počet vyšetřených všechny řady.
+    def has_tests(label, i):
+        return pd.notna(wide[label]["tests"].iloc[i]) or (until[label] and weeks[i] > until[label])
+
     start = len(weeks)
-    while start and all(pd.notna(w["tests"].iloc[start - 1]) for w in wide.values()):
+    while start and all(has_tests(label, start - 1) for label in wide):
         start -= 1
     weeks = weeks[start:]
 
     series, tests, found = [], {}, {}
-    for label, _, _, color in ERVISS_POSITIVITY_SERIES:
+    for label, _, _, color, _ in ERVISS_POSITIVITY_SERIES:
+        if label not in wide:
+            continue
         w = wide[label].iloc[start:]
         detections = _detections_with_zeros(w["detections"], w["tests"])
         series.append((label, _percent(detections, w["tests"]), color))

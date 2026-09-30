@@ -59,9 +59,14 @@ most of them come from the publishers as they are.
 
 - **Checks:** an empty dataset raises an error; the `osoby` aggregate must contain at least one
   million cases.
-- **Good to know:** a missing age is kept as `vek = -1` and a missing region as `CZ999`, so the
-  share of incomplete records (about 0.5 %) can be stated on the portal instead of being dropped
-  silently.
+- **Good to know:**
+  - A missing age is kept as `vek = -1` and a missing region as `CZ999`, so the share of
+    incomplete records (about 0.5 %) can be stated on the portal instead of being dropped
+    silently.
+  - `covid_testy.csv`: from the week of 17 August 2026 PCR tests dropped from 300–650 to 70–190 a
+    week, while thousands of antigen tests are still reported. Most positive cases now come from
+    antigen tests, so `incidence_pozitivni` must not be divided by PCR tests (registry entry
+    `mzcr-pcr-testy-2026-08`).
 
 ### ÚZIS — ISIN (notifiable infectious diseases)
 
@@ -199,6 +204,10 @@ most of them come from the publishers as they are.
     detections a week where FluNet shows 0–2, and those weeks are not used.
   - The number of specimens tested for RSV is reported only in some periods: 2022-W25–W36,
     2024-W01–W30 and continuously since 2025-W01 (registry entry `erviss-lab-rsv-jmenovatel`).
+  - SARS-CoV-2 changes its denominator in 2026-W34: until then thousands to tens of thousands of
+    specimens a week, from then the same number as for influenza (about 300) with 0–1
+    detections. The positivity chart stops at 2026-W33 (registry entry
+    `erviss-sars-cov-2-jmenovatel-2026-08`).
 
 ### ECDC — RespiCast
 

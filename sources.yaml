@@ -98,7 +98,7 @@
     - "mzcr/covid_umrti.csv"
     - "mzcr/covid_vax_pozitivni.csv"
     - "mzcr/covid_vax_hospitalizace.csv"
-  methodology: []
+  methodology: ["mzcr-pcr-testy-2026-08"]
   discovery:
     http_head: "https://onemocneni-aktualne.mzcr.cz/api/v2/covid-19/nakazeni-vyleceni-umrti-testy.csv"
 
@@ -135,7 +135,7 @@
   licence:
     name: "neuvedena v repozitáři — podmínky ECDC, uvádíme zdroj"
   files: ["ecdc/erviss_ili_ari_cz.csv", "ecdc/erviss_nonsentinel_cz.csv"]
-  methodology: ["lab-nulove-tydny-2025-05", "erviss-lab-rsv-jmenovatel"]
+  methodology: ["lab-nulove-tydny-2025-05", "erviss-lab-rsv-jmenovatel", "erviss-sars-cov-2-jmenovatel-2026-08"]
   discovery:
     github: "EU-ECDC/Respiratory_viruses_weekly_data"
 

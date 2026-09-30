@@ -29,8 +29,17 @@ Changes on `dev` since v0.4.0.
   YAML comments translated.
 - **Positivity charts** (PPDB-71) — `flu_positivity_seasons.json` (WHO FluNet: influenza
   positivity by week of the season, seasons since 2021/22) and `flu_positivity_weekly.json`
-  (ECDC ERVISS: weekly positivity of influenza and RSV). Two downloaded files that no chart read
-  are now used. Three reporting caveats added to `methodology_changes.yaml`.
+  (ECDC ERVISS: weekly positivity of influenza, RSV and SARS-CoV-2). Two downloaded files that
+  no chart read are now used. Five reporting caveats added to `methodology_changes.yaml`.
+
+### Fixed
+
+- **COVID-19 test positivity** (PPDB-71) — `covid_testing.json` divided all positive cases,
+  most of them from antigen tests, by the number of PCR tests only. The result was too high
+  throughout and, after PCR testing dropped to tens a week in August 2026, went above 100 %
+  (the chart clipped it). Positivity is now computed separately for PCR and antigen tests, each
+  with its own denominator, with no percentage below 30 tests and without the unfinished last
+  week.
 
 ## v0.4.0 — 2026-09-06
 
