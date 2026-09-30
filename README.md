@@ -1,375 +1,165 @@
 # pathogensportal-db
 
-Datová pipeline pro [Pathogen Portal CZ](https://pathogens.vm.cesnet.cz/). Stahuje otevřená
-epidemiologická data, archivuje je, normalizuje do PostgreSQL a generuje z nich Chart.js podklady
-a Hugo stránky pro portálové dashboardy.
+The data pipeline behind [Pathogen Portal CZ](https://pathogens.vm.cesnet.cz/). It downloads open
+epidemiological data, archives every download, normalises it into PostgreSQL and generates the
+Chart.js JSON files that the portal's dashboards read.
 
-Repo je samostatné schválně: portál je statický web, tenhle repo je všechno, co se hýbe kolem dat.
-Portál si ho bere jako git submodule pinnutý na release tag — viz [Jak repo konzumuje
-portál](#jak-repo-konzumuje-portál).
+The repository is separate on purpose: the portal is a static website, and this repository is
+everything that moves around the data. The portal consumes it as a git submodule pinned to a
+release tag — see [Contract with the portal](#contract-with-the-portal).
 
-## Datové zdroje
+![Overview of the data and metadata flow](docs/diagrams/overview.png)
 
-| Zdroj | Co z něj bereme | Poznámka |
-|---|---|---|
-| **MZČR** — otevřená data COVID-19 | případy, hospitalizace, testy, incidence; nově i `osoby` (věk+kraj každého případu), `umrti` (věk) a `ockovani-*` (stav očkování) | API v2, denně; `osoby.csv` (~330 MB) se streamem agreguje, surový soubor se nedrží. Nahradilo nereprodukovatelnou covid.db |
-| **ÚZIS ISIN** | hlášená infekční onemocnění (114 diagnóz) po krajích, měsících a věkových skupinách | hlavní zdroj dashboardů i detekce anomálií; otevřený export aktuálně končí 12/2025 |
-| **SZÚ — sezónní archivy** | souhrny sezón chřipky 2012/13+ | PDF archivy; sezóny 2022/23–2024/25 už online nejsou → vezou se v repu (`curated/szu/`) |
-| **SZÚ — týdenní PDF** | týdenní matice virus×týden (2 sezóny v jednom PDF) + krajská hlášení po týdnech | celoročně týdně; extrakce validovaná proti kumulativním součtům v PDF, při nesouladu parser spadne |
-| **ÚZIS — registry RPN a RTBC** | pohlavní nemoci (syfilis, kapavka, LGV; od 1994, okres × pohlaví × věk) a tuberkulóza (od 2000, čtvrtletí × kraj × věk × rodná země) | **v ISIN tyhle nemoci nejsou** — mají vlastní povinné registry. Roční aktualizace (soubory z 2/2026 nesou rok 2025, resp. 2024) |
-| **ČSÚ** | počty obyvatel po krajích (dataset `PORKR01`) | jmenovatele — bez nich jsou z čísel počty, ne incidence |
-| **ECDC** | historická data COVID-19 pro ČR | zdroj **přestal publikovat na podzim 2022**; scraper zůstává kvůli historické řadě |
-| **WHO FluNet + FluID** | týdenní laboratorní záchyty chřipky **včetně počtu vyšetřených vzorků** (od 1997) a ILI/ARI případy s pokrytou populací (souvisle od 2009/10) | FluNet nonsentinel jsou tatáž čísla jako týdenní PDF SZÚ, ale s jmenovatelem pozitivity a se sezónami 2022/23–2023/24, které SZÚ už online nemá. FluID dává míru srovnatelnou napříč roky — vstup pro sezónní prahy (MEM) |
-| **ECDC ERVISS** | ILI/ARI na 100 tis. po věkových skupinách + laboratorní hlášení, řádky za ČR (od 2022-W25) | čerstvější než FluID (ten se mimo sezónu zpožďuje); živá náhrada za mrtvý ECDC COVID zdroj |
+## Quick start
 
-## Jak to funguje
-
-Pipeline má pět fází, které na sebe navazují přes souborový systém, ne přes sdílený stav:
-
-```
-1. stažení      run_all.py ─────────► $DATA_DIR/<zdroj>/*.csv
-
-2. archivace    snapshot.py ────────► $DATA_DIR/raw/<datum>/*.gz + manifest.json
-
-2b. metadata    source_metadata.py ─► $DATA_DIR/meta/source_metadata.json
-
-3. normalizace  load_to_db.py ──────► PostgreSQL: observation, population
-
-4. výstup       generate_json.py ───► $OUTPUT_DIR/*.json      (Chart.js + blok `meta`)
-
-5. analytika    detect_anomalies.py ► $OUTPUT_DIR/anomaly_signals.json (stránka Signály)
-                compute_mem.py ─────► $OUTPUT_DIR/flu_mem.json (sezónní prahy chřipky)
-```
-
-⚠️ **Pipeline nezapisuje žádné Hugo stránky.** Dřív to dělala ebola větev
-(`gdrive_ebola.py` + `process_ebola.py`); ta byla odstraněna v PPDB-53, protože obsah
-i grafy k ebole nově dodává AI agent jako pull request přímo do portálu. Jediný
-výstup téhle pipeline je JSON.
-
-Fáze jsou samostatně spustitelné a **idempotentní** — opakovaný běh nic nezduplikuje ani
-nerozbije. Každý scraper běží v izolaci: když jeden zdroj spadne (nedostupný web, změněný formát),
-ostatní doběhnou a `run_all.py` na konci vypíše, co se nepovedlo.
-
-### Archivace snímků
-
-`snapshot.py` ukládá každé stažení jako datovaný gzip a vede manifest se sha256 otisky. Soubor,
-který se od minule nezměnil, se neukládá znovu. Důvod není úspora místa, ale **reprodukovatelnost**:
-bez archivu nejde zpětně říct, jaká data stála za grafem publikovaným v minulosti, a otevřené zdroje
-svá historická čísla běžně tiše opravují.
-
-### Metadata o zdrojích a grafech
-
-Vedle dat se stahuje i to, co o datech tvrdí jejich **vydavatel**: název sady, licence, datum
-poslední změny, periodicita vydávání, seznam sloupců. Dřív se tyhle údaje psaly ručně do katalogu
-na webu a zastarávaly — věta „soubor z ledna 2026 končí prosincem 2025“ platí jen do dalšího
-vydání a nikdo ji neopraví, dokud si toho někdo nevšimne. Vydavatelé přitom čerstvost publikují
-sami, jen každý jinak.
-
-`sources.yaml` říká, kde metadata hledat; `source_metadata.py` je stáhne čtyřmi cestami:
-
-| cesta | co dá | kdo to má |
-|---|---|---|
-| `csvw` | název, popis, licence, `dc:modified`, sloupce | ISIN, RPN, RTBC (ÚZIS) |
-| `nkod` | periodicita vydávání, témata, trvalé IRI sady | sady v [data.gov.cz](https://data.gov.cz) |
-| `http_head` | `Last-Modified`, `ETag`, velikost | MZČR, ČSÚ, WHO |
-| `github` | datum posledního commitu | ERVISS, RespiCast |
-
-Zdroje bez strojových metadat (SZÚ — PDF na měnících se URL) mají `manual` + povinné `manual_note`,
-aby šlo poznat, že datum tvrdíme my, ne zdroj.
-
-⚠️ **Selhání zjišťování nikdy neshodí pipeline.** Metadata jsou doprovodná informace; když ÚZIS
-zrovna neodpovídá, data se stáhnou dál a u zdroje se zapíše `errors`. Opak by znamenal, že portál
-přijde o data kvůli tomu, že nestáhl popisek.
-
-Generátor pak ke **každému grafu** přibalí blok `meta` — co se měří, v jaké jednotce, za jaké období,
-z jakého zdroje, jak je ten zdroj čerstvý a jaká upozornění k datům platí:
-
-```jsonc
-"meta": {
-  "chart_id": "isin_monthly_trend",
-  "metric": "cases", "unit": "count", "grain": "month", "region": "CZ",
-  "period": { "start": "2018-01", "end": "2025-12", "points": 96 },
-  "sources": [ { "id": "uzis-isin", "publisher": "ÚZIS ČR", "licence": { … },
-                 "modified_at_publisher": "2026-01-22T09:09:17Z",
-                 "periodicity": "annual", "snapshot_date": "2026-09-01" } ],
-  "caveats": [ { "id": "zoster-vykazovani-2025-07", "action": "break", "description": "…" } ]
-}
-```
-
-Co který graf měří, je v `charts.yaml`; `caveats` se **nekopírují**, berou se z
-`methodology_changes.yaml`, aby existoval jeden zdroj pravdy. Frontend blok ignoruje (Chart.js
-čte jen `labels`/`datasets`) — je pro `/api/charts`, MCP a AI vrstvu nad portálem. Právě jednotka
-a caveaty jsou to, bez čeho model vydá zlom v hlášení (EWS od 7/2025) za epidemii nebo sečte
-procenta s počty.
-
-Graf, který v `charts.yaml` chybí, projde ven bez metadat a `test_source_metadata.py` to ohlásí —
-mapa tak nemůže tiše zaostat za kódem.
-
-> `sources.yaml` tady je **technická provenience**. Stejnojmenný soubor v portálu
-> (`frontend/data/sources.yaml`) je **redakční popis** pro čtenáře (`limits`, `grain`, cs/en názvy).
-> Společné mají jen `id` a `publisher` — přes `id` se obě strany spojují.
-
-### Datová vrstva
-
-Všechny zdroje měří v zásadě totéž — *kolik případů něčeho bylo za nějaké období, na nějakém území,
-v nějaké skupině*. Proto jedna tabulka `observation` pro všechny, ne tabulka na zdroj: dotaz napříč
-zdroji pak nepotřebuje `UNION`.
-
-```sql
-observation (source_id, diagnosis_name, region_code, age_group, sex,
-             period_start, period_end, metric, value, snapshot_date)
-population  (region_code, age_group, sex, year, value)
-```
-
-Dvě věci na tom schématu stojí za vysvětlení:
-
-- **`snapshot_date` je součástí unikátního klíče.** Pipeline data nepřepisuje, ale přidává novou
-  verzi téhož pozorování. Vzniká tím *reporting triangle* — záznam o tom, jak se čísla za dané období
-  postupně doplňovala dodatečnými hlášeními. Bez něj nejde spočítat nowcasting, tedy korekci
-  reportovacího zpoždění.
-- **Unikátní klíč je `NULLS NOT DISTINCT`.** `NULL` tu znamená „nerozlišeno podle téhle dimenze"
-  (ISIN neagreguje podle pohlaví, takže `sex` je vždy `NULL`). Ve výchozím chování Postgresu se dva
-  `NULL` nepovažují za shodné, klíč by nikdy nesedl, `ON CONFLICT` by se nespustil a **každý běh
-  loaderu by data zduplikoval**. Vyžaduje PostgreSQL 15+.
-
-Kromě měsíčního ISIN se do `observation` sypou i **týdenní** laboratorní záchyty
-SZÚ (nejjemnější granularita v databázi; Praha a Střední Čechy sdílejí laboratoře
-a nesou kombinovaný kód `CZ010+CZ020`).
-
-`load_to_db.py` si schéma zajistí sám — aplikuje `db/init.sql`. Postgres totiž spustí skripty
-z `docker-entrypoint-initdb.d` jen při první inicializaci prázdného svazku, takže na databázi, která
-už jednou běžela, by tabulky přidané později nikdy nevznikly. Schéma se schválně neopisuje do Pythonu:
-`db/init.sql` zůstává jediným zdrojem pravdy a je celý idempotentní.
-
-### Generování výstupů
-
-`generate_json.py` čte primárně z databáze a při její nedostupnosti spadne zpátky na CSV, takže
-pipeline funguje i bez běžícího Postgresu. Generuje přes dvacet datových sad — COVID-19 (průběh,
-hospitalizace, testování, věk, vakcinační status), chřipku a ARI (sezónní i krajské přehledy)
-a infekční nemoci z ISIN (skupiny diagnóz, krajská incidence, měsíční trendy, věkové skupiny).
-
-### Detekce anomálií
-
-`detect_anomalies.py` prochází při každém běhu ~1 200 řad ISIN (diagnóza × kraj)
-metodou **Farrington/Noufaily** — týž algoritmus, kterým UKHSA týdně kontroluje
-tisíce řad laboratorních hlášení. Pro každou řadu spočítá očekávanou endemickou
-hladinu (kvazi-Poissonův GLM se sezónními faktory, minulé epidemie s převáženou
-vahou) a hlásí měsíce nad 99. percentilem predikčního intervalu.
-
-Validace: zpětný test na pertusi 2024 (první signál 3 měsíce před tím, než se
-epidemie stala tématem; 0 planých poplachů v klidu) a simulační studie se známou
-pravdou (`simulate_detection.py`): záchyt epidemie velikosti 3σ/5σ/10σ =
-27/60/96 %, plané poplachy 1,5–3 %. Detaily v docstringu obou skriptů.
-
-**Nový kanál hlášení (EWS).** ÚZIS od července 2025 přijímá případy i přes hlášení EWS
-a sloupec `EWS` ve zdrojových datech říká, kolik jich tudy přišlo — za druhé pololetí 2025
-přes 25 tisíc, u pásového oparu 62 % případů, u boreliózy 59 %, u mononukleózy 51 %. Řada
-tím vzroste, aniž by nemocných přibylo. Odečíst EWS nestačí (část hlášení se do nového
-kanálu přelila ze starého), takže srovnatelný počet leží někde mezi „nahlášeno − EWS"
-a „nahlášeno". Detektor proto u každého signálu rozhoduje: je-li nad prahem i dolní mez,
-signál platí (`reporting_channel.robust`); jinak je **nerozhodnutelný** a ve výstupu se
-řadí až za signály, o kterých rozhodnout jde. V prosinci 2025 tak z 56 signálů zůstává
-24 rozhodnutelných a 32 nerozhodnutelných.
-
-### Sezónní prahy chřipky (MEM)
-
-`compute_mem.py` počítá **Moving Epidemic Method** (Vega et al. 2013, 2015 — standard
-ECDC a WHO PISA) nad týdenní mírou ILI na 100 tis.: epidemický práh („sezóna začala")
-a tři prahy intenzity (střední / vysoká / velmi vysoká). Historii dává WHO FluID,
-nejčerstvější týdny ECDC ERVISS — tatáž řada dvěma cestami (205 společných týdnů,
-největší rozdíl 1,4 %). Laboratorní záchyty se jako vstup nehodí: s objemem testování
-vzrostly řádově, takže práh z minulých sezón by dnes svítil trvale.
-
-Do odhadu jde posledních 10 platných sezón. Ručně vyřazené (pandemie 2009/10, covidové
-2020/21 a 2021/22, neověřená 2025/26) jsou v `EXCLUDED_SEASONS`; navíc se automaticky
-vyřazují **sezóny bez epidemie** — vrchol pod epidemickým prahem z ostatních sezón
-(dnes jen 2013/14: data jsou úplná, chřipka tu zimu prostě skoro nebyla; v odhadu by
-ale sama zvedla práh „vysoké" intenzity nad všechno, co kdy bylo naměřeno). Všechna
-vyřazení jsou i s důvodem ve výstupním JSON. δ je pevně na standardních 2,8 kvůli
-srovnatelnosti s ECDC; citlivost na δ (leave-one-season-out) se zapisuje do výstupu.
-
-Počítají se dva ukazatele. **ILI** (chřipce podobné onemocnění — úzká definice, vlna ji
-zvedne ~15× nad podzimní klid) je hlavní: zpětný test zachytí 92 % epidemických týdnů.
-**ARI** (jakákoli akutní respirační infekce — číslo, ve kterém tradičně mluví česká
-hygiena) se počítá také, ale chřipková vlna se v ní ztrácí v celoročním pozadí jiných
-virů: zachytí jen 47 % týdnů. Výstup proto u každého ukazatele nese `intensity_reliable`
-(Youdenův index ≥ 0,7) — u ARI je `false` a portál u ní kreslí jen křivku s prahem,
-bez pásem intenzity, která by předstírala přesnost, již data nemají.
-
-K prahům přidává `flu_mem.json` dvě věci. **Trend** (`trend.py`): tempo růstu z posledních
-tří týdnů a kategorie roste / pravděpodobně roste / beze změny / pravděpodobně klesá /
-klesá podle pravděpodobnosti růstu — po vzoru CDC, jen nad tempem růstu místo Rt (ILI a ARI
-jsou směs patogenů bez jednoho generačního intervalu). Délku okna rozhodl zpětný test,
-jehož výsledek je ve výstupu. **Předpověď** (`forecast.py`, scraper `ecdc_respicast`):
-ensemble evropského hubu ECDC RespiCast na čtyři týdny, z kvantilů spočítaná
-pravděpodobnost překročení našeho epidemického prahu a poctivé vyhodnocení minulých
-předpovědí pro ČR — relativní WIS proti referenčnímu modelu hubu (ILI 0,85) a skutečné
-pokrytí intervalů („95%" pás zachytil 85 %). Předpověď se ukazuje tak, jak je, vedle
-své historické úspěšnosti; roztažení intervalů jsme zkoušeli a na druhou sezónu se nepřeneslo.
-
-Validace: jádro (`mem.py`, čisté numpy) je reimplementace R balíku `mem` a golden
-test ho drží na shodě s ním na 8+ platných míst — prahy i začátky a konce epidemií,
-na českých datech i na syntetice (`tests/test_mem_golden.py`).
-
-## Struktura repa
-
-```
-scripts/run_all.py            spustí všechny scrapery, uloží CSV do $DATA_DIR
-scripts/snapshot.py           datované gzip snímky staženého se sha256 deduplikací
-scripts/source_metadata.py    metadata od vydavatelů (licence, čerstvost) → data/meta/
-scripts/chart_meta.py         blok `meta` ke grafům — sdílí ho všechny tři generátory
-scripts/load_to_db.py         ETL: CSV → PostgreSQL (observation, population)
-scripts/generate_json.py      přečte data, vygeneruje Chart.js JSON do $OUTPUT_DIR
-scripts/detect_anomalies.py   detekce anomálií (Farrington/Noufaily) → anomaly_signals.json
-scripts/simulate_detection.py simulační studie detektoru (validace se známou pravdou)
-scripts/mem.py                Moving Epidemic Method — jádro výpočtu, bez I/O
-scripts/compute_mem.py        sezónní prahy chřipky nad ILI → flu_mem.json
-scripts/scrapers/             jednotlivé scrapery (MZČR, SZÚ ×2, ÚZIS ISIN, ÚZIS registry, ČSÚ, ECDC ×2, WHO)
-sources.yaml                  registr zdrojů — kde zjistit metadata (≠ redakční katalog v portálu)
-charts.yaml                   co který graf měří: zdroj, metrika, jednotka, zrno
-methodology_changes.yaml      registr metodických změn; zdroj `caveats` v metadatech grafů
-curated/szu/                  uzavřené sezóny SZÚ, jejichž online zdroj už neexistuje
-db/init.sql                   schéma PostgreSQL (portál si ho mountuje do kontejneru pathogen-db)
-Dockerfile                    image `datascrapper` — portál ho staví přímo z tohohle repa
-requirements.txt              Python závislosti (jediný zdroj — nic jiného se nepoužívá)
-.env.example                  vzor proměnných prostředí pro lokální běh
-```
-
-## Proměnné prostředí
-
-| Proměnná | Výchozí | Význam |
-|---|---|---|
-| `DATA_DIR` | `./data` | kam scrapery ukládají stažená data a odkud je čtou další fáze |
-| `OUTPUT_DIR` | `./site/static/data/charts` | kam se píše vygenerovaný chart JSON |
-| `DB_HOST` | `localhost` | databáze pro `load_to_db.py` a čtení v `generate_json.py` |
-| `DB_PORT` | `5432` | |
-| `POSTGRES_DB` | `pathogens` | |
-| `POSTGRES_USER` | `portal` | |
-| `POSTGRES_PASSWORD` | `portal_dev` | jen pro lokální vývoj — v produkci jde ze secretů portálu |
-
-Zkopíruj `.env.example` na `.env` a uprav podle potřeby. Bez nastavených proměnných se použijí
-výchozí hodnoty výše (relativně ke kořeni repa).
-
-## Jak to spustit lokálně
+Locally (Python 3.12):
 
 ```bash
 pip install -r requirements.txt
+cp .env.example .env                  # optional, the defaults work
 
-python scripts/run_all.py                # stáhne CSV do $DATA_DIR (a udělá snímek)
-python scripts/load_to_db.py             # naplní PostgreSQL (volitelné, viz níže)
-python scripts/generate_json.py          # vygeneruje chart JSON do $OUTPUT_DIR
-python scripts/detect_anomalies.py       # signály do $OUTPUT_DIR/anomaly_signals.json
-python scripts/compute_mem.py            # sezónní prahy chřipky do $OUTPUT_DIR/flu_mem.json
+python scripts/run_all.py             # download CSVs into $DATA_DIR, snapshot them, collect source metadata
+python scripts/load_to_db.py          # optional: fill PostgreSQL
+python scripts/generate_json.py       # chart JSON into $OUTPUT_DIR
+python scripts/detect_anomalies.py    # $OUTPUT_DIR/anomaly_signals.json
+python scripts/compute_mem.py         # $OUTPUT_DIR/flu_mem.json
 ```
 
-Krok s databází je volitelný — bez něj `generate_json.py` čte CSV napřímo. Databáze je potřeba
-na analytiku napříč zdroji (baseline, incidence, reporting triangle), ne na vykreslení grafu.
-
-```bash
-python scripts/load_to_db.py --dry-run              # jen spočítá řádky, nic nezapíše
-python scripts/load_to_db.py --snapshot-date 2026-01-31   # načte pod konkrétním datem snímku
-```
-
-## Jak to spustit v Dockeru
+In Docker:
 
 ```bash
 docker build -t pathogensportal-db .
-docker run --rm \
-  -v "$PWD/data:/data" \
-  -v "$PWD/out/charts:/output/charts" \
-  -v "$PWD/out/content:/output/content" \
-  pathogensportal-db
+docker run --rm -v "$PWD/data:/data" -v "$PWD/out/charts:/output/charts" pathogensportal-db
 ```
 
-`CMD` v Dockerfilu spustí celý řetězec za sebou: `run_all.py` → `generate_json.py` →
-`detect_anomalies.py` → `compute_mem.py`.
+The container runs `run_all.py → generate_json.py → detect_anomalies.py → compute_mem.py`.
+`load_to_db.py` is not part of that command; without a database `generate_json.py` reads the CSV
+files directly.
 
-## Jak repo konzumuje portál
+## Pipeline at a glance
 
-Portál (`pathogensportal`) si tenhle repo bere jako **git submodule pinnutý na release tag**
-(ne na branch — jinak by každý push sem měnil to, co běží v produkci) a staví z něj image
-`datascrapper`. Praktický důsledek: **jména skriptů (`run_all.py`, `generate_json.py`,
-`detect_anomalies.py`), `CMD` v Dockerfilu, jména proměnných (`DATA_DIR`/`OUTPUT_DIR`)
-a cesta `db/init.sql` jsou veřejné API tohohle repa vůči portálu.** Jejich změna je breaking
-change, ne interní úprava — vyžaduje novou verzi (release) a poznámku v release notes, ne
-tichý push na `dev`.
+The phases hand over through the file system, not through shared state. Each one can be run on its
+own and is idempotent — a repeated run neither duplicates nor breaks anything.
 
-⚠️ **PPDB-53 je přesně takový breaking change:** zmizel `process_ebola.py`, `gdrive_ebola.py`
-a proměnná `CONTENT_DIR`. Portál to snese bez úpravy — jeho pipeline kopíruje stránky jen
-`if [ "$staged_content" -gt 0 ]`, takže se ten krok prostě přeskočí — ale pin se musí zvednout
-na release, který tohle obsahuje, ne na branch.
+| # | Phase | Script | Writes |
+|---|---|---|---|
+| 1 | Download | `scripts/run_all.py` → `scripts/scrapers/*.py` | `$DATA_DIR/<source>/*.csv` |
+| 2 | Archive | `scripts/snapshot.py` (called by `run_all.py`) | `$DATA_DIR/raw/<date>/…csv.gz`, `raw/manifest.json` |
+| 2b | Source metadata | `scripts/source_metadata.py` (called by `run_all.py`) | `$DATA_DIR/meta/source_metadata.json` |
+| 3 | Normalise | `scripts/load_to_db.py` | PostgreSQL tables `observation`, `population` |
+| 4 | Charts | `scripts/generate_json.py` | `$OUTPUT_DIR/*.json` (Chart.js data + `meta` block) |
+| 5 | Analytics | `scripts/detect_anomalies.py` | `$OUTPUT_DIR/anomaly_signals.json` |
+|   |           | `scripts/compute_mem.py` | `$OUTPUT_DIR/flu_mem.json` |
 
-Nová data se na portálu objeví až tehdy, když se **submodul přepne na nový tag**. Samotné vydání
-verze tady portálem nehne.
+Every scraper runs in isolation: when one source fails (site down, format changed) the others
+finish, and `run_all.py` lists what failed and exits with code 1.
 
-## Změny po v0.2.0 (nadcházející release)
+The pipeline writes JSON only. It does not write any Hugo pages.
 
-- **Metadata o zdrojích** (`source_metadata.py`, `sources.yaml`, `charts.yaml`) — čerstvost,
-  licence a periodicita se stahují od vydavatelů (CSVW, NKOD, HTTP hlavičky, GitHub), ne
-  přepisují ručně. Každý graf veze blok `meta` s metrikou, jednotkou, obdobím, zdrojem
-  a upozorněními — podklad pro `/api/charts`, MCP a AI vrstvu nad portálem.
-- **Detekce anomálií** — systém včasného varování nad ISIN (Farrington/Noufaily),
-  validovaný zpětným testem i simulační studií; výstup pohání stránku Signály.
-- **Týdenní SZÚ scraper** (`szu_weekly.py`) — matice virus×týden z jednoho PDF
-  + krajská hlášení; oživil týdenní a regionální chřipkové grafy a dal databázi
-  týdenní granularitu.
-- **COVID demografie z otevřených dat MZČR** — náhrada nereprodukovatelné
-  covid.db datasety `osoby`/`umrti`/`ockovani-*`; součty sedí na jednotku na
-  souhrnné karty a chybějící věk klesl z 12,9 % na 0,5 %. `sqlite3` z image pryč.
-- **Kurátorované sezóny** `curated/szu/` — tři uzavřené sezóny bez online zdroje.
-- Poznámky o původu čísel u generovaných ebola grafů; ebola karta s piktogramem.
+## Data sources
 
-## Změny oproti verzi 0.1.0
+| Source | What we take | Scraper |
+|---|---|---|
+| **MZČR** — COVID-19 open data | cases, hospitalisations, tests, incidence, deaths, vaccination status, per-person age and region | `mzcr_covid.py` |
+| **ÚZIS ISIN** | notifiable infectious diseases: 114 diagnoses by region, month and age group | `uzis_isin.py` |
+| **ÚZIS registries RPN, RTBC** | sexually transmitted infections (since 1994) and tuberculosis (since 2000) — these are not in ISIN | `uzis_registries.py` |
+| **SZÚ** — seasonal archives | influenza / ARI season summaries since 2012/13 | `szu_influenza.py` |
+| **SZÚ** — weekly PDFs | virus × week matrix and weekly reports by region | `szu_weekly.py` |
+| **ČSÚ** | population by region — the denominators for incidence | `csu_population.py` |
+| **WHO FluNet + FluID** | weekly influenza lab detections with specimens tested; ILI/ARI cases with population covered | `who_flu.py` |
+| **ECDC ERVISS** | weekly ILI/ARI rates per 100,000 and lab reports for Czechia | `ecdc_erviss.py` |
+| **ECDC RespiCast** | weekly probabilistic ILI/ARI forecasts | `ecdc_respicast.py` |
+| **ECDC COVID-19** | historical daily series, frozen since autumn 2022 | `ecdc_covid.py` |
 
-### Datová vrstva (nová)
+Details, file formats and known limits of each source: [docs/data-sources.md](docs/data-sources.md).
 
-- **Archivace snímků** — každé stažení se ukládá jako datovaný gzip s manifestem a sha256
-  deduplikací, takže lze zpětně doložit, z jakých dat vznikl publikovaný graf.
-- **PostgreSQL jako normalizovaná vrstva** — tabulky `observation` a `population`, jedno schéma
-  pro všechny zdroje, `snapshot_date` v unikátním klíči kvůli reporting triangle.
-- **Loader si zajistí schéma sám** aplikací `db/init.sql`, takže funguje i proti databázi, která už
-  jednou běžela a `docker-entrypoint-initdb.d` se na ní znovu nespustí.
-- **Oprava duplikace dat při opakovaném běhu** — unikátní klíč obsahuje sloupce, které jsou u části
-  zdrojů `NULL`; ve výchozím chování Postgresu klíč nesedl, `ON CONFLICT` se nespouštěl a data se
-  s každým během zdvojovala. Řeší `UNIQUE NULLS NOT DISTINCT`.
-- **`generate_json.py` čte z databáze** a při její nedostupnosti spadne zpátky na CSV.
+## Repository layout
 
-### Nové zdroje a rozšíření stávajících
+```
+scripts/run_all.py             runs every scraper, then the snapshot and the source metadata
+scripts/scrapers/              one module per source
+scripts/snapshot.py            dated gzip snapshots with sha256 de-duplication
+scripts/source_metadata.py     metadata from the publishers (licence, freshness) → data/meta/
+scripts/load_to_db.py          ETL: CSV → PostgreSQL (observation, population)
+scripts/generate_json.py       reads the data, writes Chart.js JSON into $OUTPUT_DIR
+scripts/chart_meta.py          the `meta` block attached to every chart
+scripts/detect_anomalies.py    anomaly detection (Farrington/Noufaily) → anomaly_signals.json
+scripts/simulate_detection.py  simulation study of the detector
+scripts/compute_mem.py         seasonal influenza thresholds → flu_mem.json
+scripts/mem.py                 Moving Epidemic Method — the computation, no I/O
+scripts/trend.py               growth / decline category of the current wave
+scripts/forecast.py            threshold exceedance probability from quantile forecasts
+sources.yaml                   source registry — where to find each publisher's metadata
+charts.yaml                    what each chart measures: source, metric, unit, grain
+methodology_changes.yaml       registry of reporting changes; the source of chart `caveats`
+curated/szu/                   closed SZÚ seasons whose online source no longer exists
+db/init.sql                    PostgreSQL schema (the portal mounts it into its database container)
+tests/                         pytest suite, runs without network access
+docs/                          documentation and diagrams
+Dockerfile                     the `datascrapper` image — the portal builds it from this repo
+requirements.txt               Python dependencies (the only source of them)
+.env.example                   template of the environment variables
+```
 
-- **ČSÚ populace** — nový scraper pro počty obyvatel po krajích, díky kterému lze počítat
-  **incidenci na 100 000 obyvatel** místo holých počtů. Absolutní čísla samotná kraje řadí podle
-  velikosti, ne podle epidemiologické situace.
-- **SZÚ: automatické stahování aktuální sezóny** vedle historických PDF, plus doplnění chybějících
-  sezón zpětně.
-- **ISIN: skupiny diagnóz** — místo žebříčku deseti nejčastějších nemocí jsou diagnózy roztříděné
-  do věcných skupin (dětské a vzdušné nákazy, střevní, kožní, přenášené klíšťaty a zvířaty,
-  hepatitidy, pohlavně přenosné, vzácné závažné a ostatní).
+## Configuration
 
-### Opravy scraperů
+| Variable | Default | Meaning |
+|---|---|---|
+| `DATA_DIR` | `./data` | where the scrapers store downloads and the later phases read them |
+| `OUTPUT_DIR` | `./site/static/data/charts` | where the generated JSON is written |
+| `DB_HOST` | `localhost` | database for `load_to_db.py` and for the SQL path of `generate_json.py` |
+| `DB_PORT` | `5432` | |
+| `POSTGRES_DB` | `pathogens` | |
+| `POSTGRES_USER` | `portal` | |
+| `POSTGRES_PASSWORD` | `portal_dev` | local development only — production takes it from the portal's secrets |
+| `DB_CONNECT_TIMEOUT` | `3` | seconds `generate_json.py` waits before it falls back to the CSV files |
+| `GITHUB_TOKEN` | unset | optional; lifts the 60 requests/hour limit of the GitHub API used by `ecdc_respicast.py` |
 
-- Chybné určení sezóny u SZÚ (hranice sezóny je 40. týden) a prohozené pořadí roku a týdne
-  v třídicím klíči.
-- Ztráta dat u PDF buněk obsahujících víc virů najednou — brala se jen první hodnota.
-- Rate limiting u stahování z Google Drive — přepracováno na manifest identifikátorů, takže se už
-  stažené soubory nestahují znovu, a selhání jednoho souboru neshodí zbytek.
-- Chybějící nástroj v Docker image, kvůli kterému se část grafů tiše negenerovala.
+Relative defaults are resolved against the repository root. In the container `DATA_DIR=/data` and
+`OUTPUT_DIR=/output/charts`.
 
-### Grafy a stránky
+## Contract with the portal
 
-- **Věkové kohorty COVID-19**: záznamy bez vyplněného roku narození se slévaly do jedné nesmyslné
-  kohorty na začátku grafu. Nově se z grafu vyřazují, ale jejich počet a podíl se **pojmenovaně
-  uvádí** — tiše zahodit osminu případů by bylo zavádějící.
-- **Trajektorie ebolavirových epidemií**: řada aktuální epidemie se počítá z vlastní časové řady
-  místo ručně vypsaných hodnot (nemůže tedy zastarat), osa X je číselná místo kategorické (aby
-  sklony křivek odpovídaly skutečné rychlosti růstu) a osa Y logaritmická (epidemie se liší
-  o řády).
-- **Tabulka hodnot u Eboly** se generuje staticky. Zdrojové HTML má tělo tabulky prázdné a plnil ho
-  JavaScript z přiloženého CSV, který se na portál nepřenáší — tabulka proto zůstávala prázdná.
-- Souhrnné dlaždice u Eboly se dopočítávají ze stejné časové řady jako grafy, takže se s nimi
-  nemohou rozejít.
+The portal (`pathogensportal`) takes this repository as a **git submodule pinned to a release tag**
+— not to a branch, otherwise every push here would change what runs in production — and builds the
+`datascrapper` image from it. In practice this makes the following the public interface of the
+repository:
 
-### Prostředí a dokumentace
+- the script names `run_all.py`, `generate_json.py`, `detect_anomalies.py`, `compute_mem.py`
+- the `CMD` of the Dockerfile
+- the variable names `DATA_DIR` and `OUTPUT_DIR`
+- the path `db/init.sql`
+- the names and the shape of the generated JSON files
 
-- Sjednocený kontrakt proměnných `DATA_DIR` / `OUTPUT_DIR` / `CONTENT_DIR` s portálem.
-- Dockerfile a `requirements.txt` jako jediný zdroj závislostí.
-- Tenhle README.
+Changing any of them is a breaking change. It needs a new release and a line in the release notes,
+not a quiet push to `dev`.
+
+New data reaches the portal only when the **submodule pin moves to a new tag**. Cutting a release
+here does not change the portal by itself. See [docs/deployment.md](docs/deployment.md).
+
+## Documentation
+
+| Document | Content |
+|---|---|
+| [docs/architecture.md](docs/architecture.md) | the phases, the design principles, all three diagrams |
+| [docs/data-sources.md](docs/data-sources.md) | every source and its scraper: what is downloaded, how it is checked, what comes out |
+| [docs/snapshots.md](docs/snapshots.md) | the dated archive and why it exists |
+| [docs/data-model.md](docs/data-model.md) | the PostgreSQL schema and what each loader writes |
+| [docs/chart-generation.md](docs/chart-generation.md) | how a CSV becomes a chart JSON; catalogue of every generated file |
+| [docs/metadata.md](docs/metadata.md) | source metadata, `charts.yaml`, the `meta` block |
+| [docs/analytics/anomaly-detection.md](docs/analytics/anomaly-detection.md) | the early-warning system on ISIN |
+| [docs/analytics/flu-mem.md](docs/analytics/flu-mem.md) | seasonal influenza thresholds, trend and forecast |
+| [docs/HOLDOUT.md](docs/HOLDOUT.md) | validation episodes that must not be used during development |
+| [docs/deployment.md](docs/deployment.md) | Docker image, the dev-server trigger, releases, the submodule pin |
+| [docs/development.md](docs/development.md) | tests, adding a source or a chart, branch and PR conventions |
+| [docs/diagrams/](docs/diagrams/) | draw.io sources and PNG exports of the flowcharts |
+| [CHANGELOG.md](CHANGELOG.md) | what changed in each release |
+
+## Tests
+
+```bash
+pip install pytest
+pytest -q
+```
+
+The suite needs no network and no database. CI runs it on every push and pull request.

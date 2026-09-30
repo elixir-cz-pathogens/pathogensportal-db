@@ -1,43 +1,47 @@
-# Registr datových zdrojů — technická provenience.
+# Data source registry — technical provenance.
 #
-# Proč existuje: pipeline stahuje data z deseti různých míst a dosud nikde
-# nebylo zapsáno, KDE se o každém z nich dají zjistit metadata (kdo ho vydal,
-# pod jakou licencí, kdy ho naposledy změnil). `source_metadata.py` podle
-# tohohle registru metadata stáhne, `generate_json.py` je přibalí ke grafům
-# a MCP/AI vrstva tak u každého čísla ví, odkud pochází a jak je staré.
+# Why it exists: the pipeline downloads data from ten different places, and
+# until now nothing recorded WHERE the metadata of each one can be found (who
+# published it, under which licence, when it last changed). `source_metadata.py`
+# fetches the metadata according to this registry, `generate_json.py` attaches
+# it to the charts, and the MCP/AI layer therefore knows where every number
+# comes from and how old it is.
 #
-# ⚠️ POZOR na záměnu se stejnojmenným souborem v portálu.
-#   pathogensportal/frontend/data/sources.yaml = REDAKČNÍ popis pro čtenáře
-#       (názvy cs/en, `limits` = co z dat nejde vyčíst, `grain`, `pages`).
-#   tenhle soubor                              = TECHNICKÁ provenience
-#       (kde leží metadata, co se stahuje, do jakých souborů to padá).
-# Společné mají jen `id` a `publisher` — a ta se musí shodovat, protože přes
-# `id` se obě strany spojují. Redakční texty sem nepatří a naopak; jinak
-# vzniknou dvě pravdy o jednom zdroji a jedna z nich začne tiše zastarávat.
+# ⚠️ Do NOT confuse this with the file of the same name in the portal.
+#   pathogensportal/frontend/data/sources.yaml = EDITORIAL description for readers
+#       (cs/en titles, `limits` = what the data cannot tell you, `grain`, `pages`).
+#   this file                                  = TECHNICAL provenance
+#       (where the metadata lives, what is downloaded, which files it lands in).
+# The two share only `id` and `publisher` — and those must match, because `id`
+# is the join key between both sides. Editorial text does not belong here and
+# vice versa; otherwise there are two truths about one source and one of them
+# quietly goes stale.
 #
-# Formát záznamu:
-#   id          stabilní identifikátor, shodný s portálovým katalogem
-#   publisher   vydavatel tak, jak se uvádí sám
-#   landing     stránka pro člověka (ne soubor)
-#   licence     name (+ url), psát tak, jak ji uvádí ZDROJ; když ji neuvádí,
-#               napsat "neuvedena" — domyšlená licence je horší než mezera
-#   files       cesty relativní k $DATA_DIR, které z tohohle zdroje vznikají;
-#               přes ně se k metadatům dohledá datum snapshotu z raw/manifest.json
-#   methodology id záznamů z methodology_changes.yaml, které se tohohle zdroje
-#               týkají — odtud se plní `caveats` v metadatech grafu
-#   discovery   jak zjistit metadata u vydavatele; klíče jsou nepovinné a
-#               kombinovatelné, každý se zkouší samostatně:
-#     csvw:       URL CSVW popisu (`*.csv-metadata.json`) — dc:title, dc:license,
-#                 dc:modified, dc:publisher, seznam sloupců. Nejbohatší zdroj.
-#     nkod:       IRI datové sady v Národním katalogu otevřených dat
-#                 (data.gov.cz) — accrualPeriodicity, témata, trvalý odkaz
-#     http_head:  URL, na které stačí HEAD — Last-Modified, ETag, velikost
-#     github:     "owner/repo", datum posledního commitu přes GitHub API
-#     manual:     ručně zjištěné datum poslední změny (YYYY-MM-DD) pro zdroje,
-#                 které nezveřejňují nic strojového — vždy s `manual_note`,
-#                 ať je poznat, že je to naše tvrzení, ne tvrzení zdroje
+# Record format:
+#   id          stable identifier, identical to the portal's catalogue
+#   publisher   the publisher, named the way it names itself
+#   landing     page for a human (not a file)
+#   licence     name (+ url), written the way the SOURCE states it; when the
+#               source states none, write "neuvedena" (not stated) — an
+#               invented licence is worse than a gap
+#   files       paths relative to $DATA_DIR that this source produces; they are
+#               used to look up the snapshot date in raw/manifest.json
+#   methodology ids of records in methodology_changes.yaml that concern this
+#               source — this is what fills `caveats` in the chart metadata
+#   discovery   how to find the metadata at the publisher; every key is optional
+#               and they can be combined, each one is tried independently:
+#     csvw:       URL of the CSVW description (`*.csv-metadata.json`) — dc:title,
+#                 dc:license, dc:modified, dc:publisher, column list. The richest.
+#     nkod:       IRI of the dataset in the Czech National Open Data Catalogue
+#                 (data.gov.cz) — accrualPeriodicity, themes, permanent link
+#     http_head:  URL that answers a HEAD request — Last-Modified, ETag, size
+#     github:     "owner/repo", date of the last commit through the GitHub API
+#     manual:     hand-checked date of the last change (YYYY-MM-DD) for sources
+#                 that publish nothing machine-readable — always together with
+#                 `manual_note`, so it is clear that the claim is ours, not the
+#                 source's
 #
-# Pořadí = česká surveillance nejdřív, pak mezinárodní kontext.
+# Order = Czech surveillance first, international context after.
 
 - id: uzis-isin
   publisher: "ÚZIS ČR"
@@ -105,9 +109,10 @@
     name: "neuvedena — zveřejněné zprávy SZÚ, uvádíme zdroj"
   files: ["szu/szu_influenza_2025_2026.csv", "szu/szu_weekly_viry.csv", "szu/szu_weekly_kraje.csv"]
   methodology: ["szu-retro-korekce"]
-  # SZÚ publikuje týdenní PDF na měnících se URL — HEAD na stabilní adresu
-  # neexistuje a datum vydání se čte až z obsahu PDF (szu_weekly.py).
-  # Čerstvost se proto u tohohle zdroje bere z data snapshotu, ne od vydavatele.
+  # SZÚ publishes weekly PDFs at changing URLs — there is no stable address to
+  # send a HEAD to, and the release date can only be read from the PDF content
+  # (szu_weekly.py). Freshness for this source therefore comes from the snapshot
+  # date, not from the publisher.
   discovery:
     manual: "2026-09-24"
     manual_note: >-
@@ -162,8 +167,9 @@
     name: "ECDC — volné použití s uvedením zdroje"
   files: ["ecdc/ecdc_covid_cz.csv"]
   methodology: []
-  # Uzavřená řada — zdroj přestal publikovat v říjnu 2022. `manual` je tu
-  # proto, aby se čerstvost nezkoušela dohledávat u něčeho, co se už nehne.
+  # Closed series — the source stopped publishing in October 2022. `manual` is
+  # here so that nobody tries to discover freshness for something that will
+  # never move again.
   discovery:
     manual: "2022-10-01"
     manual_note: "Zdroj přestal datovou sadu aktualizovat; držíme ji jen kvůli historii."

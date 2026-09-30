@@ -1,44 +1,40 @@
-# GitHub Actions — návod
+# GitHub Actions — guide
 
-Tenhle repozitář má pár automatizací (GitHub Actions), které ti usnadní práci a propojí
-commity/větve/PR s issues. **Fungují hned po mergnutí tohoto PR — nic nemusíš nastavovat.**
+This repository has a few automations (GitHub Actions) that link commits, branches and pull
+requests to issues, run the tests, and refresh the dev server. They need no setup to work.
 
-## Co se děje automaticky
+## What happens automatically
 
-| Workflow | Kdy se spustí | Co udělá |
+| Workflow | When it runs | What it does |
 |---|---|---|
-| Issue Prefixer | založíš issue | přejmenuje titulek na `PPDB-<číslo>: …` |
-| Branch Issue Linker | pushneš větev `feature/…`, `bugfix/…`, `docs/…` | napíše komentář do issue, že se na něm dělá |
-| PR Open Notification | otevřeš PR | komentář do issue s odkazem na PR |
-| PR Merged Notification | mergneš PR | komentář do issue, že je hotovo |
-| CI: Tests | **každý push i PR** | spustí `pytest` a ukáže ✅/❌ |
+| Issue Prefixer | an issue is opened | renames the title to `PPDB-<number>: …` |
+| Branch Issue Linker | a `feature/…`, `bugfix/…` or `docs/…` branch is pushed | comments on the issue that work has started |
+| PR Open Notification | a pull request is opened | comments on the issue with a link to the PR |
+| PR Merged Notification | a pull request is merged | comments on the issue that it is done |
+| CI: Tests | **every push and pull request** | runs `pytest` and shows ✅ / ❌ |
+| Data pipeline trigger | a push to `dev`, or manual dispatch | asks the dev server to run the pipeline — see [docs/deployment.md](../docs/deployment.md) |
 
-## Co potřebuješ dělat ty
+## What you need to do
 
-1. **Testy:** dej soubory `test_*.py` do složky `tests/`. Při každém pushi se samy spustí.
-   Dokud žádné testy nemáš, CI stejně projde (nezablokuje tě).
-   ```python
-   # tests/test_example.py
-   def test_basic():
-       assert 1 + 1 == 2
-   ```
+1. **Tests:** put `test_*.py` files into `tests/`. They run on every push.
 
-2. **Aby fungovalo propojení s issues** (volitelné, ale doporučené):
-   - Větve pojmenuj `feature/PPDB-12_neco` (číslo = číslo issue).
-   - Do titulku PR dej `PPDB-12` (např. `PPDB-12: přidat scraper`).
-   - Když to neuděláš, nic se nerozbije — jen se nepošle komentář do issue.
+2. **For the issue links to work** (optional, but recommended):
+   - Name branches `feature/PPDB-12_something` (the number is the issue number). The pattern is
+     exact: prefix, hyphen, number, underscore.
+   - Put `PPDB-12` into the pull request title (e.g. `PPDB-12: add scraper`).
+   - If you do not, nothing breaks — the comment on the issue is just not posted.
 
-## Volitelná nastavení (nemusíš hned)
+## Optional settings
 
-- **Změnit prefix `PPDB`:** Settings → Secrets and variables → **Actions** → Variables →
-  přidej `PROJECT_PREFIX` s jinou hodnotou. (Bez toho se použije výchozí `PPDB`.)
-- **Kdyby se komentáře do issues nepsaly:** Settings → Actions → General → *Workflow permissions*
-  → přepni na **Read and write permissions** → Save.
-- **Testy jako povinná brána** před merge do `main`: Settings → Branches → přidej pravidlo na
-  `main` → *Require status checks* → vyber `tests`.
+- **Change the `PPDB` prefix:** Settings → Secrets and variables → **Actions** → Variables →
+  add `PROJECT_PREFIX` with another value. Without it the default `PPDB` is used.
+- **If the comments on issues are not posted:** Settings → Actions → General → *Workflow
+  permissions* → switch to **Read and write permissions** → Save.
+- **Tests as a required gate** before merging into `main`: Settings → Branches → add a rule for
+  `main` → *Require status checks* → select `tests`.
 
-## Kdyby něco
+## If something looks wrong
 
-Automatizace jsou napsané tak, aby **nikdy neblokovaly** tvůj push (kromě padlých testů, pokud si je
-nastavíš jako povinné). Když nějaká akce „nic neudělá", většinou jen nesedělo číslo issue v názvu —
-to je v pořádku. S nastavením ti pomůže Dominika.
+The automations are written so that they **never block** a push (except for failing tests, if you
+make them required). When an action "does nothing", the issue number in the name usually did not
+match — that is fine.

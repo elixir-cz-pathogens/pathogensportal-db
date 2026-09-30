@@ -1,6 +1,6 @@
 name: "AUTOMATION: PR Open Notification"
 
-# Při otevření PR napíše komentář do odpovídajícího issue (číslo bere z titulku PR).
+# When a PR is opened, comments on the matching issue (the number is taken from the PR title).
 on:
   pull_request:
     types: [opened]
@@ -19,12 +19,13 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const pr = context.payload.pull_request;
-            // ⚠️ Číslo issue se hledá podle PROJECT_PREFIX, ne podle `\w+`.
-            // Původní `/(\w+-\d+)/` nemělo kotvu ani omezení na prefix, takže
-            // jakákoliv dvojice slovo-číslo v titulku vypadala jako odkaz na issue.
-            // Datum v titulku (např. "... pro 2026-09-04") se vyložilo jako `2026-09`
-            // a `.split('-')[1]` z toho udělal issue #9 — do kterého pak bot napsal
-            // komentář. Oběť se navíc mění s měsícem: v prosinci by to bylo #12.
+            // ⚠️ The issue number is matched by PROJECT_PREFIX, not by `\w+`.
+            // The original `/(\w+-\d+)/` had neither an anchor nor a prefix
+            // restriction, so any word-number pair in the title looked like an
+            // issue reference. A date in the title (e.g. "... pro 2026-09-04") was
+            // read as `2026-09`, and `.split('-')[1]` turned that into issue #9 —
+            // where the bot then posted a comment. The victim also changes with
+            // the month: in December it would have been #12.
             const prefix = "${{ vars.PROJECT_PREFIX || 'PPDB' }}";
             const match = pr.title.match(new RegExp(`\\b${prefix}-(\\d+)\\b`));
             if (match) {

@@ -1,32 +1,35 @@
-# Co který graf měří — mapa chart JSON → zdroj, metrika, jednotka, zrno.
+# What each chart measures — a map chart JSON → source, metric, unit, grain.
 #
-# Proč existuje: vygenerovaný chart JSON je jen `labels` + `datasets`, tedy
-# holá čísla s českými popisky. Člověk u grafu dočte z nadpisu stránky, co
-# vidí; stroj ne. AI vrstva nad portálem, která má odpovídat „kolik bylo
-# případů“, musí u každé řady znát metriku, JEDNOTKU (počet vs. na 100 tis.
-# jsou dvě různá čísla) a zrno období — jinak sebevědomě sečte procenta nebo
-# porovná měsíce s roky. Tenhle soubor to doplňuje, aniž by se sahalo do
-# třiceti generujících funkcí.
+# Why it exists: a generated chart JSON is just `labels` + `datasets`, i.e. bare
+# numbers with Czech labels. A person reads what they are looking at from the
+# page heading; a machine cannot. The AI layer on top of the portal, which is
+# supposed to answer "how many cases were there", has to know the metric, the
+# UNIT (a count and a rate per 100,000 are two different numbers) and the
+# period grain of every series — otherwise it will confidently add up
+# percentages or compare months with years. This file supplies that without
+# touching thirty generator functions.
 #
-# `save()` v generate_json.py si sem sáhne podle jména grafu a výsledek zapíše
-# do bloku `meta`. Graf bez záznamu se pozná (varování při generování + test
-# test_chart_meta.py), takže mapa nemůže tiše zaostat za kódem.
+# `save()` in generate_json.py looks a chart up here by name and writes the
+# result into the `meta` block. A chart without a record is detected (a warning
+# during generation + the test in test_source_metadata.py), so the map cannot
+# quietly fall behind the code.
 #
-# Klíče:
-#   source   id ze sources.yaml; seznam, když graf kombinuje víc zdrojů
-#            (typicky počty + populace ČSÚ pro přepočet na 100 000)
+# Keys:
+#   source   id from sources.yaml; a list when the chart combines several
+#            sources (typically counts + ČSÚ population for the per-100,000 rate)
 #   metric   cases | deaths | tests | hospitalizations | lab_detections
 #            | positivity | case_fatality | hospitalization_rate | forecast
-#            | intensity_threshold | anomaly_score — shodné s `metric`
-#            v tabulce observation (db/init.sql), ať se dá spojit s DB
-#   unit     count | per_100k | percent | score — STROJOVÁ jednotka.
-#            Lidský popisek si grafy nesou vlastní v `unit`/`x_title`.
-#   grain    zrno osy X: day | week | month | year | age_group | region
+#            | intensity_threshold | anomaly_score — the same vocabulary as
+#            `metric` in the observation table (db/init.sql), so it joins with
+#            the database
+#   unit     count | per_100k | percent | score — the MACHINE unit.
+#            Charts carry their own human-readable label in `unit`/`x_title`.
+#   grain    grain of the X axis: day | week | month | year | age_group | region
 #            | vaccination_status | cumulative
-#   region   CZ = celá republika jako jedno číslo; NUTS3 = rozpad na kraje
+#   region   CZ = the whole country as one number; NUTS3 = broken down by region
 #
-# Zápis `isin_group_*` platí pro všechny grafy s tím prefixem (tematické
-# skupiny nemocí se generují dynamicky podle obsahu dat).
+# The `isin_group_*` entry applies to every chart with that prefix (the thematic
+# disease groups are generated dynamically from the data).
 
 covid_cases_weekly:      { source: mzcr-covid, metric: cases, unit: count, grain: week, region: CZ }
 covid_hospitalization:   { source: mzcr-covid, metric: hospitalizations, unit: count, grain: week, region: CZ }
