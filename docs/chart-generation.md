@@ -125,9 +125,37 @@ would be serialised as strings.
 | `flu_weekly` | `flu_weekly` | `szu_weekly_viry.csv` | weekly detections in the running season: influenza A, influenza B, RSV, SARS-CoV-2 |
 | `flu_regional_weekly` | `flu_regional_weekly` | `szu_weekly_kraje.csv` | weekly positive detections in the six regions with the most detections |
 | `flu_regional_overview` | `flu_regional_overview` | `szu_weekly_kraje.csv` | positive detections and specimens tested per region |
+| `flu_positivity_seasons` | `flu_positivity_seasons` | `who_flunet_cz.csv` | influenza positivity in percent by week of the season (40–20), one series per season since 2021/22 |
+| `flu_positivity_weekly` | `flu_positivity_weekly` | `erviss_nonsentinel_cz.csv` | weekly positivity of influenza and RSV, each with its own denominator |
 
 Only rows of the category "Detekce viru" (virus detection) are used from the season files;
 serology and isolation are left out.
+
+#### Positivity
+
+Counts of detections grow with the amount of testing (about 440 specimens in the non-sentinel
+system in 2019/20, about 65,000 in 2024/25), so "more influenza this year" cannot be read from
+them. Positivity — detections divided by specimens tested — cancels the testing volume out.
+
+Rules shared by both charts:
+
+- **Non-sentinel only** in the FluNet chart. The sentinel system has 20–50 specimens a week, and
+  the two systems must not be added up.
+- **Seasons from 2021/22**, at most the last six. Earlier denominators are not comparable.
+- **Empty detections inside a series are zero, at its end unknown.** The sources stopped writing
+  zeros in 2025; the last weeks have tests reported before results. Trailing weeks without any
+  result are dropped.
+- **No percentage below 30 specimens** (`POSITIVITY_MIN_TESTS`); the value is `null`.
+- **Week 53 is pooled with week 52** (numerator and denominator), so every season has the same
+  axis.
+- **The weekly chart starts at the last gap in a denominator.** ERVISS reports the number of
+  specimens tested for RSV only in some periods; the chart takes the last unbroken period in which
+  both viruses have a denominator (today from 2025-W01), and never goes before 2022-W37.
+
+Both files carry the raw numbers next to the percentages: `tests` and `detections`, keyed by
+series label, aligned with `labels`. `flu_positivity_seasons` uses the grain `season_week` in
+`charts.yaml` — its X axis is the week of the season, not a timeline, so no period is read from
+it.
 
 ### Notifiable infectious diseases — source ÚZIS ISIN
 

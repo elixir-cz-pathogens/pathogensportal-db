@@ -24,13 +24,13 @@ From the command line, with Docker — this exports every diagram in the directo
 
 ```bash
 cd docs/diagrams
-rm -f *.png
-docker run --rm -v "$PWD:/data" rlespinasse/drawio-export \
+timeout 120 docker run --rm -v "$PWD:/data" rlespinasse/drawio-export \
   --format png --scale 2 --border 20 --output . --remove-page-suffix
 ```
 
-Remove the old PNG files first, as shown; the export did not finish for us when they were still
-present. The container writes the files as `root`; fix the owner afterwards if needed:
+An export takes a few seconds per diagram. Now and then the container hangs instead of finishing —
+that is what the `timeout` is for; stop the container (`docker ps`, `docker kill`) and run the
+command again. The container writes the files as `root`; fix the owner afterwards if needed:
 
 ```bash
 sudo chown "$(id -u):$(id -g)" *.png

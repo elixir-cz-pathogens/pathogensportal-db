@@ -45,10 +45,9 @@ How to read it, left to right:
    online source no longer exists.
 2. **Scrapers.** One module per source. Each returns the list of files it wrote. What each one
    checks before it accepts a download is described in [data-sources.md](data-sources.md).
-3. **CSV files.** The hand-over point. Files marked ◆ are also loaded into PostgreSQL. Three files
-   are downloaded and archived but not read by any generator today: `ecdc_covid_cz.csv`,
-   `erviss_nonsentinel_cz.csv` and `covid_ockovani.csv`; `who_flunet_cz.csv` goes to the database
-   only.
+3. **CSV files.** The hand-over point. Files marked ◆ are also loaded into PostgreSQL. Two files
+   are downloaded and archived but not read by any generator today: `ecdc_covid_cz.csv` and
+   `covid_ockovani.csv`.
 4. **Generators.** `generate_json.py` has one function per chart. `detect_anomalies.py` and
    `compute_mem.py` each write one larger file. See [chart-generation.md](chart-generation.md),
    [analytics/anomaly-detection.md](analytics/anomaly-detection.md) and

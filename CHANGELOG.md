@@ -27,6 +27,10 @@ Changes on `dev` since v0.4.0.
   source and caveats.
 - **Documentation** (PPDB-69) — README rewritten in English, `docs/` added, three flowcharts,
   YAML comments translated.
+- **Positivity charts** (PPDB-71) — `flu_positivity_seasons.json` (WHO FluNet: influenza
+  positivity by week of the season, seasons since 2021/22) and `flu_positivity_weekly.json`
+  (ECDC ERVISS: weekly positivity of influenza and RSV). Two downloaded files that no chart read
+  are now used. Three reporting caveats added to `methodology_changes.yaml`.
 
 ## v0.4.0 — 2026-09-06
 
