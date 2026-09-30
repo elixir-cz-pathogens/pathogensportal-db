@@ -34,6 +34,11 @@ Changes on `dev` since v0.4.0.
 
 ### Fixed
 
+- **Frozen ECDC COVID-19 source no longer blocks the pipeline** (PPDB-73) — `ecdc_covid.py`
+  skips the download when `ecdc_covid_cz.csv` already exists. The dataset has been frozen since
+  October 2022 and no chart reads it; from 30 September 2026 the ECDC server reset every
+  connection, `run_all.py` exited with 1 and the dev server stopped refreshing the portal data.
+
 - **COVID-19 test positivity** (PPDB-71) — `covid_testing.json` divided all positive cases,
   most of them from antigen tests, by the number of PCR tests only. The result was too high
   throughout and, after PCR testing dropped to tens a week in August 2026, went above 100 %
