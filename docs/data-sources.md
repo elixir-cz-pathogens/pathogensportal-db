@@ -236,7 +236,10 @@ most of them come from the publishers as they are.
 - **Scraper:** `ecdc_covid.py` — filters `geoId = CZ`.
 - **Output:** `ecdc/ecdc_covid_cz.csv` — `datum, nove_pripady, nove_umrti, populace`
 - **Good to know:** ECDC stopped publishing this dataset in autumn 2022. The scraper is kept for
-  the historical series; no chart reads the file today.
+  the historical series; no chart reads the file today. Once `ecdc_covid_cz.csv` exists it is not
+  downloaded again (PPDB-73): on 30 September 2026 the ECDC server started resetting connections,
+  and because `run_all.py` fails when any source fails, this archive-only source stopped the
+  whole pipeline. To fetch it again, delete the file.
 
 ## Licences
 
