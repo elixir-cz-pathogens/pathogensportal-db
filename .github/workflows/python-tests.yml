@@ -1,7 +1,7 @@
 name: "CI: Tests"
 
-# Spustí unit testy (pytest) při každém pushi i PR — okamžitá zpětná vazba.
-# Je tolerantní: dokud žádné testy nejsou, projde (nezablokuje čerstvý repo).
+# Runs the unit tests (pytest) on every push and PR — immediate feedback.
+# It is tolerant: while there are no tests it passes (it does not block a fresh repo).
 on:
   push:
   pull_request:
@@ -27,6 +27,6 @@ jobs:
           set +e
           pytest -q
           code=$?
-          # pytest exit 5 = zatím žádné testy = OK pro čerstvý repo
-          if [ "$code" -eq 5 ]; then echo "zatím žádné testy — OK"; exit 0; fi
+          # pytest exit 5 = no tests collected yet = fine for a fresh repo
+          if [ "$code" -eq 5 ]; then echo "no tests yet — OK"; exit 0; fi
           exit $code

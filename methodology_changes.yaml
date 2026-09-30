@@ -1,27 +1,39 @@
-# Registr metodických změn ve zdrojových systémech.
+# Registry of methodology changes in the source systems.
 #
-# Proč existuje: změna způsobu vykazování vypadá v datech přesně jako epidemie
-# a detektor ji bez téhle znalosti ohlásí jako ohnisko. Jedna taková falešná
-# detekce zdiskredituje nástroj u epidemiologů natrvalo — registr je proto
-# BLOKUJÍCÍ součást systému, ne dokumentační pomůcka.
+# Why it exists: a change in the way cases are reported looks exactly like an
+# epidemic in the data, and without this knowledge the detector reports it as
+# an outbreak. One such false detection discredits the tool with
+# epidemiologists for good — so the registry is a BLOCKING part of the system,
+# not a documentation aid.
 #
-# Formát záznamu:
-#   id:      stabilní identifikátor
-#   od:      YYYY-MM, začátek platnosti změny
-#   do:      YYYY-MM nebo null (změna trvá)
-#   akce:    break    – historie PŘED datem změny se pro postižené řady
-#                       nepoužije jako baseline (úroveň řady se změnila);
-#                       dokud nenaroste nová historie, řada se nehodnotí
-#                       a hlásí se jako „přebaselinovává se“
-#            exclude  – období od–do se z baseline vyřízne (dočasná deformace,
-#                       např. výpadek hlášení), řada se jinak hodnotí normálně
-#            flag     – nic se nemění, signály v okolí jen nesou upozornění
-#            poznamka – informační záznam bez vlivu na výpočet
-#   rozsah:  diagnozy: [přesné názvy dle ISIN] nebo null = všechny
-#            kraje:    [kódy NUTS3] nebo null = všechny
-#   zdroj:   odkud o změně víme (dokument, jednání, vlastní měření)
-#   popis:   co se stalo
-#   dopad:   očekávaný směr a velikost vlivu na počty
+# The keys and the enum values are Czech because the code reads them by name
+# (detect_anomalies.py, source_metadata.py); the free-text values are Czech
+# because they are copied into the generated JSON (signal annotations, chart
+# `caveats`). Translating either changes the pipeline's output, not just the
+# wording of this file.
+#
+# Record format:
+#   id:      stable identifier
+#   od:      ("from") YYYY-MM, when the change took effect
+#   do:      ("until") YYYY-MM or null (the change is still in effect)
+#   akce:    ("action")
+#            break    – history BEFORE the change date is not used as a baseline
+#                       for the affected series (the level of the series has
+#                       changed); until enough new history accumulates the
+#                       series is not scored and is reported as "re-baselining"
+#            exclude  – the od–do period is cut out of the baseline (a temporary
+#                       distortion, e.g. a reporting outage); the series is
+#                       otherwise scored normally
+#            flag     – nothing changes, signals nearby just carry a warning
+#            poznamka – ("note") informational record with no effect on the
+#                       computation
+#   rozsah:  ("scope")
+#            diagnozy: [exact ISIN diagnosis names] or null = all
+#            kraje:    [NUTS3 region codes] or null = all
+#   zdroj:   ("source") how we know about the change (document, meeting, our
+#            own measurement)
+#   popis:   ("description") what happened
+#   dopad:   ("impact") expected direction and size of the effect on the counts
 
 - id: zoster-vykazovani-2025-07
   od: 2025-07
