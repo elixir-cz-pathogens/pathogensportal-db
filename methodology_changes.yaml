@@ -78,3 +78,78 @@
     Otevřený export ISIN končí prosincem 2025 — „poslední měsíc“ v detekci je
     proto starý; ticho v novějších obdobích není důkaz klidu, ale chybějící data.
   dopad: "žádný vliv na výpočet; zásadní pro interpretaci čerstvosti signálů"
+
+- id: flunet-jmenovatel-2021
+  od: 2021-09
+  do: null
+  akce: poznamka
+  rozsah:
+    diagnozy: null
+    kraje: null
+  zdroj: "vlastní měření nad daty WHO FluNet (09/2026)"
+  popis: >-
+    Laboratorní záchyty FluNet (nonsentinel): počet vyšetřených vzorků vzrostl
+    ze stovek za sezónu (2014/15–2019/20: 440–870) na desítky tisíc (2021/22:
+    15,8 tis., 2024/25: 65,3 tis.); sezóna 2020/21 počet vyšetřených nemá. Do
+    2019/20 šlo o cíleně vybrané vzorky s pozitivitou kolem 50 %.
+  dopad: "pozitivita je srovnatelná až od sezóny 2021/22; starší sezóny se v grafech pozitivity neuvádějí"
+
+- id: lab-nulove-tydny-2025-05
+  od: 2025-05
+  do: null
+  akce: poznamka
+  rozsah:
+    diagnozy: null
+    kraje: null
+  zdroj: "vlastní měření nad daty WHO FluNet a ECDC ERVISS (09/2026)"
+  popis: >-
+    Laboratorní záchyty FluNet i ERVISS: od týdne 21/2025 se týden bez záchytu
+    hlásí prázdným polem místo nuly (počet vyšetřených uveden je). Prázdné pole
+    uvnitř řady čteme jako nulu; na konci řady jako výsledek, který ještě
+    nebyl nahlášen.
+  dopad: "bez doplnění nul by v řadě pozitivity chyběly letní týdny; poslední 2–3 týdny se neuvádějí"
+
+- id: erviss-lab-rsv-jmenovatel
+  od: 2022-06
+  do: null
+  akce: poznamka
+  rozsah:
+    diagnozy: null
+    kraje: null
+  zdroj: "porovnání ECDC ERVISS s WHO FluNet po týdnech (09/2026)"
+  popis: >-
+    Laboratorní část ERVISS za ČR: počet vzorků vyšetřených na RSV chybí
+    v týdnech 37/2022–52/2023 a 31–52/2024. V týdnech 25–36/2022 navíc ERVISS
+    uvádí 4–29 záchytů chřipky týdně, zatímco FluNet za tytéž týdny a tentýž
+    počet vzorků 0–2; od týdne 37/2022 se oba zdroje shodují.
+  dopad: "týdenní řada pozitivity chřipky a RSV začíná až posledním souvislým obdobím s oběma jmenovateli (dnes od 1/2025)"
+
+- id: mzcr-pcr-testy-2026-08
+  od: 2026-08
+  do: null
+  akce: poznamka
+  rozsah:
+    diagnozy: null
+    kraje: null
+  zdroj: "vlastní měření nad otevřenými daty MZČR testy-pcr-antigenni (09/2026)"
+  popis: >-
+    COVID-19, testy MZČR: od týdne 17. 8. 2026 klesl počet hlášených PCR testů
+    z 300–650 na 70–190 týdně, antigenních testů se hlásí tisíce. Pozitivní
+    záchyty pocházejí převážně z antigenních testů. Pozitivita PCR z desítek
+    testů je proto nestabilní; spolehlivější obraz dává pozitivita antigenních testů.
+  dopad: "pozitivita se počítá zvlášť pro PCR a antigenní testy; dřívější podíl všech pozitivních na PCR testech dával od 8/2026 přes 100 %"
+
+- id: erviss-sars-cov-2-jmenovatel-2026-08
+  od: 2026-08
+  do: null
+  akce: poznamka
+  rozsah:
+    diagnozy: null
+    kraje: null
+  zdroj: "vlastní měření nad daty ECDC ERVISS (09/2026)"
+  popis: >-
+    Laboratorní část ERVISS za ČR: do týdne 33/2026 uvádí u SARS-CoV-2 tisíce
+    až desetitisíce vyšetřených vzorků týdně (plošné testování), od týdne
+    34/2026 počet shodný se vzorky vyšetřenými na chřipku (kolem 300) a 0–1
+    záchyt týdně. Ve stejném týdnu klesl počet PCR testů v datech MZČR.
+  dopad: "týdenní pozitivita SARS-CoV-2 z ERVISS končí týdnem 33/2026; novější týdny nejsou s řadou srovnatelné"

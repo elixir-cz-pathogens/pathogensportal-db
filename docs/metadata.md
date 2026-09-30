@@ -66,7 +66,7 @@ isin_group_*:            { source: uzis-isin, metric: cases, unit: count, grain:
 | `source` | an id from `sources.yaml`, or a list when the chart combines sources |
 | `metric` | `cases`, `deaths`, `tests`, `hospitalizations`, `lab_detections`, `positivity`, `case_fatality`, `hospitalization_rate`, `forecast`, `intensity_threshold`, `anomaly_score` |
 | `unit` | `count`, `per_100k`, `percent`, `score` — the machine-readable unit |
-| `grain` | what the X axis is: `day`, `week`, `month`, `year`, `age_group`, `region`, `vaccination_status`, `cumulative` |
+| `grain` | what the X axis is: `day`, `week`, `month`, `year`, `age_group`, `region`, `vaccination_status`, `cumulative`, `season_week` |
 | `region` | `CZ` = one number for the whole country; `NUTS3` = broken down by region |
 
 A key ending in `*` covers every chart with that prefix.

@@ -8,6 +8,7 @@ import json
 import os
 import sys
 import pandas as pd
+from datetime import date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -136,21 +137,39 @@ def covid_hospitalization():
     })
 
 
-# ── 3. Testování — PCR pozitivita % ──────────────────────────────────────────
+# ── 3. Testování — pozitivita PCR a antigenních testů % ───────────────────────
 def covid_testing():
-    df = pd.read_csv(DATA_DIR / "mzcr" / "covid_testy.csv")
-    df = to_weekly(df)
+    # Pozitivita zvlášť pro PCR a pro antigenní testy, každá s vlastním
+    # jmenovatelem. Do 09/2026 se tu dělily VŠECHNY pozitivní záchyty
+    # (`incidence_pozitivni`, převážně z antigenních testů) jen počtem PCR testů
+    # — od 17. 8. 2026, kdy PCR testů spadlo na desítky týdně, z toho vycházelo
+    # 70–240 % a graf to ořízl na 100 %.
+    df = to_weekly(pd.read_csv(DATA_DIR / "mzcr" / "covid_testy.csv"))
     w = df.groupby("week").agg(
+        dny=("datum", "nunique"),
         pcr=("pocet_PCR_testy", "sum"),
-        pozit=("incidence_pozitivni", "sum"),
+        pcr_pozit=("PCR_pozit_sympt", "sum"),
+        pcr_asymp=("PCR_pozit_asymp", "sum"),
+        ag=("pocet_AG_testy", "sum"),
+        ag_pozit=("AG_pozit_symp", "sum"),
+        ag_asymp=("AG_pozit_asymp_PCR_conf", "sum"),
     ).reset_index()
-    w["pozitivita"] = (w["pozit"] / w["pcr"] * 100).round(1).clip(0, 100)
-    labels = w["week"].dt.strftime("%Y-%m-%d").tolist()
+    # Rozběhnutý poslední týden (data jen za pár dní) by ukázal procento
+    # z hrstky testů — pryč s ním.
+    if len(w) and w["dny"].iloc[-1] < 7:
+        w = w.iloc[:-1]
+    w["pcr_pozit"] += w.pop("pcr_asymp")
+    w["ag_pozit"] += w.pop("ag_asymp")
+
+    series = [("PCR testy", "pcr_pozit", "pcr", "green"),
+              ("Antigenní testy", "ag_pozit", "ag", "purple")]
     save("covid_testing", {
-        "labels": labels,
-        "datasets": [
-            ds("PCR pozitivita (%)", w["pozitivita"].tolist(), "green"),
-        ],
+        "labels": w["week"].dt.strftime("%Y-%m-%d").tolist(),
+        "unit": "% pozitivních testů",
+        "min_tests": POSITIVITY_MIN_TESTS,
+        "datasets": [ds(label, _percent(w[det], w[tests]), color) for label, det, tests, color in series],
+        "tests": {label: _counts(w[tests]) for label, _, tests, _ in series},
+        "detections": {label: _counts(w[det]) for label, det, _, _ in series},
     })
 
 
@@ -384,6 +403,215 @@ def flu_regional_overview():
             ds("Vyšetřeno vzorků", agg["vysetreno"].astype(int).tolist(), "blue", "bar"),
         ],
     })
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Pozitivita — podíl pozitivních vzorků (WHO FluNet, ECDC ERVISS)
+# ─────────────────────────────────────────────────────────────────────────────
+# Proč procenta, když počty záchytů už máme ze SZÚ: počet záchytů roste s tím,
+# kolik se testuje (nonsentinel 2019/20 ~440 vyšetřených vzorků za sezónu,
+# 2024/25 ~65 000), takže „letos víc chřipky“ z počtů nepoznáš. Podíl
+# pozitivních mezi vyšetřenými objem testování vykrátí — proto je pozitivita
+# standardní ukazatel virologické surveillance (ECDC, WHO).
+
+FLUNET_FILE = DATA_DIR / "who" / "who_flunet_cz.csv"
+ERVISS_LAB_FILE = DATA_DIR / "ecdc" / "erviss_nonsentinel_cz.csv"
+
+# Jen NONSENTINEL: sentinel má 20–50 vzorků týdně a procenta z něj skáčou; sčítat
+# oba systémy nejde (viz who_flu.py). Nonsentinel má jmenovatel srovnatelný až
+# od 2021/22 — do 2019/20 šlo o stovky cíleně vybraných vzorků za sezónu
+# (pozitivita ~50 %), sezóna 2020/21 jmenovatel nemá vůbec.
+POSITIVITY_FIRST_SEASON = 2021
+# Paleta portálu má osm slotů a devátou řadu sčítá do „Ostatní“ — součet procent
+# by byl nesmysl. Šest sezón je i hranice čitelnosti překrývajících se křivek.
+POSITIVITY_MAX_SEASONS = 6
+# Pod tímhle počtem vyšetřených vzorků se procento neuvádí (1 z 12 = 8 % je šum).
+POSITIVITY_MIN_TESTS = 30
+# Surveillance sezóna: ISO týden 40 až týden 20 (stejná konvence jako compute_mem).
+POSITIVITY_SEASON_WEEKS = list(range(40, 53)) + list(range(1, 21))
+
+
+def _detections_with_zeros(detections: pd.Series, tests: pd.Series) -> pd.Series:
+    """
+    Doplní nuly tam, kde je zdroj vynechává. `detections` i `tests` jsou řazené
+    chronologicky se stejným indexem.
+
+    Od týdne 21/2025 hlásí FluNet i ERVISS týden bez záchytu tak, že počet
+    vyšetřených uvedou, ale záchyty nechají prázdné (dřív tam byla nula). Prázdné
+    pole uprostřed řady, za kterým následuje týden s hlášeným záchytem, je proto
+    nula. Prázdná pole NA KONCI řady nulou být nemusí — poslední dva tři týdny
+    mívají testy nahlášené dřív než výsledky — a zůstávají prázdná.
+    """
+    out = detections.astype("float64").copy()
+    last = out.last_valid_index()
+    if last is None:
+        return out
+    pos = out.index.get_loc(last)
+    inner = out.index[:pos]
+    fill = out.loc[inner].isna() & tests.loc[inner].notna()
+    out.loc[fill[fill].index] = 0.0
+    return out
+
+
+def _percent(detections: pd.Series, tests: pd.Series) -> list:
+    """Pozitivita v % na jedno desetinné místo; None, kde chybí čitatel nebo je málo vzorků."""
+    out = []
+    for d, n in zip(detections, tests):
+        if pd.isna(d) or pd.isna(n) or n < POSITIVITY_MIN_TESTS:
+            out.append(None)
+        else:
+            out.append(round(float(d) / float(n) * 100, 1))
+    return out
+
+
+def _counts(values: pd.Series) -> list:
+    return [None if pd.isna(v) else int(v) for v in values]
+
+
+# ── 10a. Pozitivita chřipky po týdnech sezóny — srovnání sezón ───────────────
+def flu_positivity_seasons():
+    if not FLUNET_FILE.exists():
+        print("  [flu_positivity] who_flunet_cz.csv chybí — přeskakuji")
+        return
+    df = pd.read_csv(FLUNET_FILE)
+    df = df[df["zdroj"] == "NONSENTINEL"].sort_values(["rok", "tyden"]).reset_index(drop=True)
+    if df.empty:
+        print("  [flu_positivity] žádné řádky NONSENTINEL — přeskakuji")
+        return
+
+    # Čitatel: inf_celkem; do 2025 ho zdroj u nulových týdnů nechával prázdný
+    # a nuly psal jen do inf_a / inf_b — součet obou je tedy tatáž informace.
+    detections = df["inf_celkem"].fillna(df["inf_a"] + df["inf_b"])
+    df["zachyty"] = _detections_with_zeros(detections, df["vysetreno"])
+
+    df["sezona"] = df["rok"].where(df["tyden"] >= 27, df["rok"] - 1)
+    # Týden 53 mají jen některé roky; sčítá se s týdnem 52 (čitatel i jmenovatel),
+    # ať mají všechny sezóny stejně dlouhou osu.
+    df["tyden_osy"] = df["tyden"].where(df["tyden"] != 53, 52)
+    weekly = (df[df["sezona"] >= POSITIVITY_FIRST_SEASON]
+              .groupby(["sezona", "tyden_osy"])[["zachyty", "vysetreno"]]
+              .sum(min_count=1))
+
+    datasets, tests, found = [], {}, {}
+    colors = list(COLORS)
+    for season in sorted(weekly.index.get_level_values("sezona").unique()):
+        rows = weekly.loc[season].reindex(POSITIVITY_SEASON_WEEKS)
+        values = _percent(rows["zachyty"], rows["vysetreno"])
+        if all(v is None for v in values):
+            continue
+        label = f"{season}/{(season + 1) % 100:02d}"
+        datasets.append((label, values))
+        tests[label] = _counts(rows["vysetreno"])
+        found[label] = _counts(rows["zachyty"])
+    datasets = datasets[-POSITIVITY_MAX_SEASONS:]
+    if not datasets:
+        print("  [flu_positivity] žádná sezóna s čitatelem i jmenovatelem — přeskakuji")
+        return
+
+    save("flu_positivity_seasons", {
+        "labels": [str(w) for w in POSITIVITY_SEASON_WEEKS],
+        "x_title": "Kalendářní týden",
+        "unit": "% pozitivních vzorků",
+        "min_tests": POSITIVITY_MIN_TESTS,
+        "datasets": [ds(label, values, colors[i % len(colors)])
+                     for i, (label, values) in enumerate(datasets)],
+        "tests": {label: tests[label] for label, _ in datasets},
+        "detections": {label: found[label] for label, _ in datasets},
+    })
+    label, values = datasets[-1]
+    peak = max(v for v in values if v is not None)
+    print(f"  [flu_positivity] {len(datasets)} sezón ({datasets[0][0]}–{label}); {label}: vrchol {peak} %")
+
+
+# ── 10b. Týdenní pozitivita chřipky, RSV a SARS-CoV-2 — souvislá řada ───────
+# ERVISS dává pro každý virus počet vyšetřených i záchytů (řádky `total`), každý
+# s vlastním jmenovatelem. Dvě věci, kvůli kterým řada nezačíná rokem 2022:
+#
+#   - počet vzorků vyšetřených na RSV ERVISS za ČR uvádí jen v některých
+#     obdobích (25–36/2022, 1–30/2024 a souvisle od 1/2025). Díru by graf
+#     přemostil rovnou čarou přes celou zimu, proto se bere jen poslední
+#     souvislé období, kde mají jmenovatel všechny řady;
+#   - v týdnech 25–36/2022 uvádí ERVISS 4–29 záchytů chřipky týdně, FluNet za
+#     tytéž týdny a tentýž počet vzorků 0–2 (od týdne 37/2022 se oba zdroje
+#     shodují na kus). Těm dvanácti týdnům nevěříme; spodní mez je pojistka pro
+#     případ, že by ERVISS jmenovatele RSV zpětně doplnil.
+#
+# SARS-CoV-2 má jmenovatel souvislý od 2022, ale do týdne 33/2026 šlo o celé
+# plošné testování (tisíce až desetitisíce vzorků týdně). Od týdne 34/2026 ERVISS
+# uvádí počet vyšetřených shodný s chřipkou a 0–1 záchyt týdně — ve stejném týdnu
+# MZČR hlásí propad PCR testů na desítky týdně. Dvě různá měření nejsou jedna
+# řada, proto se SARS-CoV-2 od zlomu neuvádí (viz methodology_changes.yaml,
+# erviss-sars-cov-2-jmenovatel-2026-08).
+ERVISS_POSITIVITY_SERIES = [          # popisek, typ, subtyp, barva, poslední srovnatelný týden
+    ("Chřipka", "Influenza", "total", "blue", None),
+    ("RSV", "RSV", "RSV", "orange", None),
+    ("SARS-CoV-2", "SARS-CoV-2", "SARS-CoV-2", "red", "2026-W33"),
+]
+ERVISS_POSITIVITY_FROM = "2022-W37"
+
+
+def flu_positivity_weekly():
+    if not ERVISS_LAB_FILE.exists():
+        print("  [flu_positivity] erviss_nonsentinel_cz.csv chybí — přeskakuji")
+        return
+    df = pd.read_csv(ERVISS_LAB_FILE)
+    df = df[(df["vek"] == "total") & (df["tyden_iso"] >= ERVISS_POSITIVITY_FROM)]
+    weeks = sorted(df.loc[df["ukazatel"] == "tests", "tyden_iso"].unique())   # "2026-W07" se řadí správně
+
+    # Řada se zlomem (`until`) má za zlomem jiný jmenovatel — do „posledního
+    # souvislého období“ se proto počítá jen do zlomu a za ním se neuvádí.
+    # Virus, který ve zdroji chybí úplně, se vynechá; graf ostatních zůstane.
+    wide, until = {}, {}
+    for label, typ, subtyp, _, last in ERVISS_POSITIVITY_SERIES:
+        rows = df[(df["typ"] == typ) & (df["subtyp"] == subtyp)]
+        if rows.empty:
+            print(f"  [flu_positivity] ERVISS nemá {label} — řada vynechána")
+            continue
+        w = (rows.pivot_table(index="tyden_iso", columns="ukazatel", values="hodnota", aggfunc="sum")
+                 .reindex(index=weeks, columns=["detections", "tests"]))
+        if last:
+            w.loc[w.index > last] = float("nan")
+        wide[label], until[label] = w, last
+
+    # Poslední souvislé období, kde mají počet vyšetřených všechny řady.
+    def has_tests(label, i):
+        return pd.notna(wide[label]["tests"].iloc[i]) or (until[label] and weeks[i] > until[label])
+
+    start = len(weeks)
+    while start and all(has_tests(label, start - 1) for label in wide):
+        start -= 1
+    weeks = weeks[start:]
+
+    series, tests, found = [], {}, {}
+    for label, _, _, color, _ in ERVISS_POSITIVITY_SERIES:
+        if label not in wide:
+            continue
+        w = wide[label].iloc[start:]
+        detections = _detections_with_zeros(w["detections"], w["tests"])
+        series.append((label, _percent(detections, w["tests"]), color))
+        tests[label] = _counts(w["tests"])
+        found[label] = _counts(detections)
+
+    # Ocas, kde nemá výsledek žádná řada (testy už nahlášené, záchyty ještě ne), pryč.
+    keep = len(weeks)
+    while keep and all(values[keep - 1] is None for _, values, _ in series):
+        keep -= 1
+    if not keep:
+        print("  [flu_positivity] ERVISS nemá žádný týden s čitatelem i jmenovatelem — přeskakuji")
+        return
+
+    mondays = [date.fromisocalendar(int(w[:4]), int(w[6:]), 1).isoformat() for w in weeks[:keep]]
+    save("flu_positivity_weekly", {
+        "labels": mondays,
+        "unit": "% pozitivních vzorků",
+        "min_tests": POSITIVITY_MIN_TESTS,
+        "first_week": weeks[0],
+        "last_week": weeks[keep - 1],
+        "datasets": [ds(label, values[:keep], color) for label, values, color in series],
+        "tests": {label: values[:keep] for label, values in tests.items()},
+        "detections": {label: values[:keep] for label, values in found.items()},
+    })
+    print(f"  [flu_positivity] týdenní řada {weeks[0]} – {weeks[keep - 1]} ({keep} týdnů)")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1012,6 +1240,9 @@ if __name__ == "__main__":
     print("  --- Regionální ---")
     flu_regional_overview()
     flu_regional_weekly()
+    print("  --- Pozitivita (FluNet, ERVISS) ---")
+    flu_positivity_seasons()
+    flu_positivity_weekly()
     print("  --- COVID věk & očkování ---")
     covid_by_age()
     covid_by_vaccination()

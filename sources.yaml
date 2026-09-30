@@ -98,7 +98,7 @@
     - "mzcr/covid_umrti.csv"
     - "mzcr/covid_vax_pozitivni.csv"
     - "mzcr/covid_vax_hospitalizace.csv"
-  methodology: []
+  methodology: ["mzcr-pcr-testy-2026-08"]
   discovery:
     http_head: "https://onemocneni-aktualne.mzcr.cz/api/v2/covid-19/nakazeni-vyleceni-umrti-testy.csv"
 
@@ -125,7 +125,7 @@
   licence:
     name: "neuvedena u datové sady — podmínky WHO, uvádíme zdroj"
   files: ["who/who_flunet_cz.csv", "who/who_fluid_cz.csv"]
-  methodology: []
+  methodology: ["flunet-jmenovatel-2021", "lab-nulove-tydny-2025-05"]
   discovery:
     http_head: "https://xmart-api-public.who.int/FLUMART/VIW_FNT?$top=1&$filter=COUNTRY_CODE%20eq%20%27CZE%27"
 
@@ -135,7 +135,7 @@
   licence:
     name: "neuvedena v repozitáři — podmínky ECDC, uvádíme zdroj"
   files: ["ecdc/erviss_ili_ari_cz.csv", "ecdc/erviss_nonsentinel_cz.csv"]
-  methodology: []
+  methodology: ["lab-nulove-tydny-2025-05", "erviss-lab-rsv-jmenovatel", "erviss-sars-cov-2-jmenovatel-2026-08"]
   discovery:
     github: "EU-ECDC/Respiratory_viruses_weekly_data"
 

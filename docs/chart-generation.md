@@ -108,7 +108,7 @@ would be serialised as strings.
 |---|---|---|---|
 | `covid_cases_weekly` | `covid_cases_weekly` | `covid_pripady.csv` | new cases and deaths per week |
 | `covid_hospitalization` | `covid_hospitalization` | `covid_hospitalizace.csv` | patients in hospital, ICU, on ventilation and ECMO — weekly maximum |
-| `covid_testing` | `covid_testing` | `covid_testy.csv` | PCR positivity in percent per week |
+| `covid_testing` | `covid_testing` | `covid_testy.csv` | weekly positivity of PCR and of antigen tests, each with its own denominator (see [Positivity](#positivity)) |
 | `covid_incidence` | `covid_incidence` | `covid_incidence.csv` | 7-day incidence per 100,000, every seventh day |
 | `covid_summary` | `covid_summary` | `covid_pripady.csv` | cumulative cases, deaths and tests, and the date of the last record |
 | `covid_by_age` | `covid_by_age` | `covid_osoby_agg.csv`, `covid_umrti.csv` | cases and deaths by ten-year age group; the number with unknown age is reported separately |
@@ -125,9 +125,51 @@ would be serialised as strings.
 | `flu_weekly` | `flu_weekly` | `szu_weekly_viry.csv` | weekly detections in the running season: influenza A, influenza B, RSV, SARS-CoV-2 |
 | `flu_regional_weekly` | `flu_regional_weekly` | `szu_weekly_kraje.csv` | weekly positive detections in the six regions with the most detections |
 | `flu_regional_overview` | `flu_regional_overview` | `szu_weekly_kraje.csv` | positive detections and specimens tested per region |
+| `flu_positivity_seasons` | `flu_positivity_seasons` | `who_flunet_cz.csv` | influenza positivity in percent by week of the season (40–20), one series per season since 2021/22 |
+| `flu_positivity_weekly` | `flu_positivity_weekly` | `erviss_nonsentinel_cz.csv` | weekly positivity of influenza, RSV and SARS-CoV-2, each with its own denominator |
 
 Only rows of the category "Detekce viru" (virus detection) are used from the season files;
 serology and isolation are left out.
+
+#### Positivity
+
+Counts of detections grow with the amount of testing (about 440 specimens in the non-sentinel
+system in 2019/20, about 65,000 in 2024/25), so "more influenza this year" cannot be read from
+them. Positivity — detections divided by specimens tested — cancels the testing volume out.
+
+Rules shared by both charts:
+
+- **Non-sentinel only** in the FluNet chart. The sentinel system has 20–50 specimens a week, and
+  the two systems must not be added up.
+- **Seasons from 2021/22**, at most the last six. Earlier denominators are not comparable.
+- **Empty detections inside a series are zero, at its end unknown.** The sources stopped writing
+  zeros in 2025; the last weeks have tests reported before results. Trailing weeks without any
+  result are dropped.
+- **No percentage below 30 specimens** (`POSITIVITY_MIN_TESTS`); the value is `null`.
+- **Week 53 is pooled with week 52** (numerator and denominator), so every season has the same
+  axis.
+- **The weekly chart starts at the last gap in a denominator.** ERVISS reports the number of
+  specimens tested for RSV only in some periods; the chart takes the last unbroken period in which
+  both viruses have a denominator (today from 2025-W01), and never goes before 2022-W37.
+- **SARS-CoV-2 in the weekly chart ends at 2026-W33.** Until then ERVISS reports the whole
+  SARS-CoV-2 testing (thousands to tens of thousands of specimens a week); from 2026-W34 it reports
+  the same number of specimens as for influenza and 0–1 detections. The two are not one series,
+  so later weeks are `null` (`ERVISS_POSITIVITY_SERIES`, registry entry
+  `erviss-sars-cov-2-jmenovatel-2026-08`). A virus missing from the source altogether is left out
+  and the chart keeps the others.
+
+`covid_testing` (MZČR) follows the same rules for the minimum of 30 tests. PCR and antigen tests
+are two series with two denominators: positive PCR results (`PCR_pozit_sympt` +
+`PCR_pozit_asymp`) over PCR tests, positive antigen results (`AG_pozit_symp` +
+`AG_pozit_asymp_PCR_conf`) over antigen tests. Before PPDB-71 the chart divided
+`incidence_pozitivni` — all positive cases, mostly from antigen tests — by PCR tests; since
+August 2026, with tens of PCR tests a week, that gave more than 100 % (registry entry
+`mzcr-pcr-testy-2026-08`). The last week is dropped while it does not have all seven days.
+
+All three files carry the raw numbers next to the percentages: `tests` and `detections`, keyed by
+series label, aligned with `labels`. `flu_positivity_seasons` uses the grain `season_week` in
+`charts.yaml` — its X axis is the week of the season, not a timeline, so no period is read from
+it.
 
 ### Notifiable infectious diseases — source ÚZIS ISIN
 

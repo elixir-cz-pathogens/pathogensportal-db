@@ -25,8 +25,8 @@ The diagram shows which scraper produces which file and who reads it:
 | SZÚ seasonal | `szu_influenza.py` | `szu/szu_influenza_<season>.csv` | season total per virus | no | `generate_json.py` |
 | SZÚ weekly | `szu_weekly.py` | `szu/szu_weekly_viry.csv`, `szu/szu_weekly_kraje.csv` | week | yes | `generate_json.py` |
 | ČSÚ | `csu_population.py` | `csu/population.csv` | year × region × sex | yes | `generate_json.py` |
-| WHO FluNet + FluID | `who_flu.py` | `who/who_flunet_cz.csv`, `who/who_fluid_cz.csv` | week | yes | `compute_mem.py` (FluID) |
-| ECDC ERVISS | `ecdc_erviss.py` | `ecdc/erviss_ili_ari_cz.csv`, `ecdc/erviss_nonsentinel_cz.csv` | week | rates only | `compute_mem.py` (rates) |
+| WHO FluNet + FluID | `who_flu.py` | `who/who_flunet_cz.csv`, `who/who_fluid_cz.csv` | week | yes | `generate_json.py` (FluNet), `compute_mem.py` (FluID) |
+| ECDC ERVISS | `ecdc_erviss.py` | `ecdc/erviss_ili_ari_cz.csv`, `ecdc/erviss_nonsentinel_cz.csv` | week | rates only | `generate_json.py` (lab file), `compute_mem.py` (rates) |
 | ECDC RespiCast | `ecdc_respicast.py` | `ecdc/respicast_cz.csv` | weekly forecast round | no | `compute_mem.py` |
 | ECDC COVID-19 | `ecdc_covid.py` | `ecdc/ecdc_covid_cz.csv` | day | no | nothing — archived only |
 
@@ -59,9 +59,14 @@ most of them come from the publishers as they are.
 
 - **Checks:** an empty dataset raises an error; the `osoby` aggregate must contain at least one
   million cases.
-- **Good to know:** a missing age is kept as `vek = -1` and a missing region as `CZ999`, so the
-  share of incomplete records (about 0.5 %) can be stated on the portal instead of being dropped
-  silently.
+- **Good to know:**
+  - A missing age is kept as `vek = -1` and a missing region as `CZ999`, so the share of
+    incomplete records (about 0.5 %) can be stated on the portal instead of being dropped
+    silently.
+  - `covid_testy.csv`: from the week of 17 August 2026 PCR tests dropped from 300–650 to 70–190 a
+    week, while thousands of antigen tests are still reported. Most positive cases now come from
+    antigen tests, so `incidence_pozitivni` must not be divided by PCR tests (registry entry
+    `mzcr-pcr-testy-2026-08`).
 
 ### ÚZIS — ISIN (notifiable infectious diseases)
 
@@ -163,7 +168,16 @@ most of them come from the publishers as they are.
   must not be older than 45 days (FluNet) or 180 days (FluID, which is reported sparsely outside
   the season).
 - **Good to know:**
-  - An empty count means "not reported", not zero; the columns are nullable integers.
+  - The columns are nullable integers, and an empty count is ambiguous. Until 2025 a week
+    without influenza had `inf_a = 0`, `inf_b = 0` and an empty `inf_celkem`. Since week 21/2025
+    such a week has all detection columns empty while `vysetreno` is filled in. The last two or
+    three weeks look the same, but there the results simply have not been reported yet. The
+    positivity charts treat an empty field inside the series as zero and at its end as unknown
+    (registry entry `lab-nulove-tydny-2025-05`).
+  - The number of specimens tested changed by orders of magnitude: a few hundred per season until
+    2019/20 (hand-picked specimens, positivity around 50 %), none reported in 2020/21, tens of
+    thousands since 2021/22. Positivity is comparable only from 2021/22 on (registry entry
+    `flunet-jmenovatel-2021`).
   - FluNet reports two independent systems for the same week, `SENTINEL` (about 50 specimens) and
     `NONSENTINEL` (about 2,000). Do not add them up. The `zdroj` column keeps the distinction.
   - The non-sentinel FluNet rows are the same numbers as the SZÚ weekly PDFs, but they also carry
@@ -180,9 +194,20 @@ most of them come from the publishers as they are.
   - `ecdc/erviss_nonsentinel_cz.csv` — `tyden_iso, patogen, typ, subtyp, ukazatel, vek, hodnota`
 - **Checks:** expected columns, rows for Czechia, no unknown indicator, newest week not older than
   45 days.
-- **Good to know:** the Czech history starts in 2022-W25, so ERVISS alone is not enough for
-  thresholds. It supplies the most recent weeks on top of the FluID history — the same series
-  reported through two routes.
+- **Good to know:**
+  - The Czech history starts in 2022-W25, so ERVISS alone is not enough for thresholds. It
+    supplies the most recent weeks on top of the FluID history — the same series reported through
+    two routes.
+  - The laboratory file carries tests and detections for influenza, RSV and SARS-CoV-2
+    (SARS-CoV-2 also by age group). Influenza tests equal the FluNet non-sentinel figures in every
+    week, and detections do from 2022-W37 on; in 2022-W25–W36 ERVISS shows 4–29 influenza
+    detections a week where FluNet shows 0–2, and those weeks are not used.
+  - The number of specimens tested for RSV is reported only in some periods: 2022-W25–W36,
+    2024-W01–W30 and continuously since 2025-W01 (registry entry `erviss-lab-rsv-jmenovatel`).
+  - SARS-CoV-2 changes its denominator in 2026-W34: until then thousands to tens of thousands of
+    specimens a week, from then the same number as for influenza (about 300) with 0–1
+    detections. The positivity chart stops at 2026-W33 (registry entry
+    `erviss-sars-cov-2-jmenovatel-2026-08`).
 
 ### ECDC — RespiCast
 
