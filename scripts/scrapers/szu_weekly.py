@@ -49,13 +49,15 @@ def _week_key(url: str) -> tuple[int, int]:
 
 def parse_viry_matrix(pdf_bytes: bytes) -> list[dict]:
     """
-    Vrátí řádky {sezona, rok, tyden, virus, pocet}. Stránka nese dvě tabulky
-    vedle sebe (minulá a běžící sezóna); dělí se podle ročních značek nad
-    hlavičkou. Validuje se proti sloupci „Kumulativně“ běžící sezóny.
+    Vrátí řádky {sezona, rok, tyden, virus, pocet}. Stránka nese dvě nebo tři
+    tabulky vedle sebe (od KT 40/2026 tři sezóny); dělí se podle ročních značek
+    nad hlavičkou. Každá tabulka se sloupcem „Kumulativně“ se proti němu validuje.
     """
     with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
         page = pdf.pages[0]
-        words = page.extract_words(keep_blank_chars=False, y_tolerance=1)
+        # x_tolerance pod mezerou mezi sloupci (~2,6 pt): ve třítabulkovém
+        # rozvržení jsou sloupce tak úzké, že výchozí 3 pt slévá sousední čísla.
+        words = page.extract_words(keep_blank_chars=False, x_tolerance=1.5, y_tolerance=1)
         chars = page.chars
 
     header_top = min(w["top"] for w in words
@@ -64,8 +66,7 @@ def parse_viry_matrix(pdf_bytes: bytes) -> list[dict]:
     # Labely týdnů po znacích — hlavička má slité popisky i týden bez tečky.
     hchars = sorted((c for c in chars if abs(c["top"] - header_top) < 1.5),
                     key=lambda c: c["x0"])
-    kumul_x = min((w["x0"] for w in words if w["text"].startswith("Kumulativ")),
-                  default=10 ** 9)
+    kumul_xs = sorted(w["x0"] for w in words if w["text"].startswith("Kumulativ"))
     labels: list[tuple[int, float]] = []
     buf, x0, last_x1 = "", None, None
 
@@ -89,13 +90,27 @@ def parse_viry_matrix(pdf_bytes: bytes) -> list[dict]:
             close(last_x1 or 0)
     close(last_x1 or 0)
     # „Kumulativně od 40. KT“ v hlavičce by jinak vyrobilo parazitní týden 40
-    labels = [l for l in labels if l[1] < kumul_x - 4]
+    labels = [l for l in labels
+              if not any(kx - 4 <= l[1] <= kx + 18 for kx in kumul_xs)]
 
     # Tabulky se dělí podle ročních značek (2024/2025…) těsně nad řádkem KT.
-    year_marks = sorted(((w["x0"], int(w["text"])) for w in words
-                         if re.fullmatch(r"20\d\d", w["text"])
-                         and header_top - 6 < w["top"] < header_top),
-                        key=lambda m: m[0])
+    # Když se rok do buňky nevejde, Excel vypíše „###“ — rok se pak odvodí
+    # od sousední tabulky (sezóny jdou zleva doprava po jedné).
+    marks = sorted(((w["x0"], w["text"]) for w in words
+                    if re.fullmatch(r"20\d\d|#+", w["text"])
+                    and header_top - 6 < w["top"] < header_top),
+                   key=lambda m: m[0])
+    year_marks: list[tuple[float, int]] = []
+    for i, (mx, text) in enumerate(marks):
+        if text.isdigit():
+            year_marks.append((mx, int(text)))
+        elif year_marks:
+            year_marks.append((mx, year_marks[-1][1] + 1))
+        else:
+            later = [(j, int(t)) for j, (_, t) in enumerate(marks[i + 1:], 1) if t.isdigit()]
+            if not later:
+                raise ValueError("[szu_weekly] rok tabulky nejde odvodit — všechny značky jsou ###")
+            year_marks.append((mx, later[0][1] - later[0][0]))
     if not year_marks:
         raise ValueError("[szu_weekly] roční značky nad hlavičkou nenalezeny")
     bounds = [m[0] - 2 for m in year_marks[1:]] + [10 ** 9]
@@ -130,9 +145,18 @@ def parse_viry_matrix(pdf_bytes: bytes) -> list[dict]:
             rows[w["top"]].append(w)
 
     first_x = regions[0]["seq"][0][2]
-    table_bounds = [regions[i + 1]["seq"][0][2] - 6 if i + 1 < len(regions) else 10 ** 9
-                    for i in range(len(regions))]
-    out, category, pending = [], None, ""
+    # Hranice mezi tabulkami: když mezi nimi stojí sloupec „Kumulativně“, patří
+    # k levé tabulce celý; jinak se dělí v půli mezery mezi krajními týdny.
+    table_bounds = []
+    for i in range(len(regions)):
+        if i + 1 == len(regions):
+            table_bounds.append(10 ** 9)
+            continue
+        x_last, x_next = regions[i]["seq"][-1][2], regions[i + 1]["seq"][0][2]
+        has_kumul = any(x_last < kx < x_next for kx in kumul_xs)
+        table_bounds.append(x_next - 3 if has_kumul else (x_last + x_next) / 2)
+    # Od KT 40/2026 chybí v PDF popisek „Detekce viru“ — matice jím začíná.
+    out, category, pending = [], "Detekce viru", ""
     failures = []
     for k in sorted(rows):
         line = sorted(rows[k], key=lambda w: w["x0"])
@@ -158,13 +182,13 @@ def parse_viry_matrix(pdf_bytes: bytes) -> list[dict]:
         for ri, reg in enumerate(regions):
             lo = table_bounds[ri - 1] if ri else -1
             hi = table_bounds[ri]
-            is_last = ri == len(regions) - 1
             x_last = reg["seq"][-1][2]
             vals, kumul = {}, None
             for v, xc in nums:
                 if not (lo < xc < hi):
                     continue
-                if is_last and xc > x_last + 10:
+                # za posledním týdnem tabulky už je jen sloupec „Kumulativně“
+                if xc > x_last + 10:
                     if kumul is None:
                         kumul = v
                     continue
@@ -174,8 +198,9 @@ def parse_viry_matrix(pdf_bytes: bytes) -> list[dict]:
                     vals[key] = vals.get(key, 0) + v
             if not vals:
                 continue
-            if is_last and kumul is not None and sum(vals.values()) != kumul:
-                failures.append(f"{label}: součet {sum(vals.values())} ≠ kumulativně {kumul}")
+            if kumul is not None and sum(vals.values()) != kumul:
+                failures.append(f"{label} {reg['start_year']}: součet {sum(vals.values())} "
+                                f"≠ kumulativně {kumul}")
             season = f"{reg['start_year']}_{reg['start_year'] + 1}"
             virus = VIRUS_NAMES.get(label, label)
             for (wk, yr), v in sorted(vals.items(), key=lambda i: (i[0][1], i[0][0])):

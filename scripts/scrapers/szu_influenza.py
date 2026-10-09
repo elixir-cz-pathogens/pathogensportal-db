@@ -385,9 +385,10 @@ def _season_from_week(week: int, year: int) -> str:
 
 def download_current(output_dir: Path, listing_url: str = CURRENT_SEASON_LISTING_URL) -> list[str]:
     """
-    Stáhne a naparsuje nejnovější týdenní PDF běžící sezóny přímo z indexové
-    stránky SZÚ. Vždy přepíše CSV aktuální sezóny (na rozdíl od historických
-    sezón v download(), které se stahují jen jednou a pak cachují).
+    Stáhne nejnovější týdenní PDF běžící sezóny z indexové stránky SZÚ a přepíše
+    CSV všech sezón, které v něm jsou a nemají kurátorovaný soubor (běžící
+    i minulá sezóna — SZÚ je zpětně koriguje). Historické sezóny v download()
+    se naopak stahují jen jednou a pak cachují.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -412,18 +413,49 @@ def download_current(output_dir: Path, listing_url: str = CURRENT_SEASON_LISTING
     season = _season_from_week(week, year)
     print(f"  [szu_flu_current] nejnovejsi: tyden {week}/{year} -> sezona {season} ({latest_url})")
 
-    pdf_resp = requests.get(latest_url, timeout=30)
+    pdf_resp = requests.get(latest_url, timeout=60)
     pdf_resp.raise_for_status()
 
-    df = _parse_last_pdf(pdf_resp.content, season)
-    if df.empty:
-        raise ValueError(f"[szu_flu_current] naparsovane PDF ({latest_url}) neobsahuje zadna data")
+    # Souhrny se počítají z týdenní matice (szu_weekly), ne z extract_table:
+    # matice je validovaná proti sloupcům „Kumulativně“, kdežto extract_table
+    # slévala sousední viry do jedné buňky a s třítabulkovým rozvržením od
+    # KT 40/2026 nevrátila nic. Matice nese jen „Detekce viru“ — sérologii
+    # a izolaci stejně nic nečte (generate_json filtruje na detekci).
+    from .szu_weekly import parse_viry_matrix
 
-    out_path = output_dir / f"szu_influenza_{season}.csv"
-    df.to_csv(out_path, index=False, encoding="utf-8")
-    top = df.groupby("virus")["pocet"].sum().sort_values(ascending=False).head(4)
-    print(f"  [szu_flu_current] {season} — {len(df):,} zaznamu (tyden {week})  top: {dict(top)}")
-    return [str(out_path)]
+    totals = season_totals(parse_viry_matrix(pdf_resp.content))
+    if season not in totals:
+        raise ValueError(f"[szu_flu_current] v PDF ({latest_url}) chybí běžící sezóna {season}")
+
+    written = []
+    curated = {p.stem.replace("szu_influenza_", "") for p in CURATED_DIR.glob("szu_influenza_*.csv")}
+    for s, df in sorted(totals.items()):
+        if s in curated:
+            continue  # uzavřená sezóna má kurátorovaný soubor, ten má přednost
+        out_path = output_dir / f"szu_influenza_{s}.csv"
+        df.to_csv(out_path, index=False, encoding="utf-8")
+        top = df.set_index("virus")["pocet"].sort_values(ascending=False).head(4)
+        print(f"  [szu_flu_current] {s} — {len(df):,} zaznamu (tyden {week})  top: {dict(top)}")
+        written.append(str(out_path))
+    return written
+
+
+def season_totals(matrix_rows: list[dict]) -> dict[str, pd.DataFrame]:
+    """Sezónní souhrny ve formátu szu_influenza_*.csv z týdenní matice virů."""
+    m = pd.DataFrame(matrix_rows)
+    out = {}
+    for season, g in m.groupby("sezona"):
+        agg = g.groupby("virus", as_index=False)["pocet"].sum()
+        agg = agg[agg["pocet"] > 0]
+        out[season] = pd.DataFrame({
+            "sezona":    season,
+            "rok":       int(season.split("_")[1]),
+            "tyden_kt":  0,
+            "kategorie": "Detekce viru",
+            "virus":     agg["virus"].values,
+            "pocet":     agg["pocet"].values,
+        })
+    return out
 
 
 if __name__ == "__main__":

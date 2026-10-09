@@ -45,6 +45,11 @@ Changes on `dev` since v0.4.0.
   (the chart clipped it). Positivity is now computed separately for PCR and antigen tests, each
   with its own denominator, with no percentage below 30 tests and without the unfinished last
   week.
+- **SZÚ three-season PDF** (PPDB-74) — from week 40/2026 SZÚ prints three seasons side by side;
+  both SZÚ scrapers failed on it and stopped the whole pipeline (no data refresh from 6 October).
+  The matrix parser now handles two or three tables and validates each one against its own
+  cumulative column. Season totals of the running season are summed from that matrix instead of
+  `extract_table`, which also fixes 2025/26: H3N2, B and RSV had been merged into one garbled row.
 
 ## v0.4.0 — 2026-09-06
 

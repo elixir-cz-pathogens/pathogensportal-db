@@ -111,8 +111,11 @@ most of them come from the publishers as they are.
     extracts its table with `pdfplumber`. Three PDF layouts are handled. A season that already has
     a CSV is skipped.
   - `download_current()` — finds the newest "by virus type" PDF on the listing page, works out the
-    season from the week number (a season starts in week 40) and always rewrites that season's
-    CSV.
+    season from the week number (a season starts in week 40), reads the virus × week matrix with
+    `szu_weekly.parse_viry_matrix` and sums it into season totals. It rewrites the CSV of every
+    season in that PDF that has no curated file — the running one and the previous one, because
+    SZÚ keeps correcting it. These totals carry only "Detekce viru"; serology and isolation are
+    not read by anything.
   - Seasons 2022/23–2024/25 are no longer hosted anywhere. Their CSVs are kept in `curated/szu/`
     and copied into `$DATA_DIR/szu/` when missing.
 - **Output:** `szu/szu_influenza_<YYYY>_<YYYY>.csv` with `sezona, rok, tyden_kt, kategorie, virus,
@@ -127,16 +130,18 @@ most of them come from the publishers as they are.
 - **Scraper:** `szu_weekly.py`
 - **What it does:**
   - "By virus type": only the newest PDF is needed — it carries the whole virus × week matrix for
-    the running season and the previous one. The matrix is read from character positions, because
-    the header labels run together.
+    the running season and the previous one (from week 40/2026 on, the two previous ones: three
+    tables side by side). The matrix is read from character positions, because the header labels
+    run together. A year that does not fit its header cell is printed as `###`; it is inferred
+    from the neighbouring table.
   - "By region": one PDF per week, reported by virological laboratory; laboratories of the same
     region are summed. Published PDFs do not change, so they are cached in `szu/pdf_kraje/`.
 - **Output:**
   - `szu/szu_weekly_viry.csv` — `sezona, rok, tyden, virus, pocet`
   - `szu/szu_weekly_kraje.csv` — `rok, tyden, kraj, pozitivni, vysetreno`
-- **Checks:** the weekly values of the running season must add up to the "cumulative" column of
-  the PDF for every virus; on a mismatch the parser raises an error rather than return wrong
-  numbers.
+- **Checks:** in every table that has a "cumulative" column, the weekly values must add up to it
+  for every virus; on a mismatch the parser raises an error rather than return wrong numbers.
+  Tests run on two real PDFs, one of each layout (`tests/fixtures/szu/`).
 - **Good to know:** Prague and Central Bohemia share laboratories and cannot be separated; they
   carry the combined code `CZ010+CZ020`.
 
