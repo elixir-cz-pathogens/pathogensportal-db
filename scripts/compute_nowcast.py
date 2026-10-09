@@ -3,8 +3,8 @@ Nowcast týdenních laboratorních detekcí (graf flu_weekly) → flu_nowcast.js
 
 STÍNOVÝ REŽIM (od 10/2026): odhad se počítá a ukládá, ale portál ho nezobrazuje
 (`"display": false`). Každý odhad se zapíše do logu $DATA_DIR/nowcast/flu_nowcast_log.csv
-a jakmile je týden starý D_FINAL týdnů, porovná se s doplněným číslem. Po 8–10
-týdnech sezóny se podle `shadow_evaluation` rozhodne, jestli a jak odhad zobrazit
+a jakmile je týden starý D_FINAL týdnů, porovná se s doplněným číslem. Až bude
+vyhodnoceno 8–10 týdnů sezóny (kolem konce ledna 2027), podle `shadow_evaluation` se rozhodne, jestli a jak odhad zobrazit
 (docs/analytics/nowcasting.md).
 
 Data:

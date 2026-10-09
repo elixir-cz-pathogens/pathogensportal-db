@@ -4,8 +4,8 @@
 of laboratory detections for the most recent weeks, which laboratories are still reporting.
 
 **Status: shadow mode** (since October 2026). The estimate is computed every run and logged, but
-the portal does not show it (`"display": false`). Whether and how to show it is decided after 8–10
-weeks of the 2026/27 season from the shadow evaluation — see [Decision rule](#decision-rule).
+the portal does not show it (`"display": false`). Whether and how to show it is decided once 8–10
+weeks of the 2026/27 season have been scored — see [Decision rule](#decision-rule).
 
 ```bash
 python scripts/compute_nowcast.py
@@ -108,7 +108,9 @@ shows it, and the factors can then be learned from our own SZÚ archive instead.
 
 ## Decision rule
 
-After 8–10 in-season weeks (from about mid-December 2026), per series:
+A week can be scored only once it is 8 weeks old: the first in-season week (KT 40/2026) is scored
+from 30 November 2026, and 8–10 scored weeks per delay are available around the end of January
+2027. Then, per series:
 
 | Shadow evaluation | On the portal |
 |---|---|
