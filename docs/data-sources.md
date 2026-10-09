@@ -27,6 +27,7 @@ The diagram shows which scraper produces which file and who reads it:
 | ČSÚ | `csu_population.py` | `csu/population.csv` | year × region × sex | yes | `generate_json.py` |
 | WHO FluNet + FluID | `who_flu.py` | `who/who_flunet_cz.csv`, `who/who_fluid_cz.csv` | week | yes | `generate_json.py` (FluNet), `compute_mem.py` (FluID) |
 | ECDC ERVISS | `ecdc_erviss.py` | `ecdc/erviss_ili_ari_cz.csv`, `ecdc/erviss_nonsentinel_cz.csv` | week | rates only | `generate_json.py` (lab file), `compute_mem.py` (rates) |
+| ECDC ERVISS snapshots | `ecdc_erviss_snapshots.py` | `ecdc/erviss_snapshots/<date>_nonSentinelTestsDetections.csv.gz` | week × snapshot | no (immutable already) | `compute_nowcast.py` |
 | ECDC RespiCast | `ecdc_respicast.py` | `ecdc/respicast_cz.csv` | weekly forecast round | no | `compute_mem.py` |
 | ECDC COVID-19 | `ecdc_covid.py` | `ecdc/ecdc_covid_cz.csv` | day | no | nothing — archived only |
 
@@ -213,6 +214,23 @@ most of them come from the publishers as they are.
     specimens a week, from then the same number as for influenza (about 300) with 0–1
     detections. The positivity chart stops at 2026-W33 (registry entry
     `erviss-sars-cov-2-jmenovatel-2026-08`).
+
+### ECDC — ERVISS snapshots
+
+- **Where:** the same repository, folder `data/snapshots/`: every Friday ECDC stores each file as
+  it was that day (since 2023-11-24).
+- **Scraper:** `ecdc_erviss_snapshots.py`, an optional job in `run_all.py` — its failure does not
+  count towards the exit code.
+- **What it does:** lists the folder through the GitHub tree API, downloads the
+  `nonSentinelTestsDetections` snapshots not yet present and keeps the Czech rows. Published
+  snapshots do not change, so nothing is downloaded twice. While the newest local snapshot is
+  less than 6 days old the API is not called at all (the anonymous limit is 60 requests an hour).
+  The first fill, about 1 GB, runs in batches of 40 snapshots per run.
+- **Output:** `ecdc/erviss_snapshots/<YYYY-MM-DD>_nonSentinelTestsDetections.csv.gz`, original
+  columns. Not passed to the `raw/` archive — the files are an immutable dated history already.
+- **Good to know:** this is the reporting triangle for the nowcast
+  ([analytics/nowcasting.md](analytics/nowcasting.md)). The non-sentinel detections equal the SZÚ
+  weekly numbers. Since 2024 there is no total per influenza type, only subtypes.
 
 ### ECDC — RespiCast
 
