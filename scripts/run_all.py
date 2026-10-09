@@ -13,8 +13,9 @@ from pathlib import Path
 # Přidej scripts/ do Python path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from scrapers import (mzcr_covid, ecdc_covid, ecdc_erviss, ecdc_respicast, szu_influenza,
-                      szu_weekly, uzis_isin, uzis_registries, csu_population, who_flu)
+from scrapers import (mzcr_covid, ecdc_covid, ecdc_erviss, ecdc_erviss_snapshots, ecdc_respicast,
+                      szu_influenza, szu_weekly, uzis_isin, uzis_registries, csu_population,
+                      who_flu)
 from snapshot import snapshot
 
 DATA_ROOT = Path(os.getenv("DATA_DIR") or Path(__file__).resolve().parents[1] / "data")
@@ -62,6 +63,21 @@ def run() -> int:
               f"{len(result['unchanged'])} beze změny (přeskočeno)")
         for rel in result["new"]:
             print(f"    + {rel}")
+
+    # Volitelné zdroje: slouží jen analytice (nowcast), ne žádnému grafu přímo.
+    # Jejich selhání se do `failures` nepočítá — exit 1 by zastavil celý řetěz
+    # v kontejneru a portál by přišel o obnovu všech dat kvůli vedlejší věci.
+    optional = [
+        ("ECDC ERVISS snapshoty (nowcast)", ecdc_erviss_snapshots.download, DATA_ROOT / "ecdc"),
+    ]
+    for label, fn, out_dir in optional:
+        print(f"\n{'='*50}")
+        print(f"  {label} — volitelné")
+        print(f"{'='*50}")
+        try:
+            fn(out_dir)
+        except Exception as e:
+            print(f"  CHYBA (ostatní data tím nejsou dotčena): {type(e).__name__}: {e}")
 
     # Metadata o zdrojích až po snapshotu — čtou z manifestu datum posledního
     # stažení. Selhání se nepřipisuje ke `failures`: bez popisku zdroje je

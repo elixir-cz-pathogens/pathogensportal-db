@@ -23,6 +23,7 @@ python scripts/load_to_db.py          # optional: fill PostgreSQL
 python scripts/generate_json.py       # chart JSON into $OUTPUT_DIR
 python scripts/detect_anomalies.py    # $OUTPUT_DIR/anomaly_signals.json
 python scripts/compute_mem.py         # $OUTPUT_DIR/flu_mem.json
+python scripts/compute_nowcast.py     # $OUTPUT_DIR/flu_nowcast.json (shadow mode)
 ```
 
 In Docker:
@@ -32,7 +33,8 @@ docker build -t pathogensportal-db .
 docker run --rm -v "$PWD/data:/data" -v "$PWD/out/charts:/output/charts" pathogensportal-db
 ```
 
-The container runs `run_all.py → generate_json.py → detect_anomalies.py → compute_mem.py`.
+The container runs `run_all.py → generate_json.py → detect_anomalies.py → compute_mem.py →
+compute_nowcast.py`; the last step may fail without stopping the others.
 `load_to_db.py` is not part of that command; without a database `generate_json.py` reads the CSV
 files directly.
 
@@ -89,6 +91,8 @@ scripts/compute_mem.py         seasonal influenza thresholds → flu_mem.json
 scripts/mem.py                 Moving Epidemic Method — the computation, no I/O
 scripts/trend.py               growth / decline category of the current wave
 scripts/forecast.py            threshold exceedance probability from quantile forecasts
+scripts/compute_nowcast.py     nowcast of weekly lab detections → flu_nowcast.json
+scripts/nowcast.py             reporting triangle and chain-ladder — the computation, no I/O
 sources.yaml                   source registry — where to find each publisher's metadata
 charts.yaml                    what each chart measures: source, metric, unit, grain
 methodology_changes.yaml       registry of reporting changes; the source of chart `caveats`
@@ -125,7 +129,8 @@ The portal (`pathogensportal`) takes this repository as a **git submodule pinned
 `datascrapper` image from it. In practice this makes the following the public interface of the
 repository:
 
-- the script names `run_all.py`, `generate_json.py`, `detect_anomalies.py`, `compute_mem.py`
+- the script names `run_all.py`, `generate_json.py`, `detect_anomalies.py`, `compute_mem.py`,
+  `compute_nowcast.py`
 - the `CMD` of the Dockerfile
 - the variable names `DATA_DIR` and `OUTPUT_DIR`
 - the path `db/init.sql`

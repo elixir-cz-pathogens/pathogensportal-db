@@ -50,6 +50,14 @@ Changes on `dev` since v0.4.0.
   The matrix parser now handles two or three tables and validates each one against its own
   cumulative column. Season totals of the running season are summed from that matrix instead of
   `extract_table`, which also fixes 2025/26: H3N2, B and RSV had been merged into one garbled row.
+- **Nowcast of weekly lab detections, shadow mode** (PPDB-75) — estimate of the final number of
+  influenza A, influenza B and RSV detections for the last two weeks, which laboratories are still
+  reporting (chain-ladder on ERVISS snapshots, negative binomial uncertainty). New scraper
+  `ecdc_erviss_snapshots.py` (optional job), `nowcast.py`, `compute_nowcast.py` and output
+  `flu_nowcast.json` with `"display": false` — the portal does not show it yet. Every estimate is
+  logged and scored against the completed number; the decision to show it follows after 8–10
+  in-season weeks. `compute_nowcast.py` is added to the container command behind `||`, so its
+  failure does not stop the data refresh. Not breaking: one new output file, nothing changed.
 
 ## v0.4.0 — 2026-09-06
 

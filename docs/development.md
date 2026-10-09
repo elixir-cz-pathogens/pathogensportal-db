@@ -51,6 +51,7 @@ The suite uses no network and no database; HTTP responses are stubbed. CI
 | `test_mem_golden.py` | `mem.py` against the R package `mem` |
 | `test_compute_mem.py` | the week × season matrix |
 | `test_trend.py`, `test_forecast.py` | trend categories, exceedance probability |
+| `test_nowcast.py` | chain-ladder on a triangle with known factors, no look-ahead, shadow log and evaluation, the ERVISS snapshot mirror |
 
 Golden tests exist so that the method cannot change by accident. If you change the method on
 purpose, regenerate the golden values deliberately and say why in the commit.

@@ -20,7 +20,7 @@ docker run --rm \
 | Base | `python:3.12-slim` |
 | Dependencies | `requirements.txt` — the only place they are listed |
 | Environment | `DATA_DIR=/data`, `OUTPUT_DIR=/output/charts` |
-| Command | `run_all.py && generate_json.py && detect_anomalies.py && compute_mem.py` |
+| Command | `run_all.py && generate_json.py && detect_anomalies.py && compute_mem.py && (compute_nowcast.py \|\| echo …)` |
 
 Things that follow from this:
 

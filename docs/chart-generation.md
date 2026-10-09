@@ -1,7 +1,8 @@
 # Chart generation — from CSV to JSON
 
 `scripts/generate_json.py` turns the downloaded CSV files into the JSON files the portal's charts
-read. Two more scripts write one larger JSON each: `detect_anomalies.py` and `compute_mem.py`;
+read. Three more scripts write one larger JSON each: `detect_anomalies.py`, `compute_mem.py` and
+`compute_nowcast.py`;
 they are described in [analytics/](analytics/).
 
 ```bash
@@ -216,6 +217,7 @@ Notes:
 |---|---|---|---|
 | `anomaly_signals` | `detect_anomalies.py` | the series whose last month exceeds the expected level | [analytics/anomaly-detection.md](analytics/anomaly-detection.md) |
 | `flu_mem` | `compute_mem.py` | influenza thresholds, trend and forecast for ILI and ARI | [analytics/flu-mem.md](analytics/flu-mem.md) |
+| `flu_nowcast` | `compute_nowcast.py` | estimated final weekly lab detections for the last two weeks (shadow mode, not shown) | [analytics/nowcasting.md](analytics/nowcasting.md) |
 
 ## Conventions
 

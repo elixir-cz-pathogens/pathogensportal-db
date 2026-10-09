@@ -21,4 +21,7 @@ ENV DATA_DIR=/data \
 # process_ebola.py) byla odstraněna v PPDB-53 — obsah i grafy k ebole nově dodává
 # AI agent jako pull request přímo do portálu. Proto tu není ani CONTENT_DIR:
 # nic do něj nezapisuje. Portál ho může dál mountovat, kontejner si ho nevšimne.
-CMD ["sh", "-c", "python scripts/run_all.py && python scripts/generate_json.py && python scripts/detect_anomalies.py && python scripts/compute_mem.py"]
+#
+# Nowcast je za `||`: jeho selhání nesmí zastavit obnovu dat (grafy se vygenerují
+# i bez něj, chybí jen flu_nowcast.json). Viz výpadek 6.–9. 10. 2026 v CHANGELOG.
+CMD ["sh", "-c", "python scripts/run_all.py && python scripts/generate_json.py && python scripts/detect_anomalies.py && python scripts/compute_mem.py && (python scripts/compute_nowcast.py || echo 'flu_nowcast: selhal, pokračuji bez něj')"]

@@ -25,13 +25,17 @@ Two flows run side by side and meet in the generators:
 | 4 | Charts | `generate_json.py` | CSV files (and PostgreSQL for one chart) | `$OUTPUT_DIR/*.json` |
 | 5 | Analytics | `detect_anomalies.py` | ISIN CSV, `methodology_changes.yaml` | `$OUTPUT_DIR/anomaly_signals.json` |
 |   |           | `compute_mem.py` | FluID, ERVISS and RespiCast CSV | `$OUTPUT_DIR/flu_mem.json` |
+|   |           | `compute_nowcast.py` | ERVISS snapshot mirror, SZÚ weekly matrix | `$OUTPUT_DIR/flu_nowcast.json`, `$DATA_DIR/nowcast/flu_nowcast_log.csv` |
 
 `run_all.py` covers phases 1, 2 and 2b in one process. The container then runs phases 4 and 5:
 
 ```
 python scripts/run_all.py && python scripts/generate_json.py \
-  && python scripts/detect_anomalies.py && python scripts/compute_mem.py
+  && python scripts/detect_anomalies.py && python scripts/compute_mem.py \
+  && (python scripts/compute_nowcast.py || echo …)
 ```
+
+The nowcast is behind `||`: if it fails, the data refresh still completes.
 
 Phase 3 is not in that command. `load_to_db.py` is run separately when a database is available.
 
