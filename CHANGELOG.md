@@ -32,6 +32,14 @@ Changes on `dev` since v0.4.0.
   (ECDC ERVISS: weekly positivity of influenza, RSV and SARS-CoV-2). Two downloaded files that
   no chart read are now used. Five reporting caveats added to `methodology_changes.yaml`.
 
+- **English labels in the generated JSON** (PPDB-77) — every chart gets optional `labels_en`,
+  `datasets[].label_en`, `x_title_en`, `unit_en`, `x_unit_en`; anomaly signals `diagnoza_nazev_en`
+  and `kraj_nazev_en`; `flu_mem.json` and `flu_nowcast.json` English labels and notes. Translations
+  in `curated/labels_en.yaml`, keyed by ICD-10 and NUTS3 codes (WHO ICD-10 2019 titles), with a
+  test that fails when a diagnosis or region in the data has no English name. The English site
+  previously showed the 114 ISIN diagnosis names, age groups and region names in Czech. Not
+  breaking: only new fields; the Czech ones are unchanged.
+
 ### Fixed
 
 - **Frozen ECDC COVID-19 source no longer blocks the pipeline** (PPDB-73) — `ecdc_covid.py`

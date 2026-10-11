@@ -13,6 +13,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import chart_meta
+import labels_en
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = Path(os.environ.get("DATA_DIR",  str(ROOT / "data")))
@@ -55,6 +56,11 @@ def save(name: str, obj: dict):
     # Ke grafu se přibalí blok `meta` (metrika, jednotka, zdroj, čerstvost,
     # upozornění) — viz chart_meta.py. Frontend ho ignoruje, čte ho MCP/AI vrstva.
     obj = chart_meta.attach(name, obj)
+    # Vedle českých popisků anglické `*_en` (viz labels_en.py); chybějící
+    # překlad graf nezastaví, jen se vypíše — test ho chytí dřív.
+    obj, missing = labels_en.localize(obj)
+    if missing:
+        print(f"  [{name}] ⚠ bez anglického popisku: {missing}")
     path = OUTPUT_DIR / f"{name}.json"
     path.write_text(json.dumps(obj, ensure_ascii=False, default=str), encoding="utf-8")
     print(f"  [{name}] → {path}")

@@ -59,6 +59,7 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import chart_meta
+import labels_en
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = Path(os.environ.get("DATA_DIR", str(ROOT / "data")))
@@ -607,14 +608,16 @@ def run_current(long, periods, n_months, exclude_t=frozenset(),
         "target_period": periods[t0],
         "method": "Farrington–Noufaily, kvazi-Poisson GLM, 99. percentil, "
                   "π parametrickým bootstrapem, bayesovská FDR",
+        "method_en": "Farrington–Noufaily, quasi-Poisson GLM, 99th percentile, "
+                     "π by parametric bootstrap, Bayesian FDR",
         "n_series_scored": len(records),
         "n_series_skipped": skipped,
         "n_signals": len(signals),
         "n_signals_undecided": sum(1 for s in signals if undecided(s)),
         "fdr": {"alpha": alpha, "n_tested": len(records),
                 "n_pass": k_fdr, "n_pass_bh": k_bh},
-        "prebaselining": prebaselining,
-        "signals": signals,
+        "prebaselining": [labels_en.annotate_signal(r) for r in prebaselining],
+        "signals": [labels_en.annotate_signal(s) for s in signals],
     }
     if provenance:
         out["provenance"] = provenance

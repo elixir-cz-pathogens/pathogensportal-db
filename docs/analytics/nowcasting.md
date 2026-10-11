@@ -139,7 +139,9 @@ from 30 November 2026, and 8–10 scored weeks per delay are available around th
 }
 ```
 
-Series names match the dataset labels in `flu_weekly.json`, so the portal can pair them.
+Series names match the dataset labels in `flu_weekly.json`, so the portal can pair them. For the
+English site every series has `name_en`, every week `label_en` (`Wk 40/26`), and the file
+`method_en`.
 
 ## Failure handling
 

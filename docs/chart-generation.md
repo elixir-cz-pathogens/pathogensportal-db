@@ -78,7 +78,27 @@ Some series charts carry extra top-level keys for the page: `season`, `x_title`,
 
 **Summary tile** — plain keys and values (`covid_summary.json`).
 
-Series labels and titles are Czech; the portal shows them as they are.
+## English labels
+
+Labels, titles and units are written in Czech. `save()` then calls `labels_en.localize()`, which
+adds an English version next to each Czech field that needs one:
+
+| Czech field | English field |
+|---|---|
+| `labels` (list, or map `NUTS3 → name`) | `labels_en` |
+| `datasets[].label` | `datasets[].label_en` |
+| `x_title`, `unit`, `x_unit` | `x_title_en`, `unit_en`, `x_unit_en` |
+
+A `*_en` field is present only when it differs from the Czech one (dates, years, `RSV` stay as
+they are). The Czech fields are unchanged, so a portal that does not know the English fields keeps
+working; the English site prefers `*_en` and falls back to its own dictionary.
+
+The translations live in [`curated/labels_en.yaml`](../curated/labels_en.yaml): diagnoses by ICD-10
+code (WHO ICD-10 2019 titles), regions by NUTS3 code, fixed labels as `terms`; week labels and age
+groups (`KT 40/25`, `5–9 let`, `65 let a více`) are rewritten by the patterns in
+`scripts/labels_en.py`. A label with no translation is printed as a warning and stays Czech;
+`tests/test_labels_en.py` fails when a diagnosis or region in the downloaded data has no English
+name, or when ÚZIS renames a diagnosis.
 
 ## The `meta` block
 

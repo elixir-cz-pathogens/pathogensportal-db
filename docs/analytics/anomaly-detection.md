@@ -170,7 +170,9 @@ parameters.
 ```
 
 The numbers in this example are illustrative. `metodicka_zmena` and `reporting_channel` are
-present only when they apply. Region `CZ` is the national total, which includes cases with no
+present only when they apply. `method_en`, and `diagnoza_nazev_en` / `kraj_nazev_en` in every
+signal and `prebaselining` record, carry the English names looked up by the ICD-10 and NUTS3 codes
+(see [chart-generation.md](../chart-generation.md#english-labels)). Region `CZ` is the national total, which includes cases with no
 region stated; the "not stated" region itself is not scored.
 
 `--backtest` writes `$DATA_DIR/analysis/anomaly_backtest.csv` with one row per series and month

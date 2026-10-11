@@ -64,9 +64,18 @@ EXCLUDED_SEASONS = {
     2025: "pokrytá populace ve FluID skočila z 5,4 na 8,5 mil. — změna hlásicího "
           "systému k ověření; do vyjasnění sezónu nepoužíváme",
 }
+EXCLUDED_SEASONS_EN = {
+    2009: "A(H1N1)pdm09 pandemic — peak as early as November, atypical course",
+    2020: "COVID-19 measures — influenza practically did not circulate (ILI peak 13/100k)",
+    2021: "COVID-19 measures — suppressed and delayed season (ILI peak 24/100k)",
+    2025: "population covered by FluID jumped from 5.4 to 8.5 million — change in the "
+          "reporting system to be verified; season not used until clarified",
+}
 
 NO_EPIDEMIC = "sezóna bez epidemie — vrchol {peak:.0f} nedosáhl epidemického prahu {thr:.0f} " \
               "odhadnutého z ostatních sezón; nemá epidemické týdny, ze kterých by šla počítat intenzita"
+NO_EPIDEMIC_EN = "season without an epidemic — peak {peak:.0f} did not reach the epidemic threshold " \
+                 "{thr:.0f} estimated from the other seasons; no epidemic weeks to compute intensity from"
 
 # Pod tímhle Youdenovým indexem (leave-one-season-out) epidemický práh sezónu od
 # klidu spolehlivě neodliší a pásma intenzity by byla falešná přesnost. ILI má
@@ -87,9 +96,11 @@ def season_label(start_year: int) -> str:
 
 
 INDICATORS = {
-    "ili": {"label": "ILI na 100 tis. obyvatel", "cases": "ili_pripady",
+    "ili": {"label": "ILI na 100 tis. obyvatel", "label_en": "ILI per 100,000 population",
+            "cases": "ili_pripady",
             "population": "ili_populace", "erviss": "ILI"},
-    "ari": {"label": "ARI na 100 tis. obyvatel", "cases": "ari_pripady",
+    "ari": {"label": "ARI na 100 tis. obyvatel", "label_en": "ARI per 100,000 population",
+            "cases": "ari_pripady",
             "population": "ari_populace", "erviss": "ARI"},
 }
 
@@ -142,7 +153,7 @@ def season_matrix(series: pd.DataFrame) -> pd.DataFrame:
     return wide.reindex(SEASON_WEEKS)
 
 
-def seasons_without_epidemic(wide: pd.DataFrame, pool: list[int], delta: float) -> dict[int, str]:
+def seasons_without_epidemic(wide: pd.DataFrame, pool: list[int], delta: float) -> dict[int, dict]:
     """
     Sezóny, ve kterých epidemie vůbec neproběhla: vrchol pod epidemickým prahem
     spočítaným z ostatních sezón. MEM v každé sezóně nějaké „epidemické období“
@@ -152,8 +163,9 @@ def seasons_without_epidemic(wide: pd.DataFrame, pool: list[int], delta: float) 
     „vysoké“ intenzity z 288 na 344, nad všechno, co kdy bylo naměřeno.
     Pravidlo je obecné a rozhoduje se z dat, ne ručním seznamem; opakuje se,
     dokud se množina nemění (vyřazení jedné sezóny posune práh pro ostatní).
+    Vrací {sezóna: {"cs": důvod, "en": reason}}.
     """
-    dropped: dict[int, str] = {}
+    dropped: dict[int, dict] = {}
     while True:
         kept = [y for y in pool if y not in dropped]
         found = None
@@ -164,7 +176,8 @@ def seasons_without_epidemic(wide: pd.DataFrame, pool: list[int], delta: float) 
             thr = mem.fit(wide[rest].to_numpy(), [season_label(k) for k in rest],
                           delta, max_seasons=None).epidemic_threshold
             if wide[y].max() < thr:
-                found = (y, NO_EPIDEMIC.format(peak=wide[y].max(), thr=thr))
+                found = (y, {"cs": NO_EPIDEMIC.format(peak=wide[y].max(), thr=thr),
+                             "en": NO_EPIDEMIC_EN.format(peak=wide[y].max(), thr=thr)})
                 break
         if found is None:
             return dropped
@@ -342,6 +355,7 @@ def forecast_blocks(indicator: str, series: pd.DataFrame, threshold: float) -> d
     latest_round = max(rounds)
     return {
         "source": "ECDC RespiCast — ensemble hubu",
+        "source_en": "ECDC RespiCast — hub ensemble",
         "latest": rounds[latest_round],
         "by_last_observed_week": by_last_observed,
         "evaluation": {
@@ -349,6 +363,7 @@ def forecast_blocks(indicator: str, series: pd.DataFrame, threshold: float) -> d
             "by_lead": {int(l): summary(g) for l, g in paired.groupby("lead")},
             "by_season": {season_label(int(s)): summary(g) for s, g in paired.groupby("season")},
             "note": "relative_wis < 1 = lepší než referenční model hubu (respicast-quantileBaseline)",
+            "note_en": "relative_wis < 1 = better than the hub's reference model (respicast-quantileBaseline)",
         },
     }
 
@@ -382,13 +397,18 @@ def compute_indicator(indicator: str, delta: float, optimize: bool) -> dict:
     validation = next((g for g in grid if g["delta"] == round(delta, 1)), None)
     return {
         "label": INDICATORS[indicator]["label"],
+        "label_en": INDICATORS[indicator]["label_en"],
         "intensity_reliable": bool(validation and validation["youden"] >= MIN_YOUDEN_FOR_INTENSITY),
         "sources": sorted(series["zdroj"].unique()),
         "delta": delta,
         "n_values_per_season": model.n_values,
         "seasons_used": model.seasons,
         "seasons_excluded": {season_label(y): why
-                             for y, why in sorted({**EXCLUDED_SEASONS, **no_epidemic}.items())},
+                             for y, why in sorted({**EXCLUDED_SEASONS,
+                                                   **{k: v["cs"] for k, v in no_epidemic.items()}}.items())},
+        "seasons_excluded_en": {season_label(y): why
+                                for y, why in sorted({**EXCLUDED_SEASONS_EN,
+                                                      **{k: v["en"] for k, v in no_epidemic.items()}}.items())},
         "thresholds": {
             "epidemic": round(model.epidemic_threshold, 2),
             "medium": round(model.intensity_thresholds[0], 2),
