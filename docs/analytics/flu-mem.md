@@ -188,7 +188,8 @@ tried and rejected: a scale estimated on one season did not carry over to the ne
 }
 ```
 
-The zeros stand for real values. `forecast` is `null` when no RespiCast file is available, and the
+The zeros stand for real values. Each indicator also has `label_en` and `seasons_excluded_en`,
+and the forecast `source_en` and `evaluation.note_en`, for the English site. `forecast` is `null` when no RespiCast file is available, and the
 whole file is skipped when `who_fluid_cz.csv` is missing.
 
 ## Validation

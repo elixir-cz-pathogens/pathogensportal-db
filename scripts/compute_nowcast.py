@@ -35,6 +35,7 @@ import numpy as np
 import pandas as pd
 
 import chart_meta
+import labels_en
 import nowcast
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -69,6 +70,11 @@ def iso_week_start(year: int, week: int) -> date:
 def week_label(d: date) -> str:
     y, w, _ = d.isocalendar()
     return f"KT {w}/{str(y)[2:]}"
+
+
+def week_label_en(d: date) -> str:
+    y, w, _ = d.isocalendar()
+    return f"Wk {w}/{str(y)[2:]}"
 
 
 def load_erviss_triangles(snap_dir: Path) -> dict[str, pd.DataFrame]:
@@ -166,7 +172,8 @@ def compute(as_of: date) -> dict | None:
                 continue
             q = nowcast.quantiles(r["reported"], model, d, rng)
             weeks.append({
-                "week": r["week"].isoformat(), "label": week_label(r["week"]), "delay": d,
+                "week": r["week"].isoformat(), "label": week_label(r["week"]),
+                "label_en": week_label_en(r["week"]), "delay": d,
                 "reported": int(r["reported"]),
                 "quantiles": {str(lv): round(float(v), 1) for lv, v in zip(nowcast.LEVELS, q)},
             })
@@ -175,6 +182,7 @@ def compute(as_of: date) -> dict | None:
                              **{f"q{lv}": float(v) for lv, v in zip(nowcast.LEVELS, q)}})
         bt = nowcast.backtest(tri)
         series_out[name] = {
+            "name_en": labels_en.translate(name) or name,
             "weeks": weeks,
             "model": {
                 "factors": {str(d): round(model.factors[d], 3) for d in nowcast.NOWCAST_DELAYS},
@@ -194,6 +202,7 @@ def compute(as_of: date) -> dict | None:
         "status": "shadow",
         "display": False,
         "method": "chain-ladder doplnění hlášení, negativně binomická nejistota",
+        "method_en": "chain-ladder completion of reporting, negative binomial uncertainty",
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "as_of": as_of.isoformat(),
         "in_season": nowcast.in_season(as_of),
