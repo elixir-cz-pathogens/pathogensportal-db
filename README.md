@@ -168,3 +168,9 @@ pytest -q
 ```
 
 The suite needs no network and no database. CI runs it on every push and pull request.
+
+## Licence
+
+The code is under the [MIT licence](LICENSE). Data downloaded from the sources — and the files
+derived from them, including `curated/szu/` — stay under each source's own terms, listed in
+[sources.yaml](sources.yaml) (`licence`).
