@@ -8,6 +8,8 @@ Releases are git tags `vMAJOR.MINOR.PATCH`. The portal pins one of them as its s
 
 Changes on `dev` since v0.4.0.
 
+- **MIT licence** (no issue) — `LICENSE` for the code, same text as in the portal repository;
+  README states that data keep the terms of their sources.
 - **WHO FluNet / FluID and ECDC ERVISS scrapers** (PPDB-60) — weekly influenza laboratory
   detections with the number of specimens tested, and ILI/ARI rates; loaders and tests.
 - **Seasonal influenza thresholds** (PPDB-61) — Moving Epidemic Method on ILI and ARI, golden tests
