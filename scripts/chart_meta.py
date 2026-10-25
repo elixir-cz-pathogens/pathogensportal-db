@@ -120,6 +120,7 @@ def meta_for(name: str, obj: dict | None = None, quiet: bool = False) -> dict | 
             "publisher": rec.get("publisher"),
             "landing_page": rec.get("landing_page"),
             "licence": rec.get("licence"),
+            "citation": rec.get("citation"),
             "modified_at_publisher": rec.get("modified_at_publisher"),
             "periodicity": rec.get("periodicity"),
             "fetched_at": rec.get("fetched_at"),

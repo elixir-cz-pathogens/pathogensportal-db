@@ -117,8 +117,18 @@ most of them come from the publishers as they are.
     season in that PDF that has no curated file — the running one and the previous one, because
     SZÚ keeps correcting it. These totals carry only "Detekce viru"; serology and isolation are
     not read by anything.
-  - Seasons 2022/23–2024/25 are no longer hosted anywhere. Their CSVs are kept in `curated/szu/`
-    and copied into `$DATA_DIR/szu/` when missing.
+  - Seasons 2022/23–2024/25 are not in the ZIP archive and not on the listing page the scraper
+    reads. SZÚ moved them under Témata › A–Z infekce › Chřipka (one page per season, weekly PDFs
+    only, e.g. [2024/25](https://szu.gov.cz/temata-zdravi-a-bezpecnosti/a-z-infekce/ch/chripka/zprava-o-chripkove-aktivite-hlaseni-a-vysledky-laboratornich-vysetreni/chripkova-sezona-2024-2025/)).
+    Being PDFs, they are deliberately not connected as a source; the CSVs stay in `curated/szu/`
+    and are copied into `$DATA_DIR/szu/` when missing.
+  - **Can FluNet replace them?** Not today (checked 2026-10-25). FluNet (`VIW_FNT`, CZE,
+    `NONSENTINEL`) has all 52 weeks of each of the three seasons, but it carries only influenza
+    and RSV — adenovirus, rhinovirus, metapneumovirus, parainfluenza, seasonal coronaviruses and
+    bocavirus are empty. For the viruses it does carry, season sums (weeks 40–39; SZÚ
+    "Influenza A" = FluNet `ANOTSUBTYPED`) match 2024/25 within ±1 per virus, but differ in
+    2022/23 (A/H3N2 −128, Influenza B −100, A not subtyped +107) and 2023/24 (RSV +134,
+    A/H1N1pdm −94).
 - **Output:** `szu/szu_influenza_<YYYY>_<YYYY>.csv` with `sezona, rok, tyden_kt, kategorie, virus,
   pocet`. From 2013/14 on the rows are season totals (`tyden_kt = 0`).
 - **Good to know:** SZÚ corrects historical laboratory counts after the fact, by units to tens of
@@ -186,8 +196,10 @@ most of them come from the publishers as they are.
     `flunet-jmenovatel-2021`).
   - FluNet reports two independent systems for the same week, `SENTINEL` (about 50 specimens) and
     `NONSENTINEL` (about 2,000). Do not add them up. The `zdroj` column keeps the distinction.
-  - The non-sentinel FluNet rows are the same numbers as the SZÚ weekly PDFs, but they also carry
-    the number of specimens tested — the denominator of positivity.
+  - The non-sentinel FluNet rows are the same numbers as the SZÚ weekly PDFs for 2024/25 and
+    2025/26, and they also carry the number of specimens tested — the denominator of positivity.
+    For 2022/23 and 2023/24 the season sums differ from the SZÚ totals by up to ~130 per virus
+    (see the SZÚ seasonal archives above).
   - FluID gives a rate that is comparable across years, which makes it the input of the seasonal
     thresholds.
 
@@ -214,6 +226,15 @@ most of them come from the publishers as they are.
     specimens a week, from then the same number as for influenza (about 300) with 0–1
     detections. The positivity chart stops at 2026-W33 (registry entry
     `erviss-sars-cov-2-jmenovatel-2026-08`).
+    The break does not line up with the TESSy → EpiPulse Cases transition: weeks 2026-W21–W33,
+    published after it, continue the earlier series; the same week the PCR count in the MZČR
+    data fell too.
+  - **Update status (checked 2026-10-25).** Since 26 June 2026 the README says that GitHub
+    updates are paused after the move from TESSy to EpiPulse Cases. In fact the repository has a
+    weekly `commit_as_of_<date>` again since 2026-08-07; the gap in `data/snapshots/` runs from
+    2026-05-22 to 2026-08-07. The newest Czech week on 2026-10-25 was 2026-W42 (commit of
+    2026-10-23); the server pipeline was one weekly commit behind (snapshot 2026-10-16), which is
+    its normal cadence.
 
 ### ECDC — ERVISS snapshots
 

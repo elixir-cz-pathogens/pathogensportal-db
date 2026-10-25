@@ -35,6 +35,10 @@ def test_registry_je_konzistentni():
         # zjištěného data nedalo odlišit.
         if "manual" in (s.get("discovery") or {}):
             assert s["discovery"].get("manual_note"), f"{s['id']}: manual bez manual_note"
+        # Poznámka k licenci je naše čtení podmínek — bez data ověření se od
+        # zastaralé nedá odlišit.
+        if s["licence"].get("note"):
+            assert s["licence"].get("verified"), f"{s['id']}: licence.note bez licence.verified"
 
 
 def test_caveaty_odkazuji_na_existujici_zaznamy():
@@ -167,6 +171,18 @@ def test_meta_nese_jednotku_zdroj_a_obdobi(monkeypatch):
     assert meta["period"] == {"start": "2018-01", "end": "2025-12", "points": 2}
     assert meta["sources"][0]["modified_at_publisher"] == "2026-01-22T09:09:17Z"
     assert meta["caveats"][0]["id"] == "ews"
+
+
+def test_meta_nese_citaci_zdroje(monkeypatch):
+    monkeypatch.setattr(chart_meta, "_CHARTS", {
+        "test_chart": {"source": "ecdc-erviss", "metric": "positivity", "unit": "percent",
+                       "grain": "week", "region": "CZ"},
+    })
+    monkeypatch.setattr(chart_meta, "_SOURCES", {
+        "ecdc-erviss": {"publisher": "ECDC / WHO Europe", "citation": "Dataset provided by ECDC"},
+    })
+    meta = chart_meta.meta_for("test_chart", {"labels": [], "datasets": []})
+    assert meta["sources"][0]["citation"] == "Dataset provided by ECDC"
 
 
 def test_obdobi_se_necte_z_neCasove_osy(monkeypatch):

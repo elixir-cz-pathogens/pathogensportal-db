@@ -1,8 +1,9 @@
 """
 WHO FluNet + FluID — týdenní chřipková surveillance za ČR.
 Zdroj: xMart API WHO (xmart-api-public.who.int/FLUMART), jeden GET na dataset
-Licence: otevřená data WHO s povinným uvedením zdroje — přesné znění podmínek
-         ověřit, než se čísla objeví na portálu (patří do poznámky pod grafem)
+Licence: WHO Terms and Conditions pro data (užití pro účely veřejného zdraví,
+         atribuce ve formátu WHO, úpravy nad rámec minimálních jen se souhlasem
+         WHO) — znění a citace v sources.yaml
 Aktualizace: týdně; FluID mívá proti FluNet zpoždění několik týdnů
 
 Proč to bereme, když máme SZÚ PDF:
@@ -12,8 +13,9 @@ Proč to bereme, když máme SZÚ PDF:
                          2024/25 a 2025/26: Influenza B i RSV na kus stejné), ale
                          navíc nesou SPEC_PROCESSED_NB — počet vyšetřených vzorků,
                          tedy jmenovatele pozitivity, který v PDF podle typu viru
-                         chybí. Zároveň vrací týdenní průběh sezón 2022/23 a 2023/24,
-                         jejichž PDF už SZÚ online nemá.
+                         chybí. Vrací i týdenní průběh sezón 2022/23 a 2023/24, jenže
+                         tam se sezónní součty od souhrnů SZÚ liší až o ~130 na virus
+                         (ověřeno 25. 10. 2026, docs/data-sources.md).
   FluID (VIW_FID_EPI)  — ILI a ARI případy + pokrytá populace po týdnech, souvisle
                          od 2009/10. Míra na 100 tis. je srovnatelná napříč roky
                          (na rozdíl od počtu záchytů, který roste s objemem

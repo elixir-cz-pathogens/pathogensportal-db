@@ -27,8 +27,11 @@ All three are YAML files in the repository root, maintained by hand.
   publisher: "ÚZIS ČR"
   landing: "https://www.nzip.cz/data/2621-infekcni-nemoci-otevrena-data"
   licence:
-    name: "volný přístup (otevřená data ÚZIS)"
-    url: "https://data.gov.cz/podmínky-užití/volný-přístup/"
+    name: "CC BY 4.0"
+    url: "https://creativecommons.org/licenses/by/4.0/"
+    note: "CC BY 4.0 uvádí stránka sady na NZIP i záznam v NKOD; CSVW … „volný přístup“"
+    verified: "2026-10-25"
+  citation: "Šanca O., Májek T., … Infekční nemoci v ČR. Národní zdravotnický informační portál [online]. …"
   files: ["isin/isin_infekcni_nemoci.csv"]
   methodology: ["isin-horizont-2025-12", "zoster-vykazovani-2025-07"]
   discovery:
@@ -42,7 +45,8 @@ All three are YAML files in the repository root, maintained by hand.
 | `id` | stable identifier; the same id is used in `charts.yaml` and in the portal's catalogue |
 | `publisher` | the publisher, named the way it names itself |
 | `landing` | a page for a human, not a file |
-| `licence` | written the way the source states it; `neuvedena` ("not stated") when it states none |
+| `licence` | written the way the source states it; `neuvedena` ("not stated") when it states none. `note` carries conditions the name does not (attribution, marking of modifications, what is forbidden) and contradictions between the publisher's own pages; `verified` is the day the terms were read — required whenever `note` is present |
+| `citation` | the citation or attribution sentence the source asks for, verbatim; copied into every chart's `meta.sources[].citation` |
 | `files` | paths relative to `$DATA_DIR`; used to look up the snapshot date |
 | `methodology` | ids of records in `methodology_changes.yaml` that concern this source |
 | `discovery` | how to find the metadata — see the next section |
@@ -131,7 +135,8 @@ One record of the output:
   "id": "uzis-isin",
   "publisher": "ÚZIS ČR",
   "landing_page": "https://www.nzip.cz/data/2621-infekcni-nemoci-otevrena-data",
-  "licence": { "name": "…", "url": "…" },
+  "licence": { "name": "…", "url": "…", "note": "…", "verified": "…" },
+  "citation": "…",
   "files": ["isin/isin_infekcni_nemoci.csv"],
   "fetched_at": "2026-09-24T06:00:12Z",
   "title": "…", "description": "…", "columns": ["rok", "mesic", "…"],

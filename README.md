@@ -60,18 +60,21 @@ The pipeline writes JSON only. It does not write any Hugo pages.
 
 ## Data sources
 
-| Source | What we take | Scraper |
-|---|---|---|
-| **MZČR** — COVID-19 open data | cases, hospitalisations, tests, incidence, deaths, vaccination status, per-person age and region | `mzcr_covid.py` |
-| **ÚZIS ISIN** | notifiable infectious diseases: 114 diagnoses by region, month and age group | `uzis_isin.py` |
-| **ÚZIS registries RPN, RTBC** | sexually transmitted infections (since 1994) and tuberculosis (since 2000) — these are not in ISIN | `uzis_registries.py` |
-| **SZÚ** — seasonal archives | influenza / ARI season summaries since 2012/13 | `szu_influenza.py` |
-| **SZÚ** — weekly PDFs | virus × week matrix and weekly reports by region | `szu_weekly.py` |
-| **ČSÚ** | population by region — the denominators for incidence | `csu_population.py` |
-| **WHO FluNet + FluID** | weekly influenza lab detections with specimens tested; ILI/ARI cases with population covered | `who_flu.py` |
-| **ECDC ERVISS** | weekly ILI/ARI rates per 100,000 and lab reports for Czechia | `ecdc_erviss.py` |
-| **ECDC RespiCast** | weekly probabilistic ILI/ARI forecasts | `ecdc_respicast.py` |
-| **ECDC COVID-19** | historical daily series, frozen since autumn 2022 | `ecdc_covid.py` |
+| Source | What we take | Licence (as the source states it) | Scraper |
+|---|---|---|---|
+| **MZČR** — COVID-19 open data | cases, hospitalisations, tests (PCR and antigen), incidence, deaths, vaccination status, per-person age and region | no copyrighted works, database not protected (terms in the national catalogue NKOD; the API page states none) | `mzcr_covid.py` |
+| **ÚZIS ISIN** | notifiable infectious diseases: 114 diagnoses by region, month and age group | CC BY 4.0, with a recommended citation | `uzis_isin.py` |
+| **ÚZIS registries RPN, RTBC** | sexually transmitted infections (since 1994) and tuberculosis (since 2000) — these are not in ISIN | CC BY 4.0, with a recommended citation | `uzis_registries.py` |
+| **SZÚ** — seasonal archives | influenza / ARI season summaries since 2012/13 | CC BY-NC-ND 4.0 in the szu.gov.cz footer; whether it covers the figures is being checked with SZÚ | `szu_influenza.py` |
+| **SZÚ** — weekly PDFs | virus × week matrix and weekly reports by region | as above | `szu_weekly.py` |
+| **ČSÚ** | population by region — the denominators for incidence | CC BY 4.0 under the ČSÚ terms; incidence per 100,000 is derived data, not ČSÚ statistics | `csu_population.py` |
+| **WHO FluNet + FluID** | weekly influenza lab detections with specimens tested; ILI/ARI cases with population covered | WHO Terms and Conditions for data — public-health use, attribution in the WHO format | `who_flu.py` |
+| **ECDC ERVISS** | weekly ILI/ARI rates per 100,000 and lab reports for Czechia | repository EUPL-1.2; the data are third-party data under the ECDC notice (fixed attribution sentence, modifications marked) | `ecdc_erviss.py` |
+| **ECDC RespiCast** | weekly probabilistic ILI/ARI forecasts | not stated for the ensemble — being checked with ECDC; individual models per `model-metadata` | `ecdc_respicast.py` |
+| **ECDC COVID-19** | historical daily series, frozen since autumn 2022 | third-party data under the ECDC notice (as ERVISS) | `ecdc_covid.py` |
+
+The exact wording, links, citations and the date each one was checked are in
+[sources.yaml](sources.yaml) (`licence`, `citation`).
 
 Details, file formats and known limits of each source: [docs/data-sources.md](docs/data-sources.md).
 
@@ -96,7 +99,7 @@ scripts/nowcast.py             reporting triangle and chain-ladder — the compu
 sources.yaml                   source registry — where to find each publisher's metadata
 charts.yaml                    what each chart measures: source, metric, unit, grain
 methodology_changes.yaml       registry of reporting changes; the source of chart `caveats`
-curated/szu/                   closed SZÚ seasons whose online source no longer exists
+curated/szu/                   SZÚ season totals 2022/23–2024/25, kept in the repo (the scraper does not read their PDFs)
 db/init.sql                    PostgreSQL schema (the portal mounts it into its database container)
 tests/                         pytest suite, runs without network access
 docs/                          documentation and diagrams

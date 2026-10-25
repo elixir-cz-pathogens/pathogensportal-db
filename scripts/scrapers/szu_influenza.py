@@ -245,8 +245,10 @@ def _season_filter(name: str, year1: int, year2: int) -> bool:
     return not (year == year2 and week >= 37)
 
 
-# Uzavřené sezóny, jejichž zdrojové PDF už SZÚ nikde nehostuje: ZIP archiv
-# (BASE_URL) končí sezónou 2021/22 a indexová stránka nese jen běžící sezónu.
+# Uzavřené sezóny, které scraper online nenajde: ZIP archiv (BASE_URL) končí
+# sezónou 2021/22 a indexová stránka nese jen běžící sezónu. SZÚ je přesunul pod
+# Témata › A–Z infekce › Chřipka, ale jen jako týdenní PDF — jako zdroj je
+# nenapojujeme.
 # Data se proto vezou přímo v repu (curated/szu/) — uzavřená sezóna se už
 # nemění, takže „kurátorovaný soubor“ je tu totéž co „reprodukovatelný“.
 # Bez tohoto kroku serverový běh pipeline tyhle sezóny nikdy neměl a graf
@@ -260,7 +262,7 @@ def _copy_curated(output_dir: Path) -> list[str]:
         dst = output_dir / src.name
         if not dst.exists():
             dst.write_bytes(src.read_bytes())
-            print(f"  [szu_flu] {src.stem.replace('szu_influenza_', '')} — z curated/ (online zdroj už neexistuje)")
+            print(f"  [szu_flu] {src.stem.replace('szu_influenza_', '')} — z curated/")
         copied.append(str(dst))
     return copied
 
