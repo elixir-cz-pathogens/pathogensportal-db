@@ -230,6 +230,8 @@ def collect(only: list[str] | None = None) -> dict:
             "files": src.get("files", []),
             "fetched_at": fetched_at,
         }
+        if src.get("citation"):
+            record["citation"] = " ".join(str(src["citation"]).split())
         errors = {}
 
         for key, value in (src.get("discovery") or {}).items():

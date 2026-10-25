@@ -1,7 +1,8 @@
 """
 ECDC COVID-19 scraper — filtruje data pro Českou republiku
 Zdroj: opendata.ecdc.europa.eu
-Licence: ECDC copyright, volné použití s uvedením zdroje
+Licence: data třetích stran podle ECDC intellectual property notices — citační
+         věta ECDC a označení úprav (sources.yaml)
 Aktualizace: týdenně (data končí říjen 2022, ECDC přestal publikovat po OWID)
 """
 

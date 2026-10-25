@@ -66,6 +66,14 @@ Changes on `dev` since v0.4.0.
   logged and scored against the completed number; the decision to show it follows after 8–10
   in-season weeks. `compute_nowcast.py` is added to the container command behind `||`, so its
   failure does not stop the data refresh. Not breaking: one new output file, nothing changed.
+- **Licences and citations checked against the publishers** (no issue, 2026-10-25) — `sources.yaml`
+  now states what each publisher's own page says: ÚZIS ISIN/RPN/RTBC CC BY 4.0 with the NZIP
+  citation, SZÚ CC BY-NC-ND 4.0 from the site footer, WHO Terms and Conditions for data, ECDC
+  third-party data notice with its attribution sentence (ERVISS, COVID-19), ČSÚ CC BY 4.0 with the
+  derived-data rule, MZČR terms from NKOD, RespiCast citation from the README. New optional keys
+  `licence.note`, `licence.verified` and `citation`; charts carry `meta.sources[].citation`. README
+  and docs no longer say the SZÚ seasons 2022/23–2024/25 are offline, and no longer say FluNet
+  equals SZÚ for 2022/23–2023/24. Not breaking: one new optional field.
 
 ## v0.4.0 — 2026-09-06
 

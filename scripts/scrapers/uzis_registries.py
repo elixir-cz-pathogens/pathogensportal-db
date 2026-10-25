@@ -1,7 +1,7 @@
 """
 ÚZIS — Registr pohlavních nemocí (RPN) a Registr tuberkulózy (RTBC), otevřená data.
 Zdroj: datanzis.uzis.gov.cz, sady NR-29-01 a NR-30-01
-Licence: volný přístup (data.gov.cz/podmínky-užití/volný-přístup)
+Licence: CC BY 4.0 (stránky sad na NZIP a NKOD; CSVW uvádí „volný přístup“) — viz sources.yaml
 Aktualizace: ročně (soubory z února 2026 nesou rok 2025, resp. 2024)
 
 Proč zvlášť, když máme ISIN: tyhle nemoci v ISIN NEJSOU. Syfilis, kapavka

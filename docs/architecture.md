@@ -45,8 +45,9 @@ Phase 3 is not in that command. `load_to_db.py` is run separately when a databas
 
 How to read it, left to right:
 
-1. **Sources.** Ten publishers, plus three closed SZÚ seasons kept in `curated/szu/` because their
-   online source no longer exists.
+1. **Sources.** Ten publishers, plus three closed SZÚ seasons kept in `curated/szu/`: their PDFs
+   sit under a different section of the SZÚ site than the one the scraper reads (see
+   [data-sources.md](data-sources.md)).
 2. **Scrapers.** One module per source. Each returns the list of files it wrote. What each one
    checks before it accepts a download is described in [data-sources.md](data-sources.md).
 3. **CSV files.** The hand-over point. Files marked ◆ are also loaded into PostgreSQL. Two files

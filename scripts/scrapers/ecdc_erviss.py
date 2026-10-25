@@ -1,8 +1,9 @@
 """
 ECDC ERVISS — týdenní respirační surveillance EU/EEA, řádky za ČR.
 Zdroj: github.com/EU-ECDC/Respiratory_viruses_weekly_data (CSV za ERVISS, erviss.org)
-Licence: otevřená data ECDC s povinným uvedením zdroje — přesné znění podmínek
-         ověřit, než se čísla objeví na portálu
+Licence: repozitář EUPL-1.2; data jsou data třetích stran podle ECDC
+         intellectual property notices — citační věta a označení úprav
+         (sources.yaml)
 Aktualizace: týdně (čtvrtek/pátek), celoročně
 
 Nahrazuje mrtvý ecdc_covid jako živé spojení na ECDC. Proti WHO FluID (stejný

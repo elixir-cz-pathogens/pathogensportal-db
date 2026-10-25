@@ -1,7 +1,8 @@
 """
 Stahuje ISIN data (infekční nemoci) z ÚZIS ČR.
-Licence: volný přístup (data.gov.cz/podmínky-užití/volný-přístup) — tak ji uvádí
-CSVW popis sady; dřívější „CC BY 4.0“ tady i na webu bylo naše domyšlení.
+Licence: CC BY 4.0 — tak ji uvádí stránka sady na NZIP i záznam v NKOD (ověřeno
+25. 10. 2026). CSVW popis sady má v dc:license dosud „volný přístup“; přesné
+znění, citace a rozpor jsou v sources.yaml.
 URL: https://datanzis.uzis.gov.cz/data/NR-27-ISIN/NR-27-01/Otevrena-data-NR-27-01-infekcni-nemoci.csv
 Výstup: data/isin/isin_infekcni_nemoci.csv
 """

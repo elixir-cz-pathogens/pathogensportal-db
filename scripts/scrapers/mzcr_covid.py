@@ -1,7 +1,8 @@
 """
 MZCR COVID-19 scraper
 Zdroj: onemocneni-aktualne.mzcr.cz/api/v2/covid-19
-Licence: otevřená data MZČR
+Licence: dle NKOD neobsahuje autorská díla ani chráněnou databázi (API licenci
+         neuvádí) — viz sources.yaml
 Aktualizace: denně
 """
 
