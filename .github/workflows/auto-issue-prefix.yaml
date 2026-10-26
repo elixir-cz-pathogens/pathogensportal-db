@@ -1,7 +1,7 @@
 name: "AUTOMATION: Issue Prefixer"
 
-# Při založení issue přejmenuje titulek na "<PREFIX>-<číslo>: původní titulek".
-# Prefix bere z repo proměnné PROJECT_PREFIX, jinak výchozí "PPDB".
+# When an issue is opened, renames its title to "<PREFIX>-<number>: original title".
+# The prefix comes from the PROJECT_PREFIX repo variable, "PPDB" by default.
 on:
   issues:
     types: [opened]

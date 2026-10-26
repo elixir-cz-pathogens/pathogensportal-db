@@ -39,7 +39,8 @@ def test_flat_season_detected_as_no_epidemic():
     wide = pd.DataFrame({y: _bell(h) for y, h in heights.items()}, index=compute_mem.SEASON_WEEKS)
     dropped = compute_mem.seasons_without_epidemic(wide, list(heights), delta=2.8)
     assert list(dropped) == [2017]
-    assert "bez epidemie" in dropped[2017]
+    assert "bez epidemie" in dropped[2017]["cs"]
+    assert "without an epidemic" in dropped[2017]["en"]
 
 
 def test_mild_but_real_season_is_kept():

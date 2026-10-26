@@ -2,8 +2,10 @@
 ECDC RespiCast — týdenní pravděpodobnostní předpovědi ILI a ARI, řádky za ČR.
 Zdroj: github.com/european-modelling-hubs/RespiCast-SyndromicIndicators
        (hub provozují ECDC, ISI Foundation a LSHTM; web respicast.ecdc.europa.eu)
-Licence: repozitář ŽÁDNOU licenci neuvádí — před zobrazením na portálu se zeptat
-         hubu (European.Modelling.Hub@ecdc.europa.eu) na podmínky a znění atribuce
+Licence: repozitář licenci neuvádí — před zobrazením na portálu se zeptat
+         hubu (European.Modelling.Hub@ecdc.europa.eu) na podmínky. README dává
+         doporučenou citaci (sources.yaml) a u jednotlivých modelů odkazuje na
+         `license` v model-metadata; ne všechny modely ji vyplňují.
 Aktualizace: týdně (čtvrtek), soubor za každé kolo předpovědí od 10/2024
 
 Bereme ensemble hubu (`respicast-hubEnsemble`), ne jednotlivé modely — ensemble

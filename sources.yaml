@@ -1,0 +1,269 @@
+# Data source registry — technical provenance.
+#
+# Why it exists: the pipeline downloads data from ten different places, and
+# until now nothing recorded WHERE the metadata of each one can be found (who
+# published it, under which licence, when it last changed). `source_metadata.py`
+# fetches the metadata according to this registry, `generate_json.py` attaches
+# it to the charts, and the MCP/AI layer therefore knows where every number
+# comes from and how old it is.
+#
+# ⚠️ Do NOT confuse this with the file of the same name in the portal.
+#   pathogensportal/frontend/data/sources.yaml = EDITORIAL description for readers
+#       (cs/en titles, `limits` = what the data cannot tell you, `grain`, `pages`).
+#   this file                                  = TECHNICAL provenance
+#       (where the metadata lives, what is downloaded, which files it lands in).
+# The two share only `id` and `publisher` — and those must match, because `id`
+# is the join key between both sides. Editorial text does not belong here and
+# vice versa; otherwise there are two truths about one source and one of them
+# quietly goes stale.
+#
+# Record format:
+#   id          stable identifier, identical to the portal's catalogue
+#   publisher   the publisher, named the way it names itself
+#   landing     page for a human (not a file)
+#   licence     name (+ url), written the way the SOURCE states it; when the
+#               source states none, write "neuvedena" (not stated) — an
+#               invented licence is worse than a gap. `note` = conditions of
+#               use that the name alone does not carry, or where sources
+#               contradict each other; `verified` = the day somebody read the
+#               terms on the page linked in `url`
+#   citation    the citation / attribution sentence the source asks for,
+#               copied verbatim (optional — only when the source gives one)
+#   files       paths relative to $DATA_DIR that this source produces; they are
+#               used to look up the snapshot date in raw/manifest.json
+#   methodology ids of records in methodology_changes.yaml that concern this
+#               source — this is what fills `caveats` in the chart metadata
+#   discovery   how to find the metadata at the publisher; every key is optional
+#               and they can be combined, each one is tried independently:
+#     csvw:       URL of the CSVW description (`*.csv-metadata.json`) — dc:title,
+#                 dc:license, dc:modified, dc:publisher, column list. The richest.
+#     nkod:       IRI of the dataset in the Czech National Open Data Catalogue
+#                 (data.gov.cz) — accrualPeriodicity, themes, permanent link
+#     http_head:  URL that answers a HEAD request — Last-Modified, ETag, size
+#     github:     "owner/repo", date of the last commit through the GitHub API
+#     manual:     hand-checked date of the last change (YYYY-MM-DD) for sources
+#                 that publish nothing machine-readable — always together with
+#                 `manual_note`, so it is clear that the claim is ours, not the
+#                 source's
+#
+# Order = Czech surveillance first, international context after.
+
+- id: uzis-isin
+  publisher: "ÚZIS ČR"
+  landing: "https://www.nzip.cz/data/2621-infekcni-nemoci-otevrena-data"
+  licence:
+    name: "CC BY 4.0"
+    url: "https://creativecommons.org/licenses/by/4.0/"
+    note: >-
+      CC BY 4.0 uvádí stránka sady na NZIP i záznam v NKOD (autorské dílo;
+      databáze není autorskoprávně ani zvláštním právem chráněná). CSVW popis
+      sady má v dc:license dosud „volný přístup“ — zdroje si odporují, platí
+      stránka sady.
+    verified: "2026-10-25"
+  citation: >-
+    Šanca O., Májek T., Davidová H., Rázková K., Klimeš D., Kubát J., Blaha M., Jarkovský J.. Infekční nemoci v ČR. Národní zdravotnický informační portál [online]. Praha: Ministerstvo zdravotnictví ČR a Ústav zdravotnických informací a statistiky ČR, 2026. Dostupné z: http://www.nzip.cz/data/2621-infekcni-nemoci-otevrena-data. ISSN 2695-0340
+  files: ["isin/isin_infekcni_nemoci.csv"]
+  methodology: ["isin-horizont-2025-12", "zoster-vykazovani-2025-07"]
+  discovery:
+    csvw: "https://datanzis.uzis.gov.cz/data/NR-27-ISIN/NR-27-01/Otevrena-data-NR-27-01-infekcni-nemoci.csv-metadata.json"
+    nkod: "https://data.gov.cz/zdroj/datové-sady/00024341/c117b2588a0d1ffb022f9d63912e9663"
+    http_head: "https://datanzis.uzis.gov.cz/data/NR-27-ISIN/NR-27-01/Otevrena-data-NR-27-01-infekcni-nemoci.csv"
+
+- id: uzis-rpn
+  publisher: "ÚZIS ČR"
+  landing: "https://www.nzip.cz/data/2639-pohlavni-nemoci-otevrena-data"
+  licence:
+    name: "CC BY 4.0"
+    url: "https://creativecommons.org/licenses/by/4.0/"
+    note: >-
+      CC BY 4.0 uvádí stránka sady na NZIP i záznam v NKOD (autorské dílo;
+      databáze není autorskoprávně ani zvláštním právem chráněná). CSVW popis
+      sady má v dc:license dosud „volný přístup“ — zdroje si odporují, platí
+      stránka sady.
+    verified: "2026-10-25"
+  citation: >-
+    Májek T., Bartůněk V., Jarkovský J.. Pohlavní nemoci v ČR. Národní zdravotnický informační portál [online]. Praha: Ministerstvo zdravotnictví ČR a Ústav zdravotnických informací a statistiky ČR, 2026. Dostupné z: http://www.nzip.cz/data/2639-pohlavni-nemoci-otevrena-data. ISSN 2695-0340
+  files: ["uzis/uzis_pohlavni_nemoci.csv"]
+  methodology: []
+  discovery:
+    csvw: "https://datanzis.uzis.gov.cz/data/NR-29-RPN/NR-29-01/Otevrena-data-NR-29-01-pohlavni-nemoci.csv-metadata.json"
+    nkod: "https://data.gov.cz/zdroj/datové-sady/00024341/37e6c297d0aec879b621cb196d3124ca"
+    http_head: "https://datanzis.uzis.gov.cz/data/NR-29-RPN/NR-29-01/Otevrena-data-NR-29-01-pohlavni-nemoci.csv"
+
+- id: uzis-rtbc
+  publisher: "ÚZIS ČR"
+  landing: "https://www.nzip.cz/data/2671-tuberkuloza-epidemiologie-otevrena-data"
+  licence:
+    name: "CC BY 4.0"
+    url: "https://creativecommons.org/licenses/by/4.0/"
+    note: >-
+      CC BY 4.0 uvádí stránka sady na NZIP i záznam v NKOD (autorské dílo;
+      databáze není autorskoprávně ani zvláštním právem chráněná). CSVW popis
+      sady má v dc:license dosud „volný přístup“ — zdroje si odporují, platí
+      stránka sady.
+    verified: "2026-10-25"
+  citation: >-
+    Májek T., Bartůněk V., Wallenfels J., Jarkovský J.. Epidemiologie tuberkulózy v ČR. Národní zdravotnický informační portál [online]. Praha: Ministerstvo zdravotnictví ČR a Ústav zdravotnických informací a statistiky ČR, 2026. Dostupné z: http://www.nzip.cz/data/2671-tuberkuloza-epidemiologie-otevrena-data. ISSN 2695-0340
+  files: ["uzis/uzis_tuberkuloza.csv"]
+  methodology: []
+  discovery:
+    csvw: "https://datanzis.uzis.gov.cz/data/NR-30-RTBC/NR-30-01/Otevrena-data-NR-30-01-tuberkuloza-epidemiologie.csv-metadata.json"
+    nkod: "https://data.gov.cz/zdroj/datové-sady/00024341/2db27e1310d6c8b7aa81ac87e0ac1f51"
+    http_head: "https://datanzis.uzis.gov.cz/data/NR-30-RTBC/NR-30-01/Otevrena-data-NR-30-01-tuberkuloza-epidemiologie.csv"
+
+- id: mzcr-covid
+  publisher: "MZČR / ÚZIS ČR"
+  landing: "https://onemocneni-aktualne.mzcr.cz/api/v2/covid-19"
+  licence:
+    name: "neobsahuje autorská díla, databáze není chráněná (podmínky užití v NKOD)"
+    url: "https://data.gov.cz/zdroj/datové-sady/00024341/9c7c00c45a83021ea370be94fe1b4ca1"
+    note: >-
+      Katalog API (onemocneni-aktualne.mzcr.cz/api/v2/covid-19) licenci
+      neuvádí. Podmínky užití jsou v NKOD — všech 48 sad COVID-19 z tohoto API
+      má shodně „neobsahuje autorská díla“, „není autorskoprávně chráněnou
+      databází“, „není chráněna zvláštním právem pořizovatele databáze“.
+      Odkaz vede na sadu testy-pcr-antigenni jako příklad.
+    verified: "2026-10-25"
+  files:
+    - "mzcr/covid_pripady.csv"
+    - "mzcr/covid_hospitalizace.csv"
+    - "mzcr/covid_testy.csv"
+    - "mzcr/covid_incidence.csv"
+    - "mzcr/covid_ockovani.csv"
+    - "mzcr/covid_osoby_agg.csv"
+    - "mzcr/covid_umrti.csv"
+    - "mzcr/covid_vax_pozitivni.csv"
+    - "mzcr/covid_vax_hospitalizace.csv"
+  methodology: ["mzcr-pcr-testy-2026-08"]
+  discovery:
+    http_head: "https://onemocneni-aktualne.mzcr.cz/api/v2/covid-19/nakazeni-vyleceni-umrti-testy.csv"
+
+- id: szu-respiratory
+  publisher: "SZÚ — Národní referenční laboratoř pro chřipku"
+  landing: "https://szu.gov.cz/publikace-szu/data/akutni-respiracni-infekce-chripka/"
+  licence:
+    name: "CC BY-NC-ND 4.0 (patička webu SZÚ)"
+    url: "https://creativecommons.org/licenses/by-nc-nd/4.0/deed.cs"
+    note: >-
+      Patička webu szu.gov.cz: „© Státní zdravotní ústav 2023 - 2026,
+      CC BY-NC-ND 4.0“. Stránka s daty jinou licenci ani podmínky neuvádí.
+      Zda se licence webu vztahuje i na číselná data ve zprávách, ověřujeme
+      u SZÚ.
+    verified: "2026-10-25"
+  files: ["szu/szu_influenza_2025_2026.csv", "szu/szu_weekly_viry.csv", "szu/szu_weekly_kraje.csv"]
+  methodology: ["szu-retro-korekce"]
+  # SZÚ publishes weekly PDFs at changing URLs — there is no stable address to
+  # send a HEAD to, and the release date can only be read from the PDF content
+  # (szu_weekly.py). Freshness for this source therefore comes from the snapshot
+  # date, not from the publisher.
+  discovery:
+    manual: "2026-09-24"
+    manual_note: >-
+      Zdroj nezveřejňuje strojová metadata ani stabilní URL souboru. Datum je
+      poslední ověření, že stránka s týdenními zprávami žije, ne datum dat.
+
+- id: who-fluid-flunet
+  publisher: "WHO"
+  landing: "https://www.who.int/tools/flunet"
+  licence:
+    name: "WHO Terms and Conditions pro data — užití pro účely veřejného zdraví"
+    url: "https://www.who.int/about/policies/publishing/data-policy/terms-and-conditions"
+    note: >-
+      Užití, šíření a zahrnutí do jiných produktů pro účely veřejného zdraví.
+      Data neprodávat, nepoužívat jméno ani znak WHO, nenaznačovat, že WHO
+      způsob užití podporuje. Úpravy nad rámec minimálního přizpůsobení
+      (stylu tabulek a grafů) podmínky vážou na předchozí písemný souhlas WHO.
+    verified: "2026-10-25"
+  # The terms prescribe the attribution format: "WHO, title of dataset, year,
+  # date of access, acknowledgement of the country or countries having provided
+  # the underlying data". The date of access is the snapshot date.
+  citation: >-
+    WHO, FluNet a FluID, 2026, [datum stažení]; podkladová data poskytla Česká republika.
+  files: ["who/who_flunet_cz.csv", "who/who_fluid_cz.csv"]
+  methodology: ["flunet-jmenovatel-2021", "lab-nulove-tydny-2025-05"]
+  discovery:
+    http_head: "https://xmart-api-public.who.int/FLUMART/VIW_FNT?$top=1&$filter=COUNTRY_CODE%20eq%20%27CZE%27"
+
+- id: ecdc-erviss
+  publisher: "ECDC / WHO Europe"
+  landing: "https://erviss.org/"
+  licence:
+    name: "EUPL-1.2 (repozitář); data třetích stran podle podmínek ECDC"
+    url: "https://www.ecdc.europa.eu/en/ecdc-intellectual-property-notices"
+    note: >-
+      EUPL-1.2 je licence repozitáře na GitHubu. Data jsou podle ECDC data
+      třetích stran: lze je stahovat a šířit, pokud se uvede citační věta
+      ECDC, a úpravy dat (např. přepočet na pozitivitu) se musí výslovně
+      označit.
+    verified: "2026-10-25"
+  citation: >-
+    Dataset provided by ECDC based on data provided by public health
+    authorities, scientific institutes or health care providers in the
+    relevant reporting countries and/or by WHO.
+  # Update status (checked 2026-10-25): since 2026-06-26 the README says
+  # GitHub updates are paused after the TESSy → EpiPulse Cases transition, but
+  # the repo has had a weekly "commit_as_of_<date>" since 2026-08-07. On
+  # 2026-10-25 the newest Czech week was 2026-W42 (commit of 2026-10-23); the
+  # server pipeline's last snapshot was 2026-10-16. The pause itself is the
+  # gap in data/snapshots/ between 2026-05-22 and 2026-08-07; single missing
+  # weeks (holidays) occur every year.
+  files: ["ecdc/erviss_ili_ari_cz.csv", "ecdc/erviss_nonsentinel_cz.csv"]
+  methodology: ["lab-nulove-tydny-2025-05", "erviss-lab-rsv-jmenovatel", "erviss-sars-cov-2-jmenovatel-2026-08"]
+  discovery:
+    github: "EU-ECDC/Respiratory_viruses_weekly_data"
+
+- id: ecdc-respicast
+  publisher: "ECDC, ISI Foundation, LSHTM"
+  landing: "https://respicast.ecdc.europa.eu/"
+  licence:
+    name: "neuvedena — před veřejným použitím ověřit u provozovatele hubu"
+  # From the repository README ("Suggested citation"), verbatim; the README
+  # asks to replace [Date] with the date of consultation.
+  citation: >-
+    European Centre for Disease Prevention and Control. RespiCast - ECDC
+    Respiratory Diseases Forecasting Hub - Syndromic indicators. Consulted on
+    [Date]. https://github.com/european-modelling-hubs/RespiCast-SyndromicIndicators.
+  files: ["ecdc/respicast_cz.csv"]
+  methodology: []
+  discovery:
+    github: "european-modelling-hubs/RespiCast-SyndromicIndicators"
+
+- id: csu-population
+  publisher: "ČSÚ"
+  landing: "https://data.csu.gov.cz/"
+  licence:
+    name: "CC BY 4.0 (podmínky ČSÚ)"
+    url: "https://csu.gov.cz/podminky_pro_vyuzivani_a_dalsi_zverejnovani_statistickych_udaju_csu"
+    note: >-
+      Při šíření je třeba uvést podmínky licence (odkazem na stránku
+      podmínek). Upravené nebo odvozené údaje se musí jako takové označit a
+      nesmí se vydávat za nezměněnou oficiální statistiku ČSÚ — incidence na
+      100 000 obyvatel jsou odvozené údaje portálu.
+    verified: "2026-10-25"
+  files: ["csu/population.csv"]
+  methodology: []
+  discovery:
+    http_head: "https://data.csu.gov.cz/api/dotaz/v1/data/sady/PORKR01?format=CSV"
+
+- id: ecdc-covid
+  publisher: "ECDC"
+  landing: "https://www.ecdc.europa.eu/en/covid-19/data"
+  licence:
+    name: "data třetích stran podle podmínek ECDC"
+    url: "https://www.ecdc.europa.eu/en/ecdc-intellectual-property-notices"
+    note: >-
+      Lze stahovat a šířit, pokud se uvede citační věta ECDC; úpravy dat se
+      musí výslovně označit.
+    verified: "2026-10-25"
+  citation: >-
+    Dataset provided by ECDC based on data provided by public health
+    authorities, scientific institutes or health care providers in the
+    relevant reporting countries and/or by WHO.
+  files: ["ecdc/ecdc_covid_cz.csv"]
+  methodology: []
+  # Closed series — the source stopped publishing in October 2022. `manual` is
+  # here so that nobody tries to discover freshness for something that will
+  # never move again.
+  discovery:
+    manual: "2022-10-01"
+    manual_note: "Zdroj přestal datovou sadu aktualizovat; držíme ji jen kvůli historii."

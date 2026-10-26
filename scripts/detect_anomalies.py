@@ -57,6 +57,10 @@ import numpy as np
 import pandas as pd
 import yaml
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import chart_meta
+import labels_en
+
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = Path(os.environ.get("DATA_DIR", str(ROOT / "data")))
 CHARTS_OUT = Path(os.environ.get("OUTPUT_DIR", str(ROOT / "site" / "static" / "data" / "charts")))
@@ -342,10 +346,14 @@ def load_series(src_path: Path | None = None) -> tuple[pd.DataFrame, list[str], 
     df = pd.read_csv(path, encoding="utf-8-sig")  # pandas čte .gz transparentně
     df.columns = df.columns.str.strip()
 
-    grouped = (df.groupby(["diagnoza", "diagnoza_nazev", "kraj_kod", "kraj_nazev",
-                           "rok", "mesic"])["pocet_pripadu"].sum().reset_index())
+    if "EWS" not in df.columns:          # starší snapshoty sloupec nemají
+        df["EWS"] = 0
+    df = df.rename(columns={"EWS": "ews"})
 
-    cz = (df.groupby(["diagnoza", "diagnoza_nazev", "rok", "mesic"])["pocet_pripadu"]
+    grouped = (df.groupby(["diagnoza", "diagnoza_nazev", "kraj_kod", "kraj_nazev",
+                           "rok", "mesic"])[["pocet_pripadu", "ews"]].sum().reset_index())
+
+    cz = (df.groupby(["diagnoza", "diagnoza_nazev", "rok", "mesic"])[["pocet_pripadu", "ews"]]
             .sum().reset_index())
     cz["kraj_kod"], cz["kraj_nazev"] = "CZ", "Česká republika"
 
@@ -374,6 +382,46 @@ def build_grid(long: pd.DataFrame, n_months: int):
         counts[g.t.to_numpy()] = g.pocet_pripadu.to_numpy()
         yield {"diagnoza": dg, "diagnoza_nazev": dg_name,
                "kraj_kod": kraj, "kraj_nazev": kraj_name}, counts
+
+
+# ── nový kanál hlášení (EWS) ─────────────────────────────────────────────────
+#
+# ÚZIS od července 2025 přijímá případy i přes hlášení EWS; sloupec `EWS` říká,
+# kolik případů řádku tudy přišlo (do 6/2025 všude nula, za 2. pololetí 2025
+# přes 25 tisíc). U pásového oparu tak přišlo 62 % případů, u boreliózy 59 %,
+# u mononukleózy 51 %. Řada tím skokově vzroste, aniž by nemocných přibylo,
+# a detektor to bez téhle znalosti ohlásí jako ohnisko.
+#
+# Prosté odečtení EWS nestačí: část případů se do nového kanálu PŘELILA ze
+# starého (pásový opar bez EWS klesl z ~340 na ~175 měsíčně). Počet srovnatelný
+# s historií proto neznáme — víme jen, že leží mezi (nahlášeno − EWS) a nahlášeno.
+# Z toho plyne poctivé rozhodnutí o každém signálu:
+#
+#   (nahlášeno − EWS) nad prahem → signál platí, ať se přelilo cokoli („robust“)
+#   jinak                        → nelze rozhodnout; nárůst může být jen nový kanál
+#
+# Předpoklad: baseline je z doby před EWS. Dnes platí (posledních 6 měsíců se do
+# baseline nepočítá). Až do ní měsíce s EWS vstoupí, zvednou očekávanou hladinu
+# i práh — verdikt „robust“ tím zůstane konzervativní, jen jich ubude.
+
+def ews_grid(long: pd.DataFrame, n_months: int) -> dict:
+    """(diagnóza, kraj) → počty případů z kanálu EWS po měsících; stejná mřížka jako build_grid."""
+    grid = {}
+    for (dg, kraj), g in long.groupby(["diagnoza", "kraj_kod"]):
+        ews = np.zeros(n_months)
+        ews[g.t.to_numpy()] = g.ews.to_numpy()
+        grid[(dg, kraj)] = ews
+    return grid
+
+
+def channel_verdict(res: dict, ews: float) -> dict | None:
+    """Verdikt o signálu s ohledem na kanál EWS; None = signálu se kanál netýká."""
+    if not res["signal"] or ews <= 0:
+        return None
+    lower = res["observed"] - ews                       # dolní mez srovnatelného počtu
+    robust = lower >= RARE_ALERT if res["type"] == "rare" else lower > res["threshold"]
+    return {"ews": float(ews), "share": round(float(ews / res["observed"]), 2),
+            "lower_bound": float(lower), "robust": bool(robust)}
 
 
 # ── reprodukovatelnost ───────────────────────────────────────────────────────
@@ -519,6 +567,7 @@ def run_current(long, periods, n_months, exclude_t=frozenset(),
     rng = np.random.default_rng(PI_SEED)
     rules = load_registry()
     records, skipped, prebaselining = [], 0, []
+    ews = ews_grid(long, n_months)
 
     for meta, counts in build_grid(long, n_months):
         static_ex, breaks, active = registry_masks(meta, periods, rules)
@@ -537,6 +586,9 @@ def run_current(long, periods, n_months, exclude_t=frozenset(),
         note = registry_annotation(active, t0)
         if note:
             res["metodicka_zmena"] = note
+        channel = channel_verdict(res, ews[(meta["diagnoza"], meta["kraj_kod"])][t0])
+        if channel:
+            res["reporting_channel"] = channel
         records.append({**meta, **res})
 
     k_fdr, k_bh = apply_fdr(records, alpha)
@@ -544,7 +596,11 @@ def run_current(long, periods, n_months, exclude_t=frozenset(),
         {k: v for k, v in r.items() if k != "signal"}
         for r in records if r["signal"]
     ]
-    signals.sort(key=lambda s: (s["score"] is None, -(s["score"] or 0), -s["observed"]))
+    # Nahoře signály, které platí bez ohledu na nový kanál hlášení; nerozhodnutelné
+    # pod nimi — jinak by tabulce vévodily nárůsty, za kterými epidemie být nemusí.
+    def undecided(s):
+        return "reporting_channel" in s and not s["reporting_channel"]["robust"]
+    signals.sort(key=lambda s: (undecided(s), s["score"] is None, -(s["score"] or 0), -s["observed"]))
 
     out = {
         "generated_at": (provenance or {}).get("as_of")
@@ -552,22 +608,30 @@ def run_current(long, periods, n_months, exclude_t=frozenset(),
         "target_period": periods[t0],
         "method": "Farrington–Noufaily, kvazi-Poisson GLM, 99. percentil, "
                   "π parametrickým bootstrapem, bayesovská FDR",
+        "method_en": "Farrington–Noufaily, quasi-Poisson GLM, 99th percentile, "
+                     "π by parametric bootstrap, Bayesian FDR",
         "n_series_scored": len(records),
         "n_series_skipped": skipped,
         "n_signals": len(signals),
+        "n_signals_undecided": sum(1 for s in signals if undecided(s)),
         "fdr": {"alpha": alpha, "n_tested": len(records),
                 "n_pass": k_fdr, "n_pass_bh": k_bh},
-        "prebaselining": prebaselining,
-        "signals": signals,
+        "prebaselining": [labels_en.annotate_signal(r) for r in prebaselining],
+        "signals": [labels_en.annotate_signal(s) for s in signals],
     }
     if provenance:
         out["provenance"] = provenance
     CHARTS_OUT.mkdir(parents=True, exist_ok=True)
     path = CHARTS_OUT / "anomaly_signals.json"
-    path.write_text(json.dumps(out, ensure_ascii=False), encoding="utf-8")
+    # `meta` nese mimo jiné caveaty ze stejného registru metodických změn, se
+    # kterým pracuje detektor. U signálů je to nejpotřebnější: kdo je čte bez
+    # vědomí o zlomu v hlášení (EWS od 7/2025), vydá změnu kanálu za epidemii.
+    path.write_text(json.dumps(chart_meta.attach("anomaly_signals", out), ensure_ascii=False),
+                    encoding="utf-8")
     n_sig_fdr = sum(1 for r in signals if r.get("fdr_pass"))
     print(f"[{periods[t0]}] oskórováno {len(records)} řad ({skipped} přeskočeno), "
-          f"signálů {len(signals)} (po FDR α={alpha}: {n_sig_fdr}; BH: {k_bh}) → {path}")
+          f"signálů {len(signals)} (po FDR α={alpha}: {n_sig_fdr}; BH: {k_bh}; "
+          f"nerozhodnutelných kvůli kanálu EWS: {out['n_signals_undecided']}) → {path}")
     for r in prebaselining:
         print(f"  ⚠ přebaselinovává se po metodické změně: {r['diagnoza_nazev']} "
               f"/ {r['kraj_nazev']} (od {r['od']}, {r['zmena']})")

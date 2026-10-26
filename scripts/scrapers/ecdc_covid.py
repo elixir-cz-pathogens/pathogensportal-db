@@ -1,7 +1,8 @@
 """
 ECDC COVID-19 scraper — filtruje data pro Českou republiku
 Zdroj: opendata.ecdc.europa.eu
-Licence: ECDC copyright, volné použití s uvedením zdroje
+Licence: data třetích stran podle ECDC intellectual property notices — citační
+         věta ECDC a označení úprav (sources.yaml)
 Aktualizace: týdenně (data končí říjen 2022, ECDC přestal publikovat po OWID)
 """
 
@@ -19,6 +20,16 @@ COUNTRY_CODE = "CZ"
 
 def download(output_dir: Path) -> list[str]:
     output_dir.mkdir(parents=True, exist_ok=True)
+    out_path = output_dir / "ecdc_covid_cz.csv"
+
+    # Sada je od 10/2022 zmrazená a nečte ji žádný graf — drží se jen jako archiv.
+    # Když už ji máme, nestahuje se znovu: 30. 9. 2026 začal server ECDC shazovat
+    # spojení a mrtvý archivní zdroj pak shodil celou pipeline (run_all vrací 1
+    # při selhání kteréhokoli zdroje). Stejný vzor jako historické sezóny SZÚ.
+    if out_path.exists():
+        print(f"  [ecdc_covid] {out_path.name} už existuje (data zmrazená od 10/2022), přeskakuji")
+        return [str(out_path)]
+
     print(f"  [ecdc_covid] stahuju {URL}")
 
     resp = requests.get(URL, timeout=60)
@@ -42,7 +53,6 @@ def download(output_dir: Path) -> list[str]:
     df_cz = df_cz[["datum", "cases", "deaths", "popData2020"]].sort_values("datum")
     df_cz.columns = ["datum", "nove_pripady", "nove_umrti", "populace"]
 
-    out_path = output_dir / "ecdc_covid_cz.csv"
     df_cz.to_csv(out_path, index=False, encoding="utf-8")
     print(f"  [ecdc_covid] {len(df_cz):,} radku (CZ) → {out_path}")
     return [str(out_path)]

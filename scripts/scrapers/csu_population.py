@@ -1,7 +1,8 @@
 """
 ČSÚ — počet obyvatel podle kraje, roku a pohlaví.
 Zdroj: data.csu.gov.cz DataStat API, datová sada PORKR01
-Licence: otevřená data ČSÚ
+Licence: CC BY 4.0 podle podmínek ČSÚ; odvozené údaje (incidence) se musí
+         označit jako odvozené — viz sources.yaml
 Aktualizace: ročně
 
 Proč právě PORKR01: potřebujeme jmenovatele pro přepočet na incidenci (na 100 tis.

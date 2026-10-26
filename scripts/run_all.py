@@ -13,8 +13,9 @@ from pathlib import Path
 # Přidej scripts/ do Python path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from scrapers import (mzcr_covid, ecdc_covid, ecdc_erviss, ecdc_respicast, szu_influenza,
-                      szu_weekly, uzis_isin, csu_population, who_flu)
+from scrapers import (mzcr_covid, ecdc_covid, ecdc_erviss, ecdc_erviss_snapshots, ecdc_respicast,
+                      szu_influenza, szu_weekly, uzis_isin, uzis_registries, csu_population,
+                      who_flu)
 from snapshot import snapshot
 
 DATA_ROOT = Path(os.getenv("DATA_DIR") or Path(__file__).resolve().parents[1] / "data")
@@ -28,6 +29,7 @@ def run() -> int:
         ("SZÚ chřipka (aktuál.)", szu_influenza.download_current, DATA_ROOT / "szu"),
         ("SZÚ týdenní PDF",       szu_weekly.download,          DATA_ROOT / "szu"),
         ("ÚZIS ISIN inf. nem.",   uzis_isin.download,          DATA_ROOT / "isin"),
+        ("ÚZIS registry RPN+TBC", uzis_registries.download,    DATA_ROOT / "uzis"),
         ("ČSÚ populace",          csu_population.download,     DATA_ROOT / "csu"),
         ("WHO FluNet + FluID",    who_flu.download,            DATA_ROOT / "who"),
         ("ECDC ERVISS (CZ)",      ecdc_erviss.download,        DATA_ROOT / "ecdc"),
@@ -61,6 +63,37 @@ def run() -> int:
               f"{len(result['unchanged'])} beze změny (přeskočeno)")
         for rel in result["new"]:
             print(f"    + {rel}")
+
+    # Volitelné zdroje: slouží jen analytice (nowcast), ne žádnému grafu přímo.
+    # Jejich selhání se do `failures` nepočítá — exit 1 by zastavil celý řetěz
+    # v kontejneru a portál by přišel o obnovu všech dat kvůli vedlejší věci.
+    optional = [
+        ("ECDC ERVISS snapshoty (nowcast)", ecdc_erviss_snapshots.download, DATA_ROOT / "ecdc"),
+    ]
+    for label, fn, out_dir in optional:
+        print(f"\n{'='*50}")
+        print(f"  {label} — volitelné")
+        print(f"{'='*50}")
+        try:
+            fn(out_dir)
+        except Exception as e:
+            print(f"  CHYBA (ostatní data tím nejsou dotčena): {type(e).__name__}: {e}")
+
+    # Metadata o zdrojích až po snapshotu — čtou z manifestu datum posledního
+    # stažení. Selhání se nepřipisuje ke `failures`: bez popisku zdroje je
+    # pipeline ochuzená, ale funkční, a shazovat kvůli tomu celý běh by
+    # znamenalo přijít i o data, která se stáhla v pořádku.
+    print(f"\n{'='*50}")
+    print("  Metadata o zdrojích")
+    print(f"{'='*50}")
+    try:
+        from source_metadata import collect, write
+        meta = collect()
+        path = write(meta)
+        broken = [sid for sid, s in meta["sources"].items() if s.get("errors")]
+        print(f"  {len(meta['sources']) - len(broken)}/{len(meta['sources'])} zdrojů → {path}")
+    except Exception as e:
+        print(f"  CHYBA (data tím nejsou dotčena): {type(e).__name__}: {e}")
 
     if failures:
         print(f"\n  SELHALO {len(failures)}/{len(jobs)} zdrojů:")

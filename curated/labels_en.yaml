@@ -1,0 +1,224 @@
+# English labels for the generated chart JSON (PPDB-77).
+#
+# The pipeline writes Czech labels; the English site used to translate them in
+# the browser with a finite dictionary (pp-charts.js), so diagnosis names, age
+# groups and region names stayed Czech. scripts/labels_en.py reads this file and
+# adds optional `*_en` fields next to the Czech ones (labels_en, label_en,
+# x_title_en, unit_en, x_unit_en; diagnoza_nazev_en / kraj_nazev_en in signals).
+# The Czech fields stay as they are, so an older frontend keeps working.
+#
+# Translations are keyed by codes wherever the data has codes (ICD-10, NUTS3),
+# so a reworded Czech name in the source does not silently drop the English one;
+# tests/test_labels_en.py fails when a code in the data has no English name.
+#
+# Sources:
+#   diagnoses – titles of the WHO ICD-10 Version 2019 classification
+#               (https://icd.who.int/browse10/2019/en), © World Health
+#               Organization; the Czech names are the ones ÚZIS publishes in
+#               ISIN / the registries (MKN-10).
+#   regions   – English names of the regions as used by the Czech Statistical
+#               Office (ČSÚ) and the regions' own English sites.
+#   terms     – our own translations of the fixed labels in generate_json.py and
+#               friends; keep them in line with the English site's wording.
+
+regions:
+  # cs: every spelling the sources use; en: short form for chart labels and
+  # maps; en_full: full name for tables (anomaly signals).
+  CZ010: {cs: ["Hl. m. Praha", "Praha", "Hlavní město Praha"], en: "Prague", en_full: "Prague"}
+  CZ020: {cs: ["Středočeský kraj", "Středočeský"], en: "Central Bohemia", en_full: "Central Bohemian Region"}
+  CZ031: {cs: ["Jihočeský kraj", "Jihočeský"], en: "South Bohemia", en_full: "South Bohemian Region"}
+  CZ032: {cs: ["Plzeňský kraj", "Plzeňský"], en: "Plzeň", en_full: "Plzeň Region"}
+  CZ041: {cs: ["Karlovarský kraj", "Karlovarský"], en: "Karlovy Vary", en_full: "Karlovy Vary Region"}
+  CZ042: {cs: ["Ústecký kraj", "Ústecký"], en: "Ústí nad Labem", en_full: "Ústí nad Labem Region"}
+  CZ051: {cs: ["Liberecký kraj", "Liberecký"], en: "Liberec", en_full: "Liberec Region"}
+  CZ052: {cs: ["Královéhradecký kraj", "Královéhradecký"], en: "Hradec Králové", en_full: "Hradec Králové Region"}
+  CZ053: {cs: ["Pardubický kraj", "Pardubický"], en: "Pardubice", en_full: "Pardubice Region"}
+  CZ063: {cs: ["Kraj Vysočina", "Vysočina"], en: "Vysočina", en_full: "Vysočina Region"}
+  CZ064: {cs: ["Jihomoravský kraj", "Jihomoravský"], en: "South Moravia", en_full: "South Moravian Region"}
+  CZ071: {cs: ["Olomoucký kraj", "Olomoucký"], en: "Olomouc", en_full: "Olomouc Region"}
+  CZ072: {cs: ["Zlínský kraj", "Zlínský"], en: "Zlín", en_full: "Zlín Region"}
+  CZ080: {cs: ["Moravskoslezský kraj", "Moravskoslezský"], en: "Moravia-Silesia", en_full: "Moravian-Silesian Region"}
+  # SZÚ reports Prague and Central Bohemia as one region
+  CZ01_02: {cs: ["Praha + Středočeský kraj", "Praha + Stř. Čechy"], en: "Prague + Central Bohemia", en_full: "Prague and Central Bohemian Region"}
+  CZ: {cs: ["Česká republika"], en: "Czechia", en_full: "Czechia"}
+
+terms:
+  # dataset labels
+  "Nové případy (týden)": "New cases (week)"
+  "Úmrtí (týden)": "Deaths (week)"
+  "Případy": "Cases"
+  "Úmrtí": "Deaths"
+  "Hospitalizace": "Hospitalisations"
+  "Hospitalizovaní celkem": "Hospitalised, total"
+  "JIP": "ICU"
+  "UPV (plicní ventilace)": "Mechanical ventilation"
+  "PCR testy": "PCR tests"
+  "Antigenní testy": "Antigen tests"
+  "7denní incidence / 100 000": "7-day incidence / 100,000"
+  "Hospitalizační míra (%)": "Hospitalisation rate (%)"
+  "Smrtnost (CFR %)": "Case fatality (CFR %)"
+  "Chřipka": "Influenza"
+  "Influenza A (celkem)": "Influenza A (total)"
+  "Coronavirus (sezónní)": "Coronavirus (seasonal)"
+  "Pozitivní záchyty": "Positive detections"
+  "Vyšetřeno vzorků": "Specimens tested"
+  "Ostatní diagnózy (souhrn)": "Other diagnoses (combined)"
+  "Syfilis": "Syphilis"
+  "Kapavka": "Gonorrhoea"
+  "Venerický lymfogranulom": "Lymphogranuloma venereum"
+  "Muži": "Men"
+  "Ženy": "Women"
+  "Tuberkulóza (A15–A19)": "Tuberculosis (A15–A19)"
+  "Narození v ČR": "Born in Czechia"
+  "Narození v zahraničí": "Born abroad"
+  # COVID-19 vaccination status
+  "Bez očkování": "Unvaccinated"
+  "Nedokončené očkování": "Incomplete vaccination"
+  "Dokončené očkování": "Complete vaccination"
+  "Posilující dávka": "Booster dose"
+  # Ebola (the Ebola scraper also writes separate *_en files)
+  "Potvrzené případy (kumulativní)": "Confirmed cases (cumulative)"
+  "Potvrzená úmrtí (kumulativní)": "Confirmed deaths (cumulative)"
+  "Úmrtí mezi potvrzenými případy (kumulativní)": "Deaths among confirmed cases (cumulative)"
+  "Nově hlášené potvrzené případy": "Newly reported confirmed cases"
+  "Nově hlášená úmrtí": "Newly reported deaths"
+  "Západní Afrika 2014–2016": "West Africa 2014–2016"
+  # axis titles and units
+  "Kalendářní týden": "Calendar week"
+  "Rok hlášení": "Year of notification"
+  "Rok incidence": "Year of incidence"
+  "Stav k datu": "Data as of"
+  "Den od prvního hlášeného případu": "Day since the first reported case"
+  "den": "day"
+  "% pozitivních vzorků": "% positive specimens"
+  "% pozitivních testů": "% positive tests"
+  "na 100 000 obyvatel": "per 100,000 population"
+  "na 100 000 mužů / žen": "per 100,000 men / women"
+  "případů na 100 000 obyvatel": "cases per 100,000 population"
+  "případů na 100 000 obyvatel ročně": "cases per 100,000 population per year"
+  # MEM indicators
+  "ILI na 100 tis. obyvatel": "ILI per 100,000 population"
+  "ARI na 100 tis. obyvatel": "ARI per 100,000 population"
+
+diagnoses:
+  # ICD-10 code: {cs: name in ÚZIS data, en: WHO ICD-10 2019 title}
+  A01: {cs: "Břišní tyfus a paratyfus", en: "Typhoid and paratyphoid fevers"}
+  A02: {cs: "Jiné infekce způsobené salmonelami", en: "Other salmonella infections"}
+  A03: {cs: "Shigelóza", en: "Shigellosis"}
+  A04: {cs: "Jiné bakteriální střevní infekce", en: "Other bacterial intestinal infections"}
+  A05: {cs: "Jiné bakteriální intoxikace – otravy, přenesené potravou", en: "Other bacterial foodborne intoxications, not elsewhere classified"}
+  A06: {cs: "Amébóza", en: "Amoebiasis"}
+  A07: {cs: "Jiné protozoární střevní nemoci", en: "Other protozoal intestinal diseases"}
+  A08: {cs: "Střevní infekce viry a jinými určenými mikroorganismy", en: "Viral and other specified intestinal infections"}
+  A09: {cs: "Jiná gastroenteritida a kolitida infekčního a NS původu", en: "Other gastroenteritis and colitis of infectious and unspecified origin"}
+  A21: {cs: "Tularemie", en: "Tularaemia"}
+  A23: {cs: "Brucelóza – vlnivá horečka", en: "Brucellosis"}
+  A26: {cs: "Červenka – erysipeloid", en: "Erysipeloid"}
+  A27: {cs: "Leptospiróza", en: "Leptospirosis"}
+  A28: {cs: "Další bakteriální zoonózy nezařazené jinde", en: "Other zoonotic bacterial diseases, not elsewhere classified"}
+  A32: {cs: "Listerióza [listeriosis]", en: "Listeriosis"}
+  A35: {cs: "Tetanus jiný", en: "Other tetanus"}
+  A36: {cs: "Záškrt [diphtheria]", en: "Diphtheria"}
+  A37: {cs: "Dávivý kašel [pertussis]", en: "Whooping cough"}
+  A38: {cs: "Spála [scarlatina]", en: "Scarlet fever"}
+  A39: {cs: "Meningokokové infekce", en: "Meningococcal infection"}
+  A40: {cs: "Streptokoková sepse", en: "Streptococcal sepsis"}
+  A41: {cs: "Jiná sepse", en: "Other sepsis"}
+  A42: {cs: "Aktinomykóza – actinomycosis", en: "Actinomycosis"}
+  A46: {cs: "Růže – erysipel", en: "Erysipelas"}
+  A48: {cs: "Jiné bakteriální nemoci nezařazené jinde", en: "Other bacterial diseases, not elsewhere classified"}
+  A50: {cs: "Vrozená syfilis", en: "Congenital syphilis"}
+  A51: {cs: "Časná syfilis", en: "Early syphilis"}
+  A52: {cs: "Pozdní syfilis", en: "Late syphilis"}
+  A53: {cs: "Jiná a nespecifikovaná syfilis", en: "Other and unspecified syphilis"}
+  A54: {cs: "Gonokoková infekce", en: "Gonococcal infection"}
+  A55: {cs: "Venerický lymfogranulom (chlamydiový)", en: "Chlamydial lymphogranuloma (venereum)"}
+  A56: {cs: "Jiná chlamydiová onemocnění přenášená pohlavním stykem", en: "Other sexually transmitted chlamydial diseases"}
+  A59: {cs: "Trichomoniáza", en: "Trichomoniasis"}
+  A63: {cs: "Jiné, převážně pohlavním stykem přenášené nemoci nezařazené jinde", en: "Other predominantly sexually transmitted diseases, not elsewhere classified"}
+  A69: {cs: "Jiné spirochetové infekce", en: "Other spirochaetal infections"}
+  A70: {cs: "Infekce původce: Chlamydia psittaci", en: "Chlamydia psittaci infection"}
+  A74: {cs: "Jiné nemoci způsobené chlamydiemi", en: "Other diseases caused by chlamydiae"}
+  A77: {cs: "Purpurová horečka (rickettsióza přenášená klíštětem)", en: "Spotted fever [tick-borne rickettsioses]"}
+  A78: {cs: "Q horečka", en: "Q fever"}
+  A79: {cs: "Jiné rickettsiózy", en: "Other rickettsioses"}
+  A81: {cs: "Atypické virové infekce centrální nervové soustavy", en: "Atypical virus infections of central nervous system"}
+  A83: {cs: "Virová encefalitida přenášená komáry", en: "Mosquito-borne viral encephalitis"}
+  A84: {cs: "Virová encefalitida přenášená klíšťaty", en: "Tick-borne viral encephalitis"}
+  A86: {cs: "Neurčená virová encefalitida", en: "Unspecified viral encephalitis"}
+  A87: {cs: "Virová meningitida", en: "Viral meningitis"}
+  A88: {cs: "Jiné virové infekce centrální nervové soustavy nezařazené jinde", en: "Other viral infections of central nervous system, not elsewhere classified"}
+  A89: {cs: "Neurčená virová infekce centrální nervové soustavy", en: "Unspecified viral infection of central nervous system"}
+  A92: {cs: "Jiná virová horečka přenášená komáry", en: "Other mosquito-borne viral fevers"}
+  A93: {cs: "Jiné virové horečky přenášené členovci nezařazené jinde", en: "Other arthropod-borne viral fevers, not elsewhere classified"}
+  A94: {cs: "Neurčená virová horečka přenášená členovci", en: "Unspecified arthropod-borne viral fever"}
+  A95: {cs: "Žlutá zimnice", en: "Yellow fever"}
+  A97: {cs: "Dengue", en: "Dengue"}
+  A98: {cs: "Jiná virová hemoragická horečka nezařazená jinde", en: "Other viral haemorrhagic fevers, not elsewhere classified"}
+  B00: {cs: "Infekce virem Herpes simplex", en: "Herpesviral [herpes simplex] infections"}
+  B01: {cs: "Plané neštovice [varicella]", en: "Varicella [chickenpox]"}
+  B02: {cs: "Pásový opar [herpes zoster]", en: "Zoster [herpes zoster]"}
+  B04: {cs: "Opičí neštovice", en: "Mpox"}  # ICD-10 2019: Monkeypox (renamed by WHO in 2022)
+  B05: {cs: "Spalničky", en: "Measles"}
+  B06: {cs: "Zarděnky [rubeola]", en: "Rubella [German measles]"}
+  B07: {cs: "Virové bradavice", en: "Viral warts"}
+  B08: {cs: "Jiné virové infekce charakterizované postižením kůže a sliznic NJ", en: "Other viral infections characterized by skin and mucous membrane lesions, not elsewhere classified"}
+  B09: {cs: "Neurčené virové infekce charakterizované postižením kůže a sliznic", en: "Unspecified viral infection characterized by skin and mucous membrane lesions"}
+  B15: {cs: "Akutní hepatitida A", en: "Acute hepatitis A"}
+  B16: {cs: "Akutní hepatitida B", en: "Acute hepatitis B"}
+  B17: {cs: "Jiná akutní virová hepatitida", en: "Other acute viral hepatitis"}
+  B18: {cs: "Chronická virová hepatitida", en: "Chronic viral hepatitis"}
+  B19: {cs: "Neurčená virová hepatitida", en: "Unspecified viral hepatitis"}
+  B25: {cs: "Cytomegalovirová nemoc", en: "Cytomegaloviral disease"}
+  B26: {cs: "Příušnice [parotitis epidemica]", en: "Mumps"}
+  B27: {cs: "Infekční mononukleóza", en: "Infectious mononucleosis"}
+  B30: {cs: "Virová konjunktivitida", en: "Viral conjunctivitis"}
+  B33: {cs: "Jiná virová onemocnění nezařazená jinde", en: "Other viral diseases, not elsewhere classified"}
+  B35: {cs: "Dermatofytóza", en: "Dermatophytosis"}
+  B36: {cs: "Jiné povrchové mykózy", en: "Other superficial mycoses"}
+  B37: {cs: "Kandidóza [candidosis]", en: "Candidiasis"}
+  B45: {cs: "Kryptokokóza [cryptococcosis]", en: "Cryptococcosis"}
+  B48: {cs: "Jiné mykózy nezařazené jinde", en: "Other mycoses, not elsewhere classified"}
+  B50: {cs: "Malárie‚ původce: Plasmodium falciparum", en: "Plasmodium falciparum malaria"}
+  B51: {cs: "Malárie‚ původce: Plasmodium vivax", en: "Plasmodium vivax malaria"}
+  B52: {cs: "Malárie‚ původce: Plasmodium malariae", en: "Plasmodium malariae malaria"}
+  B53: {cs: "Jiná parazitologicky ověřená malárie", en: "Other parasitologically confirmed malaria"}
+  B54: {cs: "Malárie NS", en: "Unspecified malaria"}
+  B55: {cs: "Leishmanióza [leishmaniasis]", en: "Leishmaniasis"}
+  B58: {cs: "Toxoplazmóza [toxoplasmosis]", en: "Toxoplasmosis"}
+  B59: {cs: "Pneumocystóza [pneumocystosis] (J17.3*)", en: "Pneumocystosis"}  # WHO ICD-10 2019 classifies it as B48.5
+  B60: {cs: "Jiné protozoární nemoci nezařazené jinde", en: "Other protozoal diseases, not elsewhere classified"}
+  B65: {cs: "Schistozomóza [schistosomiasis] a bilharzióza [bilharziasis]", en: "Schistosomiasis [bilharziasis]"}
+  B67: {cs: "Echinokokóza", en: "Echinococcosis"}
+  B68: {cs: "Tenióza [taeniasis] – napadení tasemnicí", en: "Taeniasis"}
+  B69: {cs: "Cysticerkóza", en: "Cysticercosis"}
+  B70: {cs: "Difylobotrióza [diphyllobothriasis] a sparganóza [sparganosis]", en: "Diphyllobothriasis and sparganosis"}
+  B71: {cs: "Jiné infekce cestody – tasemnicemi", en: "Other cestode infections"}
+  B75: {cs: "Trichinóza [trichinellosis]", en: "Trichinellosis"}
+  B76: {cs: "Onemocnění měchovci", en: "Hookworm diseases"}
+  B77: {cs: "Askarióza [ascariasis]", en: "Ascariasis"}
+  B78: {cs: "Strongyloidóza [strongyloidiasis]", en: "Strongyloidiasis"}
+  B79: {cs: "Trichurióza [trichuriasis]", en: "Trichuriasis"}
+  B80: {cs: "Enterobióza [enterobiasis]", en: "Enterobiasis"}
+  B81: {cs: "Jiná střevní helmintóza nezařazená jinde", en: "Other intestinal helminthiases, not elsewhere classified"}
+  B83: {cs: "Jiné helmintózy", en: "Other helminthiases"}
+  B85: {cs: "Zavšivení – pedikulóza [pediculosis], ftiriáza [phthiriasis]", en: "Pediculosis and phthiriasis"}
+  B86: {cs: "Svrab [scabies]", en: "Scabies"}
+  B88: {cs: "Napadení jinými ektoparazity", en: "Other infestations"}
+  B95: {cs: "Streptokok a stafylokok jako příčina nemoci zařazené do jiných kapitol", en: "Streptococcus and staphylococcus as the cause of diseases classified to other chapters"}
+  B96: {cs: "Jiná určená bakteriální agens jako příč. nemoci zař. do jiných kapitol", en: "Other specified bacterial agents as the cause of diseases classified to other chapters"}
+  B99: {cs: "Jiné a neurčené infekční nemoci", en: "Other and unspecified infectious diseases"}
+  G00: {cs: "Bakteriální zánět mozkových a míšních plen (bakter. meningitida) NJ", en: "Bacterial meningitis, not elsewhere classified"}
+  G51: {cs: "Poruchy lícního nervu [nervi facialis]", en: "Facial nerve disorders"}
+  G61: {cs: "Zánětlivá polyneuropatie", en: "Inflammatory polyneuropathy"}
+  J04: {cs: "Akutní zánět hrtanu a průdušnice [laryngitis et tracheitis acuta]", en: "Acute laryngitis and tracheitis"}
+  J10: {cs: "Chřipka způsobená identifikovaným sezónním chřipkovým virem", en: "Influenza due to identified seasonal influenza virus"}
+  J12: {cs: "Virový zánět plic (pneumonie) nezařazený jinde", en: "Viral pneumonia, not elsewhere classified"}
+  J13: {cs: "Zánět plic‚ původce: Streptococcus pneumoniae", en: "Pneumonia due to Streptococcus pneumoniae"}
+  J14: {cs: "Zánět plic‚ původce: Haemophilus influenzae", en: "Pneumonia due to Haemophilus influenzae"}
+  J15: {cs: "Bakteriální zánět plic (pneumonie) nezařazený jinde", en: "Bacterial pneumonia, not elsewhere classified"}
+  J16: {cs: "Zánět plic (pneumonie) způsobený jinými infekčními organismy NJ", en: "Pneumonia due to other infectious organisms, not elsewhere classified"}
+  J17: {cs: "Zánět plic (pneumonie) při nemocech zařazených jinde", en: "Pneumonia in diseases classified elsewhere"}
+  J18: {cs: "Pneumonie‚ původce NS", en: "Pneumonia, organism unspecified"}
+  W54: {cs: "Kousnutí nebo úder psem", en: "Bitten or struck by dog"}
+  W55: {cs: "Kousnutí nebo úder jinými savci", en: "Bitten or struck by other mammals"}

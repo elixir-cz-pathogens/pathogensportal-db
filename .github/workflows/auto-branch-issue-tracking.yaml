@@ -1,6 +1,6 @@
 name: "AUTOMATION: Branch Issue Linker"
 
-# Při pushi větve feature/bugfix/docs napíše (jednou) komentář do odpovídajícího issue.
+# When a feature/bugfix/docs branch is pushed, comments (once) on the matching issue.
 on:
   push:
     branches:
