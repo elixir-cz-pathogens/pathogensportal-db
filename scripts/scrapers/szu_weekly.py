@@ -35,6 +35,8 @@ PDF_RE = re.compile(
     r'href="(https://szu\.gov\.cz/wp-content/uploads/[^"]*'
     r'laboratorni_vysetreni_podle_(typu_viru|kraju)[^"]*\.pdf)"')
 WEEK_RE = re.compile(r"(\d{1,2})_?_?tyden_(\d{4})")
+# Roční značka tabulky: „2024“, od KT 40/2026 „2024/2025“; „###“, když se nevejde.
+MARK_RE = re.compile(r"20\d\d(?:/20\d\d)?|#+")
 
 
 def _week_key(url: str) -> tuple[int, int]:
@@ -60,8 +62,15 @@ def parse_viry_matrix(pdf_bytes: bytes) -> list[dict]:
         words = page.extract_words(keep_blank_chars=False, x_tolerance=1.5, y_tolerance=1)
         chars = page.chars
 
-    header_top = min(w["top"] for w in words
-                     if w["text"].startswith("40") and w["top"] < 90)
+    # Hlavička matice je řádek KT 40 s ročními značkami těsně nad sebou. Od KT 40/2026
+    # stojí nad maticí ještě souhrn „Chřipky: sum A, B, A+B“ s vlastním řádkem týdnů,
+    # ale bez ročních značek — první řádek „40.“ proto už hlavičkou být nemusí.
+    def marks_above(top):
+        return [w for w in words
+                if MARK_RE.fullmatch(w["text"]) and top - 6 < w["top"] < top]
+    header_tops = sorted({w["top"] for w in words
+                          if w["text"].startswith("40") and w["top"] < 90})
+    header_top = next((t for t in header_tops if marks_above(t)), header_tops[0])
 
     # Labely týdnů po znacích — hlavička má slité popisky i týden bez tečky.
     hchars = sorted((c for c in chars if abs(c["top"] - header_top) < 1.5),
@@ -96,13 +105,19 @@ def parse_viry_matrix(pdf_bytes: bytes) -> list[dict]:
     # Tabulky se dělí podle ročních značek (2024/2025…) těsně nad řádkem KT.
     # Když se rok do buňky nevejde, Excel vypíše „###“ — rok se pak odvodí
     # od sousední tabulky (sezóny jdou zleva doprava po jedné).
-    marks = sorted(((w["x0"], w["text"]) for w in words
-                    if re.fullmatch(r"20\d\d|#+", w["text"])
-                    and header_top - 6 < w["top"] < header_top),
+    # „2024/2025“ dřív stálo jen v titulcích tabulek, značkou byl prostý rok. Od KT
+    # 41/2026 prosté roky chybí a značkou je sezóna, u tabulky třikrát (vlevo, v titulku
+    # „Sezóna ARI …“, vpravo) — platí ta nejlevější, tedy první výskyt sezóny.
+    above = marks_above(header_top)
+    plain = [w for w in above if "/" not in w["text"]]
+    marks = sorted(((w["x0"], w["text"][:4] if w["text"][0] == "2" else w["text"])
+                    for w in (plain if any(w["text"].isdigit() for w in plain) else above)),
                    key=lambda m: m[0])
     year_marks: list[tuple[float, int]] = []
     for i, (mx, text) in enumerate(marks):
         if text.isdigit():
+            if any(y == int(text) for _, y in year_marks):
+                continue
             year_marks.append((mx, int(text)))
         elif year_marks:
             year_marks.append((mx, year_marks[-1][1] + 1))
@@ -183,12 +198,15 @@ def parse_viry_matrix(pdf_bytes: bytes) -> list[dict]:
             lo = table_bounds[ri - 1] if ri else -1
             hi = table_bounds[ri]
             x_last = reg["seq"][-1][2]
+            # Od KT 41/2026 stojí „Kumulativně“ těsně za týdnem 39 (mezera ~2 pt),
+            # takže odstup od posledního týdne nestačí — rozhoduje poloha hlavičky.
+            x_kumul = min((kx for kx in kumul_xs if x_last < kx < hi), default=x_last + 10)
             vals, kumul = {}, None
             for v, xc in nums:
                 if not (lo < xc < hi):
                     continue
                 # za posledním týdnem tabulky už je jen sloupec „Kumulativně“
-                if xc > x_last + 10:
+                if xc > min(x_last + 10, x_kumul - 1):
                     if kumul is None:
                         kumul = v
                     continue

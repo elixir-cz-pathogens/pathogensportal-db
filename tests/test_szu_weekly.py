@@ -5,6 +5,9 @@ KT 39/2026 je poslední PDF se dvěma tabulkami (minulá + běžící sezóna).
 KT 40/2026 je první se třemi: prostřední rok je v hlavičce jako „###“, sloupce
 „Kumulativně“ jsou dva, chybí popisek „Detekce viru“ a sloupce jsou tak úzké,
 že se sousední čísla slévají. Na tom pipeline 6. 10. 2026 přestala běžet.
+KT 42/2026 má nad maticí nový souhrn „Chřipky: sum A, B, A+B“ s vlastním řádkem
+týdnů, značky tabulek jsou „2024/2025“ místo roku a „Kumulativně“ stojí těsně za
+týdnem 39. Na tom pipeline přestala běžet podruhé (26. 10. 2026).
 Čísla tu testovat jde, protože publikované PDF se už nemění.
 """
 
@@ -42,7 +45,17 @@ def test_three_table_layout():
     }
 
 
-@pytest.mark.parametrize("week", [39, 40])
+def test_summary_block_layout():
+    m = _matrix(42)
+    assert sorted(m["sezona"].unique()) == ["2024_2025", "2025_2026", "2026_2027"]
+    new = m[m["sezona"] == "2026_2027"]
+    # „Kumulativně“ za týdnem 39 se nesmí přičíst k žádnému týdnu
+    assert set(zip(new["rok"], new["tyden"])) == {(2026, 40), (2026, 41), (2026, 42)}
+    flu_a = new[new["virus"] == "Influenza A"].set_index("tyden")["pocet"].to_dict()
+    assert flu_a == {40: 1, 41: 7, 42: 1}
+
+
+@pytest.mark.parametrize("week", [39, 40, 42])
 def test_no_glued_numbers(week):
     # slitá čísla ze sousedních sloupců dávají nesmyslně velké týdenní hodnoty
     assert _matrix(week)["pocet"].max() < 1000
