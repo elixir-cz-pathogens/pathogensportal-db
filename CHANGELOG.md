@@ -60,6 +60,11 @@ Changes on `dev` since v0.4.0.
   The matrix parser now handles two or three tables and validates each one against its own
   cumulative column. Season totals of the running season are summed from that matrix instead of
   `extract_table`, which also fixes 2025/26: H3N2, B and RSV had been merged into one garbled row.
+- **SZÚ PDF with a summary block** (no issue) — from week 41/2026 SZÚ adds an "influenza A, B,
+  A+B" summary with its own week row above the matrix, marks the tables with the season
+  (`2024/2025`) instead of the year, and puts the cumulative column right after week 39. Both SZÚ
+  scrapers failed again (lab data stuck at week 39). The parser now takes the week row that has the
+  year marks above it, accepts season marks, and finds the cumulative column by its header.
 - **Nowcast of weekly lab detections, shadow mode** (PPDB-75) — estimate of the final number of
   influenza A, influenza B and RSV detections for the last two weeks, which laboratories are still
   reporting (chain-ladder on ERVISS snapshots, negative binomial uncertainty). New scraper
