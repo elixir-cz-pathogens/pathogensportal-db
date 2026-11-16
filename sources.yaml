@@ -267,3 +267,42 @@
   discovery:
     manual: "2022-10-01"
     manual_note: "Zdroj přestal datovou sadu aktualizovat; držíme ji jen kvůli historii."
+
+- id: ena
+  publisher: "EMBL-EBI"
+  landing: "https://www.ebi.ac.uk/ena/browser/home"
+  licence:
+    name: "INSDC — sekvenční záznamy bez omezení užití"
+    url: "https://www.insdc.org/policy/"
+  files: ["ena/ena_cz_totals.json", "ena/ena_cz_runs.csv", "ena/ena_cz_taxa.csv",
+          "ena/ena_cz_divisions.csv"]
+  methodology: ["ena-zeme-vkladatel"]
+  # Portal API na HEAD nevrací datum změny (archiv se mění průběžně), proto se
+  # čerstvost bere z data stažení ve `fetched_at` výstupu scraperu.
+  discovery:
+    manual: "2026-11-13"
+    manual_note: >-
+      Archiv přijímá záznamy průběžně a API nevydává datum poslední změny. Datum je
+      poslední ověření, že dotaz na českou zemi odběru odpovídá, ne datum dat.
+
+- id: nextstrain
+  publisher: "Nextstrain"
+  landing: "https://nextstrain.org/"
+  licence:
+    name: "kód AGPL, snímky CC BY 4.0; podkladová data podle jednotlivých stromů"
+    url: "https://nextstrain.org/terms"
+  files: ["nextstrain/nextstrain_cz.csv", "nextstrain/nextstrain_cz_clades.csv"]
+  methodology: ["nextstrain-gisaid-podklad", "nextstrain-stari-stromu"]
+  discovery:
+    http_head: "https://data.nextstrain.org/seasonal-flu_h3n2_ha_2y.json"
+
+- id: ncbi-pathogen-detection
+  publisher: "NCBI (National Library of Medicine)"
+  landing: "https://www.ncbi.nlm.nih.gov/pathogens/"
+  licence:
+    name: "bez omezení užití ze strany NCBI (politika pro molekulární data)"
+    url: "https://www.ncbi.nlm.nih.gov/home/about/policies/"
+  files: ["ncbi/ncbi_pd_cz.csv", "ncbi/ncbi_pd_release.json"]
+  methodology: ["ncbi-izolaty-nejsou-vzorek"]
+  discovery:
+    http_head: "https://ftp.ncbi.nlm.nih.gov/pathogen/Results/Klebsiella/latest_snps/AMR/PDG000000012.2578.amr.metadata.tsv"

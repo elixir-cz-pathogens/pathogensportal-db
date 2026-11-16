@@ -8,6 +8,21 @@ Releases are git tags `vMAJOR.MINOR.PATCH`. The portal pins one of them as its s
 
 Changes on `dev` since v0.4.0.
 
+- **Respiratory blocks** (no issue) — `compute_resp.py` builds `resp_overview.json`,
+  `resp_age.json` and `flu_types.json`: the week at a glance, ILI/ARI by age against the range of
+  previous seasons, and influenza detections by type and subtype. Each block carries facts and a
+  comment composed from them (`facts.py`), so the text can later be written by a language model
+  without touching the page. National holiday weeks come from `curated/holidays_cz_weekly.csv`.
+- **Genomic data from Czechia** (no issue) — three new scrapers and `compute_genomics.py` build
+  `genomics_overview.json`, `genomics_lineages.json` and `genomics_amr.json`: what is publicly
+  held in ENA from Czech specimens, how many Czech strains are in the public Nextstrain trees,
+  and which resistance genes NCBI's AMRFinderPlus found in Czech bacterial isolates. The
+  pathogen and tree lists are in `curated/genomics_taxa.yaml` and `curated/genomics_trees.yaml`.
+  Record counts are never presented as illness counts and resistance-gene counts are never turned
+  into percentages — the isolates are not a random sample; tests enforce both.
+  The three sources are side jobs in `run_all.py`: an outage of ENA, Nextstrain or NCBI does not
+  return exit 1 and so cannot stop the refresh of the other charts. `compute_genomics.py` then
+  leaves the JSON untouched (same `fetched_at`), so the page keeps its true update date.
 - **MIT licence** (no issue) — `LICENSE` for the code, same text as in the portal repository;
   README states that data keep the terms of their sources.
 - **WHO FluNet / FluID and ECDC ERVISS scrapers** (PPDB-60) — weekly influenza laboratory

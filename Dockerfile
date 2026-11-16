@@ -24,4 +24,8 @@ ENV DATA_DIR=/data \
 #
 # Nowcast je za `||`: jeho selhání nesmí zastavit obnovu dat (grafy se vygenerují
 # i bez něj, chybí jen flu_nowcast.json). Viz výpadek 6.–9. 10. 2026 v CHANGELOG.
-CMD ["sh", "-c", "python scripts/run_all.py && python scripts/generate_json.py && python scripts/detect_anomalies.py && python scripts/compute_mem.py && (python scripts/compute_nowcast.py || echo 'flu_nowcast: selhal, pokračuji bez něj')"]
+# compute_resp.py (respirační bloky) běží po compute_mem, protože z flu_mem.json
+# bere práh a trend; stejně jako nowcast nesmí zastavit obnovu ostatních dat.
+# compute_genomics.py (genomická data) nezávisí na ničem jiném než na svých
+# scraperech; i ono je za `||`, aby výpadek cizího archivu nezastavil obnovu grafů.
+CMD ["sh", "-c", "python scripts/run_all.py && python scripts/generate_json.py && python scripts/detect_anomalies.py && python scripts/compute_mem.py && (python scripts/compute_nowcast.py || echo 'flu_nowcast: selhal, pokračuji bez něj') && (python scripts/compute_resp.py || echo 'compute_resp: selhal, pokračuji bez něj') && (python scripts/compute_genomics.py || echo 'compute_genomics: selhal, pokračuji bez něj')"]

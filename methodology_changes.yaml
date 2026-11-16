@@ -160,3 +160,57 @@
     Příčinu zdroj neuvádí; souběh s poklesem PCR v MZČR ukazuje spíš na
     změnu na české straně (ověřeno 25. 10. 2026).
   dopad: "týdenní pozitivita SARS-CoV-2 z ERVISS končí týdnem 33/2026; novější týdny nejsou s řadou srovnatelné"
+
+- id: ena-zeme-vkladatel
+  od: null
+  do: null
+  akce: poznamka
+  rozsah:
+    diagnozy: null
+    kraje: null
+  zdroj: "pole `country` v záznamech ENA"
+  popis: >-
+    Zemi odběru vyplňuje u záznamu ten, kdo data do archivu vkládá, a je nepovinná.
+    Záznam z českého vzorku bez vyplněné země se do počtů nedostane, všechna čísla
+    jsou proto spodní odhad. Počet záznamů navíc není nemocnost — vzniká tím, že
+    někdo vzorek sekvenoval a data zveřejnil.
+
+- id: nextstrain-gisaid-podklad
+  od: null
+  do: null
+  akce: poznamka
+  rozsah:
+    diagnozy: null
+    kraje: null
+  zdroj: "pole `data_provenance` ve stromech Nextstrain"
+  popis: >-
+    Stromy chřipky, covidu a ptačí chřipky stojí na datech z GISAID. Jeho podmínky
+    zakazují data šířit a zpřístupňovat přes jiný portál, proto se z nich přebírají
+    jen souhrnné počty českých kmenů a odkaz; sekvence se nestahují.
+
+- id: nextstrain-stari-stromu
+  od: null
+  do: null
+  akce: poznamka
+  rozsah:
+    diagnozy: null
+    kraje: null
+  zdroj: "pole `updated` ve stromech Nextstrain"
+  popis: >-
+    Každý strom se přepočítává vlastním tempem: chřipkové denně až týdně, evropský
+    strom SARS-CoV-2 naposledy 1. 10. 2025. Stáří stromu se proto uvádí u každého
+    zvlášť — bez něj by čtenář bral počet kmenů za současný stav.
+
+- id: ncbi-izolaty-nejsou-vzorek
+  od: null
+  do: null
+  akce: poznamka
+  rozsah:
+    diagnozy: null
+    kraje: null
+  zdroj: "NCBI Pathogen Detection, výsledky AMRFinderPlus"
+  popis: >-
+    Sekvenované izoláty nejsou náhodný vzorek: sekvenují se přednostně kmeny vybrané
+    kvůli rezistenci a část vzorků pochází z odpadních vod (u klebsiel 205 z 1 149).
+    Z počtů nalezených genů se proto nepočítají procenta — neříkaly by, jak častá je
+    rezistence u pacientů.

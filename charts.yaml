@@ -52,6 +52,17 @@ flu_mem:                 { source: [who-fluid-flunet, ecdc-erviss], metric: inte
 flu_positivity_seasons:  { source: who-fluid-flunet, metric: positivity, unit: percent, grain: season_week, region: CZ }
 flu_positivity_weekly:   { source: ecdc-erviss, metric: positivity, unit: percent, grain: week, region: CZ }
 flu_nowcast:             { source: [szu-respiratory, ecdc-erviss], metric: lab_detections, unit: count, grain: week, region: CZ }
+# Respiratory blocks (compute_resp.py). The overview mixes rates and shares: every
+# tile carries its own `unit`; the record here describes the leading ILI tile.
+resp_overview:           { source: [ecdc-erviss, who-fluid-flunet, mzcr-covid], metric: cases, unit: per_100k, grain: week, region: CZ }
+resp_age:                { source: ecdc-erviss, metric: cases, unit: per_100k, grain: season_week, region: CZ }
+flu_types:               { source: ecdc-erviss, metric: lab_detections, unit: count, grain: season_week, region: CZ }
+
+# Genomics (compute_genomics.py). `grain: cumulative` = stav archivu, ne časová řada;
+# jednotka je počet ZÁZNAMŮ v archivu, ne počet případů — proto `metric: sequences`.
+genomics_overview:       { source: ena, metric: sequences, unit: count, grain: cumulative, region: CZ }
+genomics_lineages:       { source: nextstrain, metric: sequences, unit: count, grain: cumulative, region: CZ }
+genomics_amr:            { source: [ncbi-pathogen-detection, ena], metric: sequences, unit: count, grain: cumulative, region: CZ }
 
 isin_top_diseases:       { source: uzis-isin, metric: cases, unit: count, grain: year, region: CZ }
 isin_monthly_trend:      { source: uzis-isin, metric: cases, unit: count, grain: month, region: CZ }
