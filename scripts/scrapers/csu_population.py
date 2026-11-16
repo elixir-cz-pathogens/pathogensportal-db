@@ -8,8 +8,12 @@ Aktualizace: ročně
 Proč právě PORKR01: potřebujeme jmenovatele pro přepočet na incidenci (na 100 tis.
 obyvatel). Věkově stratifikované sady (OBY02D) mají krásná pětiletá pásma, ale API je
 kvůli velikosti nevydá synchronně — musely by se tahat asynchronně. PORKR01 je jeden
-GET, malý, a na celkovou incidenci podle kraje stačí. Věkovou stratifikaci doplníme,
-až ji bude reálně potřeba některý graf.
+GET, malý, a na celkovou incidenci podle kraje stačí.
+
+Věk: sada WGEN01AG1 (počet obyvatel podle jednotek věku, celá ČR, k 31. 12.) je
+malá a API ji vydá jedním GET. Jednotky věku jdou sečíst do libovolných skupin,
+takže poslouží pro ISIN (pětileté skupiny) i pro týdenní souhrn ÚZIS (jiné
+skupiny). Výstup: population_age.csv — jen celá ČR, obě pohlaví dohromady.
 
 Pozn. k metodice: ukazatel je "Počet obyvatel k 31. 12." (koncový stav). Učebnicově
 se pro incidenci používá střední stav (k 1. 7.), rozdíl je ale řádu desetin procenta
@@ -24,6 +28,10 @@ import pandas as pd
 import requests
 
 URL = "https://data.csu.gov.cz/api/dotaz/v1/data/sady/PORKR01?format=CSV"
+AGE_URL = "https://data.csu.gov.cz/api/dotaz/v1/data/sady/WGEN01AG1?format=CSV"
+
+# Nejvyšší věk je v sadě otevřený interval „100 a více“; ukládá se jako 100.
+AGE_OPEN_END = 100
 
 # Názvy území v ČSÚ → NUTS3 kódy (stejné kódy, jaké používá ISIN v generate_json.py)
 REGION_TO_NUTS3 = {
@@ -78,7 +86,46 @@ def download(output_dir: Path) -> list[str]:
     out_path = output_dir / "population.csv"
     out.to_csv(out_path, index=False, encoding="utf-8")
     print(f"  [csu_population] {len(out):,} radku, roky {out['rok'].min()}–{out['rok'].max()} → {out_path}")
-    return [str(out_path)]
+
+    # Věk je doplněk pro dva bloky jedné stránky. Jeho výpadek nesmí vrátit chybu:
+    # ta by v run_all.py zastavila obnovu všech dat, i těch, která na věku nestojí.
+    # Zůstane poslední podařený soubor a přepočty na věk se dál počítají z něj.
+    try:
+        return [str(out_path), str(download_age(output_dir))]
+    except Exception as e:
+        print(f"  [csu_population] věk se nepodařilo stáhnout ({type(e).__name__}: {e}) — pokračuji bez něj")
+        return [str(out_path)]
+
+
+def parse_age(content: bytes) -> pd.DataFrame:
+    """CSV sady WGEN01AG1 → rok, vek (0–100, kde 100 = 100 a více), pocet (obě pohlaví)."""
+    df = pd.read_csv(io.BytesIO(content))
+    need = {"Ukazatel", "Věk (roky)", "Území", "Roky", "Hodnota"}
+    if df.empty or need - set(df.columns):
+        raise ValueError(f"ČSÚ WGEN01AG1: chybí sloupce {sorted(need - set(df.columns))} nebo je sada prázdná")
+    df = df[df["Území"] == "Česko"]
+    age = df["Věk (roky)"].astype(str).str.extract(r"^(\d+)")[0]
+    if age.isna().any():
+        raise ValueError(f"ČSÚ WGEN01AG1: nečitelný věk {df.loc[age.isna(), 'Věk (roky)'].unique()[:3]}")
+    df = df.assign(vek=age.astype(int), rok=df["Roky"].astype(int))
+    out = df.groupby(["rok", "vek"], as_index=False)["Hodnota"].sum().rename(columns={"Hodnota": "pocet"})
+    out["pocet"] = out["pocet"].round().astype(int)
+    # Součet mužů a žen: každý rok musí mít oba ukazatele a všechny jednotky věku.
+    per_year = df.groupby("rok")["Ukazatel"].nunique()
+    if (per_year != 2).any() or (out.groupby("rok")["vek"].nunique() != AGE_OPEN_END + 1).any():
+        raise ValueError("ČSÚ WGEN01AG1: některý rok nemá obě pohlaví nebo všechny jednotky věku 0–100")
+    return out.sort_values(["rok", "vek"])
+
+
+def download_age(output_dir: Path) -> Path:
+    print(f"  [csu_population] stahuju {AGE_URL}")
+    resp = requests.get(AGE_URL, timeout=60)
+    resp.raise_for_status()
+    out = parse_age(resp.content)
+    path = output_dir / "population_age.csv"
+    out.to_csv(path, index=False, encoding="utf-8")
+    print(f"  [csu_population] věk: {len(out):,} radku, roky {out['rok'].min()}–{out['rok'].max()} → {path}")
+    return path
 
 
 if __name__ == "__main__":

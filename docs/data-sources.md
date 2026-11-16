@@ -21,10 +21,11 @@ The diagram shows which scraper produces which file and who reads it:
 |---|---|---|---|---|---|
 | MZČR COVID-19 | `mzcr_covid.py` | `mzcr/covid_*.csv` (9 files) | day; month × age × region | no | `generate_json.py` |
 | ÚZIS ISIN | `uzis_isin.py` | `isin/isin_infekcni_nemoci.csv` | month × region × age × diagnosis | yes | `generate_json.py`, `detect_anomalies.py` |
+| ÚZIS ISIN weekly summary | `uzis_isin_weekly.py` | `isin/isin_tydenni.csv`, `isin/isin_tydenni_stav.json` | ISO week × region × age × diagnosis (11 diagnoses) | no | `compute_isin.py` |
 | ÚZIS RPN + RTBC | `uzis_registries.py` | `uzis/uzis_pohlavni_nemoci.csv`, `uzis/uzis_tuberkuloza.csv` | year (TB: quarter) | yes | `generate_json.py` |
 | SZÚ seasonal | `szu_influenza.py` | `szu/szu_influenza_<season>.csv` | season total per virus | no | `generate_json.py` |
 | SZÚ weekly | `szu_weekly.py` | `szu/szu_weekly_viry.csv`, `szu/szu_weekly_kraje.csv` | week | yes | `generate_json.py` |
-| ČSÚ | `csu_population.py` | `csu/population.csv` | year × region × sex | yes | `generate_json.py` |
+| ČSÚ | `csu_population.py` | `csu/population.csv`, `csu/population_age.csv` | year × region × sex; year × single year of age | regions only | `generate_json.py`, `compute_isin.py` |
 | WHO FluNet + FluID | `who_flu.py` | `who/who_flunet_cz.csv`, `who/who_fluid_cz.csv` | week | yes | `generate_json.py` (FluNet), `compute_mem.py` (FluID) |
 | ECDC ERVISS | `ecdc_erviss.py` | `ecdc/erviss_ili_ari_cz.csv`, `ecdc/erviss_nonsentinel_cz.csv` | week | rates only | `generate_json.py` (lab file), `compute_mem.py` (rates) |
 | ECDC ERVISS snapshots | `ecdc_erviss_snapshots.py` | `ecdc/erviss_snapshots/<date>_nonSentinelTestsDetections.csv.gz` | week × snapshot | no (immutable already) | `compute_nowcast.py` |
@@ -85,6 +86,43 @@ most of them come from the publishers as they are.
     people being ill — see [analytics/anomaly-detection.md](analytics/anomaly-detection.md).
   - Region `CZ999` means "not stated".
   - Syphilis, gonorrhoea and tuberculosis are **not** in ISIN; they have their own registries.
+
+### ÚZIS — weekly summary of selected infectious diseases
+
+- **Where:** the data summary NR-27-04 "Meziroční srovnání počtu infekčních nemocí po týdnech"
+  ([NZIP page](https://www.nzip.cz/data/2620-infekcni-nemoci-mezirocni-srovnani-datovy-souhrn)).
+  The files sit on a shared storage of ÚZIS; the link `…/download` returns everything as one ZIP
+  (about 32 MB) without a login.
+- **Scraper:** `uzis_isin_weekly.py`
+- **Why next to the open ISIN file:** the open CSV has every diagnosis but is updated once a year
+  and ends with last December. The summary has 11 diagnoses, by ISO week up to the previous
+  week, and — the reason it is needed — a separate count of records based on EWS reports.
+- **Shape of the source:** folders `Infekce/<Monday>/`; only the last four or five hold files, the
+  future Mondays are created ahead and empty. One XLSX per diagnosis, 15 sheets (the country and
+  14 regions; the region name is read from cell A9, because one sheet name is wrong in the
+  source). On a sheet the years lie side by side as column blocks, each with pairs of columns
+  ISIN / EWS per age group. "ISIN" is every record, "EWS" the records among them that were
+  created from an EWS report — not additional cases.
+- **Output:**
+  - `isin/isin_tydenni.csv` — `diagnoza` (ICD-10), `kraj_kod` (`CZ` or NUTS3), `rok`, `tyden` (ISO),
+    `vek` (age group or `Celkem`), `pocet`, `pocet_ews`
+  - `isin/isin_tydenni_stav.json` — the folder taken, the status date the source states in the
+    file header, and the diagnosis names as the source writes them
+- **Checks:** every year in the header row must have its block (a block that lost its header
+  would drop the current year silently); weeks must run from 1 without a gap; the age groups
+  must add up to `Celkem`; EWS must not exceed the total; all 15 areas must be present. A newest
+  folder older than three weeks fails the download.
+- **Good to know:**
+  - It is a side source in `run_all.py`: a failure does not stop the refresh of the other data,
+    and the page keeps the last state.
+  - The archive is downloaded once a week — while the folder of the current week is on disk the
+    scraper returns the files it has.
+  - Weekly counts were stable across four releases checked in October and November 2026: a week
+    did not change by more than two cases after it was first published.
+  - In the running year the regional sheets add up to less than the national one; the portal
+    draws only the national series. See `isin-tydenni-kraje-bez-kraje` in
+    `methodology_changes.yaml`.
+  - The source states no licence, only a citation. See `sources.yaml`.
 
 ### ÚZIS — registries RPN and RTBC
 
@@ -168,6 +206,11 @@ most of them come from the publishers as they are.
 - **Output:** `csu/population.csv` — `rok, kraj_kod, kraj_nazev, pohlavi, pocet`. `kraj_kod` is the
   NUTS3 code, `CZ` for the whole country.
 - **Checks:** every expected region must be present.
+- **By age:** dataset `WGEN01AG1` (population by single year of age, whole country) goes to
+  `csu/population_age.csv` — `rok, vek, pocet`, both sexes together, `vek` 100 = 100 and over.
+  Single years can be summed into any age groups, which the two ISIN sources need because their
+  groups differ. A failure of this download is reported and skipped: the population by region
+  is a required source and must not fail because of an addition.
 - **Good to know:** these are the denominators. Without them the charts show counts, and a map of
   counts is mostly a map of where more people live. The figure is the population on 31 December,
   not the mid-year population; the difference is a few tenths of a percent.

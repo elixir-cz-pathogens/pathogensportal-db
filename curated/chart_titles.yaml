@@ -135,6 +135,15 @@ isin_group_rare_severe:
 isin_group_other:
   cs: "Ostatní infekční diagnózy v ČR (souhrn) — roční počty hlášených případů"
   en: "Other infectious diagnoses in Czechia (combined) — annual counts of notified cases"
+isin_overview:
+  cs: "Infekční nemoci v ČR — nejčastější diagnózy po letech, věkové skupiny a kraje na 100 000 obyvatel"
+  en: "Infectious diseases in Czechia — most frequent diagnoses by year, age groups and regions per 100,000"
+isin_groups:
+  cs: "Infekční nemoci v ČR podle tematických skupin — roční počty diagnóz a věkové skupiny na 100 000 obyvatel"
+  en: "Infectious diseases in Czechia by thematic group — annual counts of diagnoses and age groups per 100,000"
+isin_weekly:
+  cs: "Vybrané infekční nemoci v ČR — hlášené případy po týdnech včetně záznamů z hlášení EWS"
+  en: "Selected infectious diseases in Czechia — reported cases by week, with records from EWS reports"
 anomaly_signals:
   cs: "Signály detekce anomálií v hlášení infekčních nemocí v ČR"
   en: "Anomaly detection signals in infectious disease notifications in Czechia"

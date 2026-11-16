@@ -1,0 +1,53 @@
+# Reader-facing names of diagnoses — Czech and English, keyed by ICD-10 code.
+#
+# Why it exists: ISIN names diagnoses by their ICD-10 heading. For a specialist
+# that is the exact term; for a reader of the portal "Jiné spirochetové infekce"
+# hides that nearly all of those cases are Lyme disease, and the weekly ÚZIS
+# summary writes its names in capitals ("ENTERITIDA - CAMPYLOBACTER"). The
+# overview blocks (scripts/compute_isin.py) show the name from this file and keep
+# the official one next to it, so nothing is lost.
+#
+# Rules:
+#   - A name must not narrow the code. A04 is "other bacterial intestinal
+#     infections", of which Campylobacter is about two thirds — so the name says
+#     "Campylobacter and others", not "campylobacteriosis". A04.5 alone is
+#     campylobacteriosis.
+#   - A code that is not listed keeps the official name (English from
+#     labels_en.yaml). Add a name here only when the official one misleads or
+#     is unreadable.
+#   - Three-character codes are the open ISIN export, codes with a subcategory
+#     (A04.5, A37.0, A69.2) are the weekly ÚZIS summary; the two are different
+#     series even where the name is the same.
+
+A02:   { cs: "Salmonelóza", en: "Salmonellosis" }
+A04:   { cs: "Bakteriální střevní infekce (kampylobakter a další)", en: "Bacterial intestinal infections (Campylobacter and others)" }
+A04.5: { cs: "Kampylobakterióza", en: "Campylobacteriosis" }
+A08:   { cs: "Virové střevní infekce (rotaviry, noroviry a další)", en: "Viral intestinal infections (rotavirus, norovirus and others)" }
+A09:   { cs: "Průjmová onemocnění bez určeného původce", en: "Diarrhoeal disease, cause not determined" }
+A37:   { cs: "Černý kašel", en: "Whooping cough" }
+A37.0: { cs: "Černý kašel", en: "Whooping cough" }
+A38:   { cs: "Spála", en: "Scarlet fever" }
+A46:   { cs: "Růže (erysipel)", en: "Erysipelas" }
+A56:   { cs: "Chlamydiové infekce přenášené pohlavním stykem", en: "Sexually transmitted chlamydial infections" }
+A69:   { cs: "Borelióza a jiné spirochetové infekce", en: "Lyme disease and other spirochaetal infections" }
+A69.2: { cs: "Lymeská borelióza", en: "Lyme disease" }
+B01:   { cs: "Plané neštovice", en: "Chickenpox" }
+B02:   { cs: "Pásový opar", en: "Shingles" }
+B05:   { cs: "Spalničky", en: "Measles" }
+B08:   { cs: "Jiné virové vyrážkové infekce", en: "Other viral rash infections" }
+B15:   { cs: "Hepatitida A", en: "Hepatitis A" }
+B26:   { cs: "Příušnice", en: "Mumps" }
+B27:   { cs: "Infekční mononukleóza", en: "Infectious mononucleosis" }
+B86:   { cs: "Svrab", en: "Scabies" }
+
+# Diagnoses of the thematic group pages
+A03:   { cs: "Shigelóza", en: "Shigellosis" }
+A05:   { cs: "Bakteriální otravy z jídla", en: "Bacterial food poisoning" }
+A36:   { cs: "Záškrt", en: "Diphtheria" }
+A63:   { cs: "Jiné pohlavně přenosné nemoci", en: "Other sexually transmitted diseases" }
+A84:   { cs: "Klíšťová encefalitida", en: "Tick-borne encephalitis" }
+B04:   { cs: "Opičí neštovice (mpox)", en: "Mpox" }
+B16:   { cs: "Akutní hepatitida B", en: "Acute hepatitis B" }
+B85:   { cs: "Zavšivení (vši)", en: "Lice infestation" }
+W54:   { cs: "Pokousání psem", en: "Dog bite" }
+W55:   { cs: "Pokousání jiným savcem", en: "Bite by another mammal" }

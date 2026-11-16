@@ -79,6 +79,43 @@
     proto starý; ticho v novějších obdobích není důkaz klidu, ale chybějící data.
   dopad: "žádný vliv na výpočet; zásadní pro interpretaci čerstvosti signálů"
 
+- id: isin-ews-podil-roste
+  od: 2025-07
+  do: null
+  akce: poznamka
+  rozsah:
+    diagnozy: null
+    kraje: null
+  zdroj: "týdenní datový souhrn ÚZIS NR-27-04, sloupec EWS (vlastní měření, 11/2026)"
+  popis: >-
+    Od července 2025 vzniká část záznamů ISIN z hlášení EWS (automatizované
+    hlášení od poskytovatelů a laboratoří) a jejich podíl dál roste — přechod
+    neskončil jedním skokem. Za rok 2026 do 46. týdne: pásový opar 92 %, plané
+    neštovice a mononukleóza 87 %, borelióza 81 %, svrab 69 %, salmonelóza a
+    hepatitida A 24 %, kampylobakterióza 17 %. Poslední tři měly ve 2. pololetí
+    2025 jen 3–5 %.
+  dopad: >-
+    Počty od 7/2025 nejsou srovnatelné s předchozími roky u žádné z 11 diagnóz
+    týdenního souhrnu. compute_isin.py srovnání s minulým rokem nevytváří, když
+    podíl EWS přesáhne 10 %, a místo něj píše upozornění.
+
+- id: isin-tydenni-kraje-bez-kraje
+  od: 2026-01
+  do: null
+  akce: poznamka
+  rozsah:
+    diagnozy: null
+    kraje: null
+  zdroj: "týdenní datový souhrn ÚZIS NR-27-04, porovnání listu ČR se součtem krajů (vlastní měření, 11/2026)"
+  popis: >-
+    V běžícím roce je součet 14 krajských listů nižší než list ČR (plané
+    neštovice o 810 z 32 811, kampylobakterióza o 658 z 12 392), v letech
+    2022–2025 se liší nejvýš o 10. Část letošních záznamů tedy zatím nemá
+    přiřazený kraj.
+  dopad: >-
+    Celostátní týdenní počty jsou úplné, krajské za běžící rok ne. Portál z
+    týdenního souhrnu kreslí jen celou ČR.
+
 - id: flunet-jmenovatel-2021
   od: 2021-09
   do: null

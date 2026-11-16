@@ -8,6 +8,24 @@ Releases are git tags `vMAJOR.MINOR.PATCH`. The portal pins one of them as its s
 
 Changes on `dev` since v0.4.0.
 
+- **Weekly infectious-disease data and overview blocks** (no issue) — a new scraper,
+  `uzis_isin_weekly.py`, reads the weekly ÚZIS data summary NR-27-04 (11 diagnoses by ISO week up
+  to the previous week, with the records created from EWS reports counted separately), and
+  `compute_isin.py` builds `isin_weekly.json` and `isin_overview.json` for the overview
+  dashboard: weekly counts of the running year, the ten most frequent diagnoses of every year
+  with their EWS share, age groups per 100,000 and the sentence for the regional map. A
+  diagnosis with more than 10% of records from EWS is not compared with previous years; the
+  text carries a warning instead. `csu_population.py` also downloads population by single year
+  of age (`population_age.csv`). The weekly summary states no licence, only a citation, so
+  `isin_weekly` goes out under "the terms of the source apply". The scraper is a side source:
+  its failure does not stop the refresh.
+- **Thematic disease groups** (no issue) — `compute_isin.py` also builds `isin_groups.json` for the
+  group pages: yearly counts of every diagnosis with the EWS part, age groups per 100,000 and, for
+  "other", the ten largest diagnoses of every year. **Changed grouping:** whooping cough,
+  infectious mononucleosis and the other viral rash infections moved from "other" to
+  `childhood_airborne`, tularaemia from `rare_severe` to `vector_animal`. The series of
+  `isin_group_childhood_airborne`, `isin_group_vector_animal`, `isin_group_rare_severe` and the
+  total of `isin_group_other` change accordingly.
 - **Fixed: a corrected SZÚ regional PDF stopped the whole refresh** (no issue) — on 16 November
   2026 SZÚ published the corrected table of week 45 under the file name of week 46. The scraper
   reads the week from the table, so every region appeared twice in that week,

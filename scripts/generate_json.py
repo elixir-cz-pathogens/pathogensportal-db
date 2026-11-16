@@ -1008,6 +1008,11 @@ DISEASE_GROUPS = {
             "Spála [scarlatina]",
             "Příušnice [parotitis epidemica]",
             "Spalničky",
+            # Do 11/2026 byly tyhle tři v „Ostatní“ — černý kašel tam v roce 2024
+            # tvořil dvě třetiny součtu a nebyl nikde vidět.
+            "Dávivý kašel [pertussis]",
+            "Infekční mononukleóza",
+            "Jiné virové infekce charakterizované postižením kůže a sliznic NJ",
         ],
     },
     "gastrointestinal": {
@@ -1036,6 +1041,7 @@ DISEASE_GROUPS = {
             "Kousnutí nebo úder psem",
             "Kousnutí nebo úder jinými savci",
             "Jiné spirochetové infekce",
+            "Tularemie",            # zoonóza; do 11/2026 mezi vzácnými závažnými
         ],
     },
     "hepatitis": {
@@ -1066,7 +1072,6 @@ DISEASE_GROUPS = {
             "Q horečka",
             "Brucelóza – vlnivá horečka",
             "Žlutá zimnice",
-            "Tularemie",
         ],
     },
 }
