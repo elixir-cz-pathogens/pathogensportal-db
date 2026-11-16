@@ -14,6 +14,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from scrapers import (mzcr_covid, ecdc_covid, ecdc_erviss, ecdc_erviss_snapshots, ecdc_respicast,
+                      ena_czech, ncbi_pathogen, nextstrain_czech,
                       szu_influenza, szu_weekly, uzis_isin, uzis_registries, csu_population,
                       who_flu)
 from snapshot import snapshot
@@ -36,9 +37,23 @@ def run() -> int:
         ("ECDC RespiCast (CZ)",   ecdc_respicast.download,     DATA_ROOT / "ecdc"),
     ]
 
+    # Genomické zdroje: tři cizí archivy, na kterých nezávisí žádný jiný graf.
+    # Běží ve stejné smyčce jako povinné zdroje (ať se dostanou do snapshotu
+    # a do metadat o zdrojích), ale jejich selhání nevrací exit 1 — ten by
+    # v kontejneru zastavil celý řetěz a portál by kvůli výpadku ENA nebo NCBI
+    # přišel o obnovu chřipky i covidu. compute_genomics.py pak JSON nepřepíše
+    # (viz save() tamtéž), takže datum aktualizace na stránce zůstane pravdivé.
+    side_jobs = [
+        ("ENA sekvence (CZ)",     ena_czech.download,          DATA_ROOT / "ena"),
+        ("Nextstrain stromy (CZ)", nextstrain_czech.download,  DATA_ROOT / "nextstrain"),
+        ("NCBI rezistence (CZ)",  ncbi_pathogen.download,      DATA_ROOT / "ncbi"),
+    ]
+    side_labels = {label for label, _, _ in side_jobs}
+
     all_files = []
     failures = []
-    for label, fn, out_dir in jobs:
+    side_failures = []
+    for label, fn, out_dir in jobs + side_jobs:
         print(f"\n{'='*50}")
         print(f"  {label}")
         print(f"{'='*50}")
@@ -48,8 +63,12 @@ def run() -> int:
             all_files.extend(files)
             print(f"  OK — {len(files)} souboru za {time.time()-t0:.1f}s")
         except Exception as e:
-            print(f"  CHYBA: {e}")
-            failures.append((label, e))
+            if label in side_labels:
+                print(f"  CHYBA (ostatní data tím nejsou dotčena): {type(e).__name__}: {e}")
+                side_failures.append((label, e))
+            else:
+                print(f"  CHYBA: {e}")
+                failures.append((label, e))
 
     print(f"\n{'='*50}")
     print(f"  Hotovo — {len(all_files)} CSV souboru v {DATA_ROOT}")
@@ -94,6 +113,12 @@ def run() -> int:
         print(f"  {len(meta['sources']) - len(broken)}/{len(meta['sources'])} zdrojů → {path}")
     except Exception as e:
         print(f"  CHYBA (data tím nejsou dotčena): {type(e).__name__}: {e}")
+
+    if side_failures:
+        print(f"\n  Vedlejší zdroje — selhalo {len(side_failures)}/{len(side_jobs)} "
+              f"(běh pokračuje, jejich stránky zůstanou u poslední podařené verze):")
+        for label, e in side_failures:
+            print(f"    - {label}: {e}")
 
     if failures:
         print(f"\n  SELHALO {len(failures)}/{len(jobs)} zdrojů:")

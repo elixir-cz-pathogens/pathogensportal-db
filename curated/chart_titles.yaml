@@ -1,0 +1,169 @@
+# Titles of the generated chart JSON files — Czech and English.
+#
+# Why it exists: charts.yaml says WHAT a chart measures (metric, unit, grain) in
+# a machine vocabulary; this file says what the file IS, in a sentence a person
+# or a catalogue can show. Without it a reader of `flu_weekly.json` has only the
+# file name. scripts/chart_meta.py writes the title into the `meta` block.
+#
+# Rules:
+#   - A title has to stand on its own. The dashboard heading "Hospitalisations —
+#     patient status" relies on the page being about COVID-19; here the disease
+#     and the country are part of the title.
+#   - No years and no season in a title ("2018–2025", "season 2025/26"). The
+#     file is regenerated and the title is not, so a period written here goes
+#     stale; the period is in `meta.period`. tests/test_source_metadata.py
+#     rejects a four-digit year in a title.
+#   - Wording follows the chart headings on the portal's dashboards; keep the
+#     two in line when either changes.
+#
+# Keys are the chart names from charts.yaml. The thematic disease groups
+# (`isin_group_*` there) are listed one by one, because one title cannot name
+# eight groups.
+
+covid_cases_weekly:
+  cs: "COVID-19 v ČR — nové případy a úmrtí po týdnech"
+  en: "COVID-19 in Czechia — new cases and deaths by week"
+covid_hospitalization:
+  cs: "COVID-19 v ČR — hospitalizovaní pacienti (týdenní maximum)"
+  en: "COVID-19 in Czechia — patients in hospital (weekly maximum)"
+covid_testing:
+  cs: "COVID-19 v ČR — pozitivita PCR a antigenních testů po týdnech"
+  en: "COVID-19 in Czechia — positivity of PCR and antigen tests by week"
+covid_incidence:
+  cs: "COVID-19 v ČR — sedmidenní incidence na 100 000 obyvatel"
+  en: "COVID-19 in Czechia — 7-day incidence per 100,000 population"
+covid_summary:
+  cs: "COVID-19 v ČR — souhrnné počty za celé období"
+  en: "COVID-19 in Czechia — summary counts for the whole period"
+covid_by_age:
+  cs: "COVID-19 v ČR — případy a úmrtí podle věkové skupiny"
+  en: "COVID-19 in Czechia — cases and deaths by age group"
+covid_cfr_by_age:
+  cs: "COVID-19 v ČR — smrtnost (CFR) podle věkové skupiny"
+  en: "COVID-19 in Czechia — case fatality (CFR) by age group"
+covid_by_vaccination:
+  cs: "COVID-19 v ČR — případy a hospitalizace podle stavu očkování"
+  en: "COVID-19 in Czechia — cases and hospitalisations by vaccination status"
+covid_hosp_rate_by_vax:
+  cs: "COVID-19 v ČR — podíl hospitalizovaných podle stavu očkování"
+  en: "COVID-19 in Czechia — hospitalisation rate by vaccination status"
+
+flu_season_overview:
+  cs: "Chřipka A a B v ČR — laboratorní záchyty za sezónu"
+  en: "Influenza A and B in Czechia — laboratory detections per season"
+flu_weekly:
+  cs: "Respirační viry v ČR — laboratorní záchyty po týdnech běžící sezóny"
+  en: "Respiratory viruses in Czechia — laboratory detections by week of the current season"
+flu_respiratory_all:
+  cs: "Respirační viry v ČR — laboratorní záchyty jednotlivých virů za sezónu"
+  en: "Respiratory viruses in Czechia — laboratory detections of each virus per season"
+flu_regional_weekly:
+  cs: "Laboratorní vyšetření respiračních infekcí v krajích ČR — pozitivní záchyty po týdnech běžící sezóny"
+  en: "Laboratory testing for respiratory infections in the Czech regions — positive detections by week of the current season"
+flu_regional_overview:
+  cs: "Laboratorní vyšetření respiračních infekcí v krajích ČR — pozitivní záchyty a vyšetřené vzorky za běžící sezónu"
+  en: "Laboratory testing for respiratory infections in the Czech regions — positive detections and samples tested in the current season"
+flu_mem:
+  cs: "Chřipka v ČR — epidemický práh a prahy intenzity sezóny (MEM)"
+  en: "Influenza in Czechia — epidemic threshold and season intensity thresholds (MEM)"
+flu_positivity_seasons:
+  cs: "Chřipka v ČR — pozitivita po týdnech sezóny, srovnání sezón"
+  en: "Influenza in Czechia — positivity by week of the season, seasons compared"
+flu_positivity_weekly:
+  cs: "Chřipka, RSV a SARS-CoV-2 v ČR — týdenní pozitivita"
+  en: "Influenza, RSV and SARS-CoV-2 in Czechia — weekly positivity"
+flu_nowcast:
+  cs: "Chřipka a RSV v ČR — odhad laboratorních záchytů v dosud neúplných týdnech (nowcast)"
+  en: "Influenza and RSV in Czechia — estimate of laboratory detections for weeks not yet complete (nowcast)"
+
+resp_overview:
+  cs: "Respirační infekce v ČR — přehled týdne (ILI, ARI, pozitivita chřipky a RSV, covid)"
+  en: "Respiratory infections in Czechia — the week at a glance (ILI, ARI, influenza and RSV positivity, COVID-19)"
+resp_age:
+  cs: "ILI a ARI v ČR podle věkových skupin — běžící sezóna proti rozpětí předchozích sezón"
+  en: "ILI and ARI in Czechia by age group — current season against the range of previous seasons"
+flu_types:
+  cs: "Chřipka v ČR — laboratorní záchyty podle typu a subtypu po týdnech a sezónách"
+  en: "Influenza in Czechia — laboratory detections by type and subtype, by week and by season"
+
+genomics_overview:
+  cs: "Genomická data z Česka — veřejné sekvenční záznamy v archivu ENA"
+  en: "Genomic data from Czechia — public sequence records in the ENA archive"
+genomics_lineages:
+  cs: "České kmeny ve veřejných stromech příbuznosti Nextstrain"
+  en: "Czech strains in the public Nextstrain phylogenetic trees"
+genomics_amr:
+  cs: "Geny rezistence v českých bakteriálních izolátech (NCBI Pathogen Detection)"
+  en: "Resistance genes in Czech bacterial isolates (NCBI Pathogen Detection)"
+
+isin_top_diseases:
+  cs: "Deset nejčastějších hlášených infekčních nemocí v ČR — roční počty případů"
+  en: "Ten most common notified infectious diseases in Czechia — annual case counts"
+isin_monthly_trend:
+  cs: "Vybrané infekční nemoci v ČR — měsíční počty hlášených případů"
+  en: "Selected infectious diseases in Czechia — monthly counts of notified cases"
+isin_age_groups:
+  cs: "Hlášené infekční nemoci v ČR — počty případů podle věkové skupiny"
+  en: "Notified infectious diseases in Czechia — case counts by age group"
+isin_regional_map:
+  cs: "Hlášené infekční nemoci podle krajů ČR — počty případů"
+  en: "Notified infectious diseases by Czech region — case counts"
+isin_regional_incidence:
+  cs: "Hlášené infekční nemoci podle krajů ČR — případy na 100 000 obyvatel"
+  en: "Notified infectious diseases by Czech region — cases per 100,000 population"
+isin_group_childhood_airborne:
+  cs: "Časté dětské a vzdušné nemoci v ČR — roční počty hlášených případů"
+  en: "Childhood and airborne diseases in Czechia — annual counts of notified cases"
+isin_group_gastrointestinal:
+  cs: "Střevní a potravinové nemoci v ČR — roční počty hlášených případů"
+  en: "Gastrointestinal and foodborne diseases in Czechia — annual counts of notified cases"
+isin_group_skin_contact:
+  cs: "Kožní a kontaktní nemoci v ČR — roční počty hlášených případů"
+  en: "Skin and contact diseases in Czechia — annual counts of notified cases"
+isin_group_vector_animal:
+  cs: "Nemoci přenášené klíšťaty a zvířaty v ČR — roční počty hlášených případů"
+  en: "Diseases transmitted by ticks and animals in Czechia — annual counts of notified cases"
+isin_group_hepatitis:
+  cs: "Virové hepatitidy v ČR — roční počty hlášených případů"
+  en: "Viral hepatitis in Czechia — annual counts of notified cases"
+isin_group_sti:
+  cs: "Pohlavně přenosné nemoci hlášené přes ISIN v ČR — roční počty případů"
+  en: "Sexually transmitted infections notified through ISIN in Czechia — annual case counts"
+isin_group_rare_severe:
+  cs: "Vzácné závažné infekční nemoci v ČR — roční počty hlášených případů"
+  en: "Rare severe infectious diseases in Czechia — annual counts of notified cases"
+isin_group_other:
+  cs: "Ostatní infekční diagnózy v ČR (souhrn) — roční počty hlášených případů"
+  en: "Other infectious diagnoses in Czechia (combined) — annual counts of notified cases"
+anomaly_signals:
+  cs: "Signály detekce anomálií v hlášení infekčních nemocí v ČR"
+  en: "Anomaly detection signals in infectious disease notifications in Czechia"
+
+sti_registry_trend:
+  cs: "Syfilis, kapavka a venerický lymfogranulom v ČR — roční počty hlášených případů"
+  en: "Syphilis, gonorrhoea and lymphogranuloma venereum in Czechia — annual counts of notified cases"
+sti_registry_incidence:
+  cs: "Syfilis a kapavka v ČR — hlášené případy na 100 000 obyvatel"
+  en: "Syphilis and gonorrhoea in Czechia — notified cases per 100,000 population"
+sti_registry_sex:
+  cs: "Syfilis a kapavka v ČR — muži a ženy, případy na 100 000"
+  en: "Syphilis and gonorrhoea in Czechia — men and women, cases per 100,000"
+sti_registry_map:
+  cs: "Syfilis a kapavka podle kraje bydliště v ČR — případy na 100 000 obyvatel"
+  en: "Syphilis and gonorrhoea by region of residence in Czechia — cases per 100,000 population"
+sti_registry_age:
+  cs: "Syfilis a kapavka v ČR — hlášené případy podle věkové skupiny"
+  en: "Syphilis and gonorrhoea in Czechia — notified cases by age group"
+
+tbc_incidence:
+  cs: "Tuberkulóza v ČR — nově hlášené případy na 100 000 obyvatel"
+  en: "Tuberculosis in Czechia — newly notified cases per 100,000 population"
+tbc_map:
+  cs: "Tuberkulóza podle krajů ČR — víceletý průměr na 100 000 obyvatel"
+  en: "Tuberculosis by Czech region — multi-year average per 100,000 population"
+tbc_origin:
+  cs: "Tuberkulóza v ČR — roční počty případů podle rodné země pacienta"
+  en: "Tuberculosis in Czechia — annual case counts by the patient's country of birth"
+tbc_age:
+  cs: "Tuberkulóza v ČR — roční počty případů podle věkové skupiny"
+  en: "Tuberculosis in Czechia — annual case counts by age group"

@@ -44,7 +44,8 @@ The suite uses no network and no database; HTTP responses are stubbed. CI
 | `test_who_erviss_scrapers.py` | WHO and ERVISS scrapers: changed columns, empty country filter, a source that stopped updating |
 | `test_respicast_scraper.py` | RespiCast scraper: country filter, the duplicated median, the round cache |
 | `test_uzis_registries.py` | STI and tuberculosis chart generators on small samples |
-| `test_source_metadata.py` | metadata discovery, failure isolation, and that every generated chart is in `charts.yaml` |
+| `test_source_metadata.py` | metadata discovery, failure isolation, that every generated chart is in `charts.yaml` and has a title, and the conversion of axis labels to ISO dates |
+| `test_isin_codes.py` | ICD-10 codes on the series of the ISIN disease charts |
 | `test_glm.py` | the quasi-Poisson GLM against `statsmodels` (skipped when it is not installed) |
 | `test_scoring_golden.py` | golden values of the anomaly scoring |
 | `test_reporting_channel.py` | the EWS channel verdict |
@@ -81,8 +82,9 @@ purpose, regenerate the golden values deliberately and say why in the commit.
 1. Write a function in `scripts/generate_json.py` that reads the CSV, aggregates, and calls
    `save("<chart_name>", {...})`. Return early with a message when the input file is missing.
 2. Call the function in the `__main__` block at the bottom of the file.
-3. Add a line for `<chart_name>` to `charts.yaml` (source, metric, unit, grain, region). Without it
-   `tests/test_source_metadata.py` fails.
+3. Add a line for `<chart_name>` to `charts.yaml` (source, metric, unit, grain, region) and a Czech
+   and English title to `curated/chart_titles.yaml`. Without them `tests/test_source_metadata.py`
+   fails.
 4. Add the file to the catalogue in [chart-generation.md](chart-generation.md).
 5. The portal refers to the file by name. A new chart is safe; renaming or removing one is a
    breaking change.

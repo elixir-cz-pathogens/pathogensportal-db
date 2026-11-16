@@ -98,6 +98,7 @@ scripts/compute_nowcast.py     nowcast of weekly lab detections → flu_nowcast.
 scripts/nowcast.py             reporting triangle and chain-ladder — the computation, no I/O
 sources.yaml                   source registry — where to find each publisher's metadata
 charts.yaml                    what each chart measures: source, metric, unit, grain
+curated/chart_titles.yaml      Czech and English title of each chart file
 methodology_changes.yaml       registry of reporting changes; the source of chart `caveats`
 curated/szu/                   SZÚ season totals 2022/23–2024/25, kept in the repo (the scraper does not read their PDFs)
 db/init.sql                    PostgreSQL schema (the portal mounts it into its database container)

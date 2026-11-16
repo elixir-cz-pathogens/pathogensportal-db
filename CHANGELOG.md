@@ -8,6 +8,21 @@ Releases are git tags `vMAJOR.MINOR.PATCH`. The portal pins one of them as its s
 
 Changes on `dev` since v0.4.0.
 
+- **Respiratory blocks** (no issue) — `compute_resp.py` builds `resp_overview.json`,
+  `resp_age.json` and `flu_types.json`: the week at a glance, ILI/ARI by age against the range of
+  previous seasons, and influenza detections by type and subtype. Each block carries facts and a
+  comment composed from them (`facts.py`), so the text can later be written by a language model
+  without touching the page. National holiday weeks come from `curated/holidays_cz_weekly.csv`.
+- **Genomic data from Czechia** (no issue) — three new scrapers and `compute_genomics.py` build
+  `genomics_overview.json`, `genomics_lineages.json` and `genomics_amr.json`: what is publicly
+  held in ENA from Czech specimens, how many Czech strains are in the public Nextstrain trees,
+  and which resistance genes NCBI's AMRFinderPlus found in Czech bacterial isolates. The
+  pathogen and tree lists are in `curated/genomics_taxa.yaml` and `curated/genomics_trees.yaml`.
+  Record counts are never presented as illness counts and resistance-gene counts are never turned
+  into percentages — the isolates are not a random sample; tests enforce both.
+  The three sources are side jobs in `run_all.py`: an outage of ENA, Nextstrain or NCBI does not
+  return exit 1 and so cannot stop the refresh of the other charts. `compute_genomics.py` then
+  leaves the JSON untouched (same `fetched_at`), so the page keeps its true update date.
 - **MIT licence** (no issue) — `LICENSE` for the code, same text as in the portal repository;
   README states that data keep the terms of their sources.
 - **WHO FluNet / FluID and ECDC ERVISS scrapers** (PPDB-60) — weekly influenza laboratory
@@ -42,7 +57,23 @@ Changes on `dev` since v0.4.0.
   previously showed the 114 ISIN diagnosis names, age groups and region names in Czech. Not
   breaking: only new fields; the Czech ones are unchanged.
 
+- **Titles, ISO dates and ICD-10 codes in the chart metadata** (no issue) — every chart's `meta`
+  block carries a `title` in Czech and English (`curated/chart_titles.yaml`); `meta.period` gets
+  `start_date` and `end_date` as ISO dates next to the axis labels it already repeated
+  (`KT 40/26` could not be read as a date); the series of the ISIN disease charts carry the ICD-10
+  code in `datasets[].code`, with `meta.series_code_system` naming the code list. The code was in
+  the input all along and was dropped when the charts grouped by the Czech name. `meta.licence`
+  states what the chart itself may be reused under: CC BY 4.0 when every source of the chart
+  allows open reuse (`licence.open` in `sources.yaml` — ÚZIS, the Ministry of Health, CZSO),
+  otherwise "the terms of the source apply" with the deciding sources named (SZÚ, WHO, ECDC).
+  Not breaking: only new fields.
+
 ### Fixed
+
+- **Grain of three charts in `charts.yaml`** (no issue) — `flu_season_overview` and
+  `flu_respiratory_all` were declared weekly although their axis is one point per season (new
+  grain `season`); `tbc_age` was declared as an age axis although its axis is years, so it had no
+  `period`.
 
 - **Frozen ECDC COVID-19 source no longer blocks the pipeline** (PPDB-73) — `ecdc_covid.py`
   skips the download when `ecdc_covid_cz.csv` already exists. The dataset has been frozen since

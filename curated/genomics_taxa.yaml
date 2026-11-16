@@ -1,0 +1,287 @@
+# Patogeny, pro které se sleduje, co je z Česka veřejně v genomických archivech.
+#
+# Proč ručně vedený seznam, a ne „co je v archivu nejčastější“: značka `pathogen`
+# v ENA je velmi široká — patří do ní i viry rostlin (šarka švestky) a zvířat
+# (prasečí PRRS) nebo bakteriofágy. Žebříček podle počtu by tedy vedl čtenáře
+# pryč od nemocí, o kterých portál píše. Seznam proto drží tytéž nemoci, které
+# má portál v ostatních panelech, a archiv se dotazuje na ně.
+#
+# Pole:
+#   id       stabilní klíč do výstupního JSON (ne taxon — ten se může změnit)
+#   taxon    tax_id v NCBI taxonomii; dotaz používá tax_tree(), tedy včetně
+#            podřízených taxonů (např. 11320 = Influenza A virus pokrývá všechny
+#            subtypy, 77643 = komplex M. tuberculosis pokrývá M. bovis i další)
+#   name     název pro čtenáře, cs/en
+#   latin    vědecký název, kurzívou v tabulce; u virů bez kurzívy, proto `italic`
+#   group    skupina v tabulce (klíč do GROUPS v compute_genomics.py)
+#   page     stránka portálu o téže nemoci; null = portál o ní zatím nemá panel
+#
+# Pořadí uvnitř skupiny = pořadí v tabulce; skupiny řadí compute_genomics.py.
+
+- id: tuberculosis
+  taxon: 77643
+  name: { cs: "Tuberkulóza", en: "Tuberculosis" }
+  latin: "Mycobacterium tuberculosis complex"
+  italic: true
+  group: respiratory
+  page: /dashboards/infectious-diseases-tbc/
+
+- id: strep-a
+  taxon: 1314
+  name: { cs: "Streptokok skupiny A", en: "Group A streptococcus" }
+  latin: "Streptococcus pyogenes"
+  italic: true
+  group: respiratory
+  page: /dashboards/infectious-diseases-childhood/
+
+- id: pneumococcus
+  taxon: 1313
+  name: { cs: "Pneumokok", en: "Pneumococcus" }
+  latin: "Streptococcus pneumoniae"
+  italic: true
+  group: respiratory
+  page: /dashboards/infectious-diseases-childhood/
+
+- id: sars-cov-2
+  taxon: 2697049
+  name: { cs: "SARS-CoV-2", en: "SARS-CoV-2" }
+  latin: "Severe acute respiratory syndrome coronavirus 2"
+  italic: false
+  group: respiratory
+  page: /dashboards/covid19-surveillance/
+  # Česká data covidu jsou z drtivé většiny v GISAID, ne v ENA — viz `gisaid`
+  # v compute_genomics.py. Bez téhle poznámky by řádek vypadal, že se
+  # nesekvenuje.
+  note: gisaid
+
+- id: influenza-a
+  taxon: 11320
+  name: { cs: "Chřipka A", en: "Influenza A" }
+  latin: "Influenza A virus"
+  italic: false
+  group: respiratory
+  page: /dashboards/influenza-surveillance/
+
+- id: influenza-b
+  taxon: 11520
+  name: { cs: "Chřipka B", en: "Influenza B" }
+  latin: "Influenza B virus"
+  italic: false
+  group: respiratory
+  page: /dashboards/influenza-surveillance/
+
+- id: pertussis
+  taxon: 520
+  name: { cs: "Černý kašel", en: "Whooping cough" }
+  latin: "Bordetella pertussis"
+  italic: true
+  group: respiratory
+  page: /dashboards/infectious-diseases-childhood/
+
+- id: rsv
+  taxon: 11250
+  name: { cs: "RSV", en: "RSV" }
+  latin: "human respiratory syncytial virus"
+  italic: false
+  group: respiratory
+  page: /dashboards/influenza-surveillance/
+
+- id: measles
+  taxon: 11234
+  name: { cs: "Spalničky", en: "Measles" }
+  latin: "Measles morbillivirus"
+  italic: false
+  group: respiratory
+  page: /dashboards/infectious-diseases-childhood/
+
+- id: diphtheria
+  taxon: 1717
+  name: { cs: "Záškrt", en: "Diphtheria" }
+  latin: "Corynebacterium diphtheriae"
+  italic: true
+  group: respiratory
+  page: /dashboards/infectious-diseases-childhood/
+
+- id: listeria
+  taxon: 1639
+  name: { cs: "Listerióza", en: "Listeriosis" }
+  latin: "Listeria monocytogenes"
+  italic: true
+  group: enteric
+  page: /dashboards/infectious-diseases-gastro/
+
+- id: salmonella
+  taxon: 590
+  name: { cs: "Salmonelóza", en: "Salmonellosis" }
+  latin: "Salmonella"
+  italic: true
+  group: enteric
+  page: /dashboards/infectious-diseases-gastro/
+
+- id: campylobacter
+  taxon: 194
+  name: { cs: "Kampylobakterióza", en: "Campylobacteriosis" }
+  latin: "Campylobacter"
+  italic: true
+  group: enteric
+  page: /dashboards/infectious-diseases-gastro/
+
+- id: c-difficile
+  taxon: 1496
+  name: { cs: "Klostridiová infekce", en: "Clostridioides infection" }
+  latin: "Clostridioides difficile"
+  italic: true
+  group: enteric
+  page: /dashboards/infectious-diseases-gastro/
+
+- id: rotavirus
+  taxon: 10912
+  name: { cs: "Rotaviry", en: "Rotaviruses" }
+  latin: "Rotavirus"
+  italic: false
+  group: enteric
+  page: /dashboards/infectious-diseases-gastro/
+
+- id: hepatitis-a
+  taxon: 12092
+  name: { cs: "Hepatitida A", en: "Hepatitis A" }
+  latin: "Hepatovirus A"
+  italic: false
+  group: enteric
+  page: /dashboards/infectious-diseases-hepatitis/
+
+- id: hepatitis-e
+  taxon: 1678143
+  name: { cs: "Hepatitida E", en: "Hepatitis E" }
+  latin: "Paslahepevirus balayani"
+  italic: false
+  group: enteric
+  page: /dashboards/infectious-diseases-hepatitis/
+
+- id: hiv
+  taxon: 11676
+  name: { cs: "HIV", en: "HIV" }
+  latin: "Human immunodeficiency virus 1"
+  italic: false
+  group: sti
+  page: /dashboards/infectious-diseases-sti/
+
+- id: syphilis
+  taxon: 160
+  name: { cs: "Syfilis", en: "Syphilis" }
+  latin: "Treponema pallidum"
+  italic: true
+  group: sti
+  page: /dashboards/infectious-diseases-sti/
+
+- id: gonorrhoea
+  taxon: 485
+  name: { cs: "Kapavka", en: "Gonorrhoea" }
+  latin: "Neisseria gonorrhoeae"
+  italic: true
+  group: sti
+  page: /dashboards/infectious-diseases-sti/
+
+- id: hepatitis-b
+  taxon: 10407
+  name: { cs: "Hepatitida B", en: "Hepatitis B" }
+  latin: "Hepatitis B virus"
+  italic: false
+  group: sti
+  page: /dashboards/infectious-diseases-hepatitis/
+
+- id: hepatitis-c
+  taxon: 11103
+  name: { cs: "Hepatitida C", en: "Hepatitis C" }
+  latin: "Orthohepacivirus hominis"
+  italic: false
+  group: sti
+  page: /dashboards/infectious-diseases-hepatitis/
+
+- id: mpox
+  taxon: 10244
+  name: { cs: "Mpox", en: "Mpox" }
+  latin: "Monkeypox virus"
+  italic: false
+  group: sti
+  page: /dashboards/infectious-diseases-rare/
+
+- id: tbe
+  taxon: 11084
+  name: { cs: "Klíšťová encefalitida", en: "Tick-borne encephalitis" }
+  latin: "Tick-borne encephalitis virus"
+  italic: false
+  group: vector
+  page: /dashboards/infectious-diseases-vector/
+
+- id: borrelia
+  taxon: 64895
+  name: { cs: "Borelióza", en: "Lyme borreliosis" }
+  latin: "Borreliella"
+  italic: true
+  group: vector
+  page: /dashboards/infectious-diseases-vector/
+
+- id: hantavirus
+  taxon: 1980442
+  name: { cs: "Hantaviry", en: "Hantaviruses" }
+  latin: "Orthohantavirus"
+  italic: false
+  group: vector
+  page: /dashboards/infectious-diseases-vector/
+
+- id: tularaemia
+  taxon: 263
+  name: { cs: "Tularemie", en: "Tularaemia" }
+  latin: "Francisella tularensis"
+  italic: true
+  group: vector
+  page: /dashboards/infectious-diseases-vector/
+
+- id: meningococcus
+  taxon: 487
+  name: { cs: "Meningokok", en: "Meningococcus" }
+  latin: "Neisseria meningitidis"
+  italic: true
+  group: invasive
+  page: /dashboards/infectious-diseases-rare/
+
+- id: legionella
+  taxon: 446
+  name: { cs: "Legionelóza", en: "Legionellosis" }
+  latin: "Legionella pneumophila"
+  italic: true
+  group: invasive
+  page: /dashboards/infectious-diseases-rare/
+
+- id: klebsiella
+  taxon: 573
+  name: { cs: "Klebsiela", en: "Klebsiella" }
+  latin: "Klebsiella pneumoniae"
+  italic: true
+  group: amr
+  page: null
+
+- id: e-faecium
+  taxon: 1352
+  name: { cs: "Enterokok", en: "Enterococcus" }
+  latin: "Enterococcus faecium"
+  italic: true
+  group: amr
+  page: null
+
+- id: e-coli
+  taxon: 562
+  name: { cs: "Escherichia coli", en: "Escherichia coli" }
+  latin: "Escherichia coli"
+  italic: true
+  group: amr
+  page: null
+
+- id: s-aureus
+  taxon: 1280
+  name: { cs: "Zlatý stafylokok", en: "Staphylococcus aureus" }
+  latin: "Staphylococcus aureus"
+  italic: true
+  group: amr
+  page: null

@@ -27,6 +27,14 @@
 #               use that the name alone does not carry, or where sources
 #               contradict each other; `verified` = the day somebody read the
 #               terms on the page linked in `url`
+#               `open: true` = OUR reading that the terms allow anyone to
+#               reuse and modify the data for any purpose with at most an
+#               attribution. Only then may a chart built on the source go out
+#               under CC BY 4.0 (`meta.licence`, see chart_meta.py); without
+#               the flag the chart says "the terms of the source apply". A
+#               missing flag therefore errs on the safe side. Do not set it
+#               because a validator wants a licence — set it when the terms
+#               at `url` say so.
 #   citation    the citation / attribution sentence the source asks for,
 #               copied verbatim (optional — only when the source gives one)
 #   files       paths relative to $DATA_DIR that this source produces; they are
@@ -53,6 +61,7 @@
   landing: "https://www.nzip.cz/data/2621-infekcni-nemoci-otevrena-data"
   licence:
     name: "CC BY 4.0"
+    open: true
     url: "https://creativecommons.org/licenses/by/4.0/"
     note: >-
       CC BY 4.0 uvádí stránka sady na NZIP i záznam v NKOD (autorské dílo;
@@ -74,6 +83,7 @@
   landing: "https://www.nzip.cz/data/2639-pohlavni-nemoci-otevrena-data"
   licence:
     name: "CC BY 4.0"
+    open: true
     url: "https://creativecommons.org/licenses/by/4.0/"
     note: >-
       CC BY 4.0 uvádí stránka sady na NZIP i záznam v NKOD (autorské dílo;
@@ -95,6 +105,7 @@
   landing: "https://www.nzip.cz/data/2671-tuberkuloza-epidemiologie-otevrena-data"
   licence:
     name: "CC BY 4.0"
+    open: true
     url: "https://creativecommons.org/licenses/by/4.0/"
     note: >-
       CC BY 4.0 uvádí stránka sady na NZIP i záznam v NKOD (autorské dílo;
@@ -116,6 +127,7 @@
   landing: "https://onemocneni-aktualne.mzcr.cz/api/v2/covid-19"
   licence:
     name: "neobsahuje autorská díla, databáze není chráněná (podmínky užití v NKOD)"
+    open: true
     url: "https://data.gov.cz/zdroj/datové-sady/00024341/9c7c00c45a83021ea370be94fe1b4ca1"
     note: >-
       Katalog API (onemocneni-aktualne.mzcr.cz/api/v2/covid-19) licenci
@@ -233,6 +245,7 @@
   landing: "https://data.csu.gov.cz/"
   licence:
     name: "CC BY 4.0 (podmínky ČSÚ)"
+    open: true
     url: "https://csu.gov.cz/podminky_pro_vyuzivani_a_dalsi_zverejnovani_statistickych_udaju_csu"
     note: >-
       Při šíření je třeba uvést podmínky licence (odkazem na stránku
@@ -267,3 +280,42 @@
   discovery:
     manual: "2022-10-01"
     manual_note: "Zdroj přestal datovou sadu aktualizovat; držíme ji jen kvůli historii."
+
+- id: ena
+  publisher: "EMBL-EBI"
+  landing: "https://www.ebi.ac.uk/ena/browser/home"
+  licence:
+    name: "INSDC — sekvenční záznamy bez omezení užití"
+    url: "https://www.insdc.org/policy/"
+  files: ["ena/ena_cz_totals.json", "ena/ena_cz_runs.csv", "ena/ena_cz_taxa.csv",
+          "ena/ena_cz_divisions.csv"]
+  methodology: ["ena-zeme-vkladatel"]
+  # Portal API na HEAD nevrací datum změny (archiv se mění průběžně), proto se
+  # čerstvost bere z data stažení ve `fetched_at` výstupu scraperu.
+  discovery:
+    manual: "2026-11-13"
+    manual_note: >-
+      Archiv přijímá záznamy průběžně a API nevydává datum poslední změny. Datum je
+      poslední ověření, že dotaz na českou zemi odběru odpovídá, ne datum dat.
+
+- id: nextstrain
+  publisher: "Nextstrain"
+  landing: "https://nextstrain.org/"
+  licence:
+    name: "kód AGPL, snímky CC BY 4.0; podkladová data podle jednotlivých stromů"
+    url: "https://nextstrain.org/terms"
+  files: ["nextstrain/nextstrain_cz.csv", "nextstrain/nextstrain_cz_clades.csv"]
+  methodology: ["nextstrain-gisaid-podklad", "nextstrain-stari-stromu"]
+  discovery:
+    http_head: "https://data.nextstrain.org/seasonal-flu_h3n2_ha_2y.json"
+
+- id: ncbi-pathogen-detection
+  publisher: "NCBI (National Library of Medicine)"
+  landing: "https://www.ncbi.nlm.nih.gov/pathogens/"
+  licence:
+    name: "bez omezení užití ze strany NCBI (politika pro molekulární data)"
+    url: "https://www.ncbi.nlm.nih.gov/home/about/policies/"
+  files: ["ncbi/ncbi_pd_cz.csv", "ncbi/ncbi_pd_release.json"]
+  methodology: ["ncbi-izolaty-nejsou-vzorek"]
+  discovery:
+    http_head: "https://ftp.ncbi.nlm.nih.gov/pathogen/Results/Klebsiella/latest_snps/AMR/PDG000000012.2578.amr.metadata.tsv"

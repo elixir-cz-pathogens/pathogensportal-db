@@ -60,9 +60,9 @@ All three are YAML files in the repository root, maintained by hand.
 ### `charts.yaml`
 
 ```yaml
-isin_monthly_trend:      { source: uzis-isin, metric: cases, unit: count, grain: month, region: CZ }
+isin_monthly_trend:      { source: uzis-isin, metric: cases, unit: count, grain: month, region: CZ, series_code: icd10 }
 isin_regional_incidence: { source: [uzis-isin, csu-population], metric: cases, unit: per_100k, grain: region, region: NUTS3 }
-isin_group_*:            { source: uzis-isin, metric: cases, unit: count, grain: year, region: CZ }
+isin_group_*:            { source: uzis-isin, metric: cases, unit: count, grain: year, region: CZ, series_code: icd10 }
 ```
 
 | Key | Values |
@@ -70,10 +70,25 @@ isin_group_*:            { source: uzis-isin, metric: cases, unit: count, grain:
 | `source` | an id from `sources.yaml`, or a list when the chart combines sources |
 | `metric` | `cases`, `deaths`, `tests`, `hospitalizations`, `lab_detections`, `positivity`, `case_fatality`, `hospitalization_rate`, `forecast`, `intensity_threshold`, `anomaly_score` |
 | `unit` | `count`, `per_100k`, `percent`, `score` — the machine-readable unit |
-| `grain` | what the X axis is: `day`, `week`, `month`, `year`, `age_group`, `region`, `vaccination_status`, `cumulative`, `season_week` |
+| `grain` | what the X axis is: `day`, `week`, `month`, `year`, `season`, `age_group`, `region`, `vaccination_status`, `cumulative`, `season_week` |
 | `region` | `CZ` = one number for the whole country; `NUTS3` = broken down by region |
+| `series_code` | optional; the code list the chart's series are coded with (`icd10`). The code itself is in `datasets[i].code` |
 
 A key ending in `*` covers every chart with that prefix.
+
+### `curated/chart_titles.yaml`
+
+```yaml
+isin_monthly_trend:
+  cs: "Vybrané infekční nemoci v ČR — měsíční počty hlášených případů"
+  en: "Selected infectious diseases in Czechia — monthly counts of notified cases"
+```
+
+The title of each chart file in Czech and English. `charts.yaml` describes a chart in a machine
+vocabulary; the title is the sentence a person or a catalogue shows. It has to stand on its own
+(the disease and the country are part of it) and it carries no year or season: the file is
+regenerated and the title is not, so the period belongs in `meta.period`. The thematic disease
+groups covered by `isin_group_*` are listed one by one.
 
 ### `methodology_changes.yaml`
 
@@ -156,20 +171,38 @@ One record of the output:
 the chart with a `meta` block:
 
 1. Look the chart up in `charts.yaml` (exact name first, then a `*` prefix).
-2. Copy `metric`, `unit`, `grain` and `region`.
-3. For time grains (`day`, `week`, `month`, `year`), read the period from the first and the last
-   label. For an age or region axis this is skipped — "from 0–4 to 80+" would look like a data
-   range.
-4. For every source id, add the record from `source_metadata.json` and collect its caveats. A
+2. Add the `title` from `curated/chart_titles.yaml`.
+3. Copy `metric`, `unit`, `grain` and `region`.
+4. For time grains (`day`, `week`, `month`, `year`, `season`), read the period from the first and
+   the last label. For an age or region axis this is skipped — "from 0–4 to 80+" would look like
+   a data range. `start` and `end` repeat the labels as the chart shows them (`KT 40/26`);
+   `start_date` and `end_date` are the first day of the first period and the last day of the last
+   one as ISO dates. The dates are written only when both ends can be converted with certainty —
+   a season label such as `2012/2013` gets none.
+5. Add `licence` — what the chart itself may be reused under. It is CC BY 4.0 only when every
+   source of the chart is marked `licence.open: true` in `sources.yaml`; otherwise it is
+   `source-terms` with `restricted_by` naming the sources whose terms decide (the terms are in
+   `sources[].licence`). A chart is somebody else's numbers plus our processing, and the
+   processing cannot pass on more rights than the source gave. The `source-terms` value carries
+   no `url` on purpose: a harvester would read a licence link as an open licence.
+6. When the chart's series carry codes (`series_code` in `charts.yaml` and at least one
+   `datasets[i].code`), add `series_code_system` saying which code list they come from.
+7. For every source id, add the record from `source_metadata.json` and collect its caveats. A
    caveat that arrives from several sources appears once.
 
 ```jsonc
 "meta": {
   "chart_id": "isin_monthly_trend",
+  "title": { "cs": "Vybrané infekční nemoci v ČR — měsíční počty hlášených případů",
+             "en": "Selected infectious diseases in Czechia — monthly counts of notified cases" },
   "metric": "cases", "unit": "count", "grain": "month", "region": "CZ",
   "generated_at": "2026-09-24T06:03:41Z",
   "source_ids": ["uzis-isin"],
-  "period": { "start": "2018-01", "end": "2025-12", "points": 96 },
+  "licence": { "id": "CC-BY-4.0", "name": { "cs": "CC BY 4.0", "en": "CC BY 4.0" },
+               "url": "https://creativecommons.org/licenses/by/4.0/" },
+  "period": { "start": "2018-01", "end": "2025-12", "points": 96,
+              "start_date": "2018-01-01", "end_date": "2025-12-31" },
+  "series_code_system": { "id": "ICD-10", "name": "MKN-10 / ICD-10", "url": "…" },
   "sources": [ { "id": "uzis-isin", "title": "…", "publisher": "ÚZIS ČR", "landing_page": "…",
                  "licence": { "…": "" }, "modified_at_publisher": "2026-01-22T09:09:17Z",
                  "periodicity": "annual", "fetched_at": "…", "snapshot_date": "2026-09-01" } ],
@@ -178,15 +211,26 @@ the chart with a `meta` block:
 }
 ```
 
-Both inputs are optional. Without `charts.yaml` or `source_metadata.json` the charts are still
-generated, only without `meta` or without the `sources` part.
+All inputs are optional. Without `charts.yaml` or `source_metadata.json` the charts are still
+generated, only without `meta` or without the `sources` part; without a title the chart goes out
+with a warning.
+
+The series of the ISIN disease charts (`isin_top_diseases`, `isin_monthly_trend`,
+`isin_group_*`) carry the ICD-10 code next to the Czech name:
+
+```jsonc
+"datasets": [ { "label": "Akutní hepatitida A", "code": "B15", "label_en": "Acute hepatitis A", "data": [ … ] } ]
+```
+
+The label is a display name and the source may reword it; the code is the identifier. A summed
+series ("Ostatní diagnózy (souhrn)") has no code.
 
 ## Who reads `meta`
 
 | Consumer | Uses |
 |---|---|
 | the portal's `/api/charts` | serves the JSON unchanged, `meta` included |
-| the MCP server and the AI layer | unit, period, source, freshness, caveats |
+| the MCP server and the AI layer | title, unit, period, source, freshness, caveats |
 | Chart.js on the dashboards | nothing — it reads only `labels` and `datasets` |
 
 ## Keeping the registries honest
@@ -195,6 +239,10 @@ generated, only without `meta` or without the `sources` part.
 the code:
 
 - every chart the generators produce must have an entry in `charts.yaml`;
+- a source with restrictive or unstated terms (SZÚ, WHO, ECDC, RespiCast) must not be marked
+  `licence.open` — that takes a written answer from the source, not an edit;
+- every chart must have a Czech and an English title in `curated/chart_titles.yaml`, with no year
+  in it, and no title may be left behind for a chart that no longer exists;
 - every `methodology` id in `sources.yaml` must exist in `methodology_changes.yaml` — a typo would
   otherwise silently drop a caveat;
 - an unreachable publisher must end up in `errors` without affecting the other sources;
@@ -204,6 +252,6 @@ the code:
 
 | You are… | Do this |
 |---|---|
-| adding a chart | add one line to `charts.yaml` |
+| adding a chart | add one line to `charts.yaml` and a title to `curated/chart_titles.yaml` |
 | adding a source | add a record to `sources.yaml`; use the same `id` in the portal's catalogue |
 | recording a reporting change | add a record to `methodology_changes.yaml` and list its `id` under `methodology` of the affected source |

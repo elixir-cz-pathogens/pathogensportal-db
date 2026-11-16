@@ -1,0 +1,80 @@
+# Veřejné stromy příbuznosti (Nextstrain), ve kterých se hledají české kmeny.
+#
+# Proč přebírat a nepočítat: strom pro jednu nemoc stojí na tisících sekvencí
+# z celého světa a přepočítává se průběžně. Postavit vlastní by znamenalo stáhnout
+# sekvence, zarovnat je, odhadnout strom a ten pak udržovat — tedy duplikovat
+# práci, kterou už někdo dělá lépe. Z hotového stromu se bere jen to, co se týká
+# Česka: kolik kmenů v něm je, do kterých linií patří, odkdy pocházejí a kdy byl
+# strom naposledy přepočítán.
+#
+# Pole:
+#   id        klíč do výstupního JSON
+#   build     cesta na data.nextstrain.org (bez .json) — tentýž řetězec s lomítky
+#             místo podtržítek je adresa stromu pro čtenáře
+#   name      popisek pro čtenáře, cs/en
+#   group     respiratory | other — dělí stromy na stránce
+#   clade_key pole v uzlech stromu, ze kterého se čte linie (stromy se liší)
+#   host_key  nepovinné; pole s hostitelem/chovem, u ptačí chřipky to je hlavní
+#             rozlišení (chovaná drůbež vs. volně žijící ptáci)
+#   human     false = nákaza, u které české vzorky NEJSOU od člověka; stránka to
+#             musí napsat, jinak by si čtenář spojil ptačí chřipku s lidmi
+#
+# ⚠️ Podkladová data stromů chřipky, covidu i ptačí chřipky pocházejí z GISAID.
+# Jeho podmínky zakazují data šířit a zpřístupňovat přes jiný portál, proto se
+# z nich přebírají jen souhrnné počty a odkaz; sekvence se nestahují.
+
+- id: h5n1
+  build: avian-flu_h5n1_ha_2y
+  name: { cs: "Ptačí chřipka H5N1", en: "Avian influenza H5N1" }
+  group: other
+  clade_key: gisaid_clade
+  host_key: domestic_status
+  human: false
+
+- id: sars-cov-2
+  build: ncov_gisaid_europe_6m
+  name: { cs: "SARS-CoV-2 (Evropa)", en: "SARS-CoV-2 (Europe)" }
+  group: respiratory
+  clade_key: clade_membership
+
+- id: flu-h1n1pdm
+  build: seasonal-flu_h1n1pdm_ha_2y
+  name: { cs: "Chřipka A(H1N1)pdm09", en: "Influenza A(H1N1)pdm09" }
+  group: respiratory
+  clade_key: subclade
+
+- id: flu-h3n2
+  build: seasonal-flu_h3n2_ha_2y
+  name: { cs: "Chřipka A(H3N2)", en: "Influenza A(H3N2)" }
+  group: respiratory
+  clade_key: subclade
+
+- id: flu-vic
+  build: seasonal-flu_vic_ha_2y
+  name: { cs: "Chřipka B, linie Victoria", en: "Influenza B, Victoria lineage" }
+  group: respiratory
+  clade_key: subclade
+
+- id: rsv-a
+  build: rsv_a_genome_all-time
+  name: { cs: "RSV typu A", en: "RSV type A" }
+  group: respiratory
+  clade_key: clade_membership
+
+- id: rsv-b
+  build: rsv_b_genome_all-time
+  name: { cs: "RSV typu B", en: "RSV type B" }
+  group: respiratory
+  clade_key: clade_membership
+
+- id: measles
+  build: measles_genome
+  name: { cs: "Spalničky", en: "Measles" }
+  group: other
+  clade_key: clade_membership
+
+- id: mpox
+  build: mpox_clade-IIb
+  name: { cs: "Mpox, klad IIb", en: "Mpox, clade IIb" }
+  group: other
+  clade_key: lineage
