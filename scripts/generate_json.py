@@ -29,10 +29,14 @@ COLORS = {
 }
 
 
-def ds(label, data, color="blue", chart_type="line", fill=False):
+def ds(label, data, color="blue", chart_type="line", fill=False, code=None):
     bg, border = COLORS[color]
     return {
         "label": label,
+        # `code` = identifikátor řady z číselníku (MKN-10); popisek je jen jméno
+        # pro čtenáře a zdroj ho může přeformulovat. Který číselník to je, říká
+        # `meta.series_code_system`. Chart.js neznámý klíč ignoruje.
+        **({"code": code} if code else {}),
         "data": data,
         "backgroundColor": bg,
         "borderColor": border,
@@ -760,6 +764,23 @@ def _load_isin() -> pd.DataFrame:
     return df
 
 
+def _isin_codes(df: pd.DataFrame) -> dict:
+    """
+    Název diagnózy → kód MKN-10, jak je ISIN dává vedle sebe ve sloupcích
+    `diagnoza_nazev` a `diagnoza`.
+
+    Grafy seskupují podle názvu, protože ten se kreslí; kód se tím dřív ztratil.
+    Název, který by ve zdroji patřil k víc kódům, se vynechá — řada bez kódu je
+    lepší než řada se špatným.
+    """
+    if "diagnoza" not in df.columns:
+        return {}
+    pairs = df[["diagnoza_nazev", "diagnoza"]].dropna().drop_duplicates()
+    counts = pairs["diagnoza_nazev"].value_counts()
+    unique = pairs[pairs["diagnoza_nazev"].map(counts) == 1]
+    return dict(zip(unique["diagnoza_nazev"], unique["diagnoza"].astype(str)))
+
+
 POPULATION_FILE = DATA_DIR / "csu" / "population.csv"
 
 
@@ -791,11 +812,12 @@ def isin_top_diseases():
     years = [str(y) for y in sorted(by_year.index.tolist())]
     color_cycle = ["blue", "red", "teal", "orange", "green", "purple",
                    "blue", "red", "teal", "orange"]
+    codes = _isin_codes(df)
     datasets = []
     for i, diag in enumerate(top):
         if diag in by_year.columns:
             datasets.append(ds(diag, by_year[diag].tolist(),
-                               color_cycle[i % len(color_cycle)], "bar"))
+                               color_cycle[i % len(color_cycle)], "bar", code=codes.get(diag)))
 
     save("isin_top_diseases", {"labels": years, "datasets": datasets})
 
@@ -929,11 +951,12 @@ def isin_monthly_trend():
 
     labels = by_ym.index.tolist()
     color_map = SELECTED
+    codes = _isin_codes(df)
     datasets = []
     for diag in SELECTED:
         if diag in by_ym.columns:
             datasets.append(ds(diag, by_ym[diag].tolist(),
-                               color_map.get(diag, "blue")))
+                               color_map.get(diag, "blue"), code=codes.get(diag)))
 
     save("isin_monthly_trend", {"labels": labels, "datasets": datasets})
 
@@ -1049,6 +1072,7 @@ def isin_disease_groups():
 
     color_cycle = ["blue", "red", "teal", "orange", "green", "purple",
                    "blue", "red", "teal", "orange"]
+    codes = _isin_codes(df)
 
     for key, group in DISEASE_GROUPS.items():
         diseases = group["diseases"]
@@ -1064,7 +1088,7 @@ def isin_disease_groups():
         for i, diag in enumerate(diseases):
             if diag in by_year.columns:
                 datasets.append(ds(diag, by_year[diag].tolist(),
-                                   color_cycle[i % len(color_cycle)], "bar"))
+                                   color_cycle[i % len(color_cycle)], "bar", code=codes.get(diag)))
 
         save(f"isin_group_{key}", {"labels": years, "datasets": datasets})
         print(f"  [isin_groups] {key}: {len(datasets)} nemocí, {subset['pocet_pripadu'].sum():,.0f} případů celkem")
