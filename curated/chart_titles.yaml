@@ -76,6 +76,26 @@ flu_nowcast:
   cs: "Chřipka a RSV v ČR — odhad laboratorních záchytů v dosud neúplných týdnech (nowcast)"
   en: "Influenza and RSV in Czechia — estimate of laboratory detections for weeks not yet complete (nowcast)"
 
+resp_overview:
+  cs: "Respirační infekce v ČR — přehled týdne (ILI, ARI, pozitivita chřipky a RSV, covid)"
+  en: "Respiratory infections in Czechia — the week at a glance (ILI, ARI, influenza and RSV positivity, COVID-19)"
+resp_age:
+  cs: "ILI a ARI v ČR podle věkových skupin — běžící sezóna proti rozpětí předchozích sezón"
+  en: "ILI and ARI in Czechia by age group — current season against the range of previous seasons"
+flu_types:
+  cs: "Chřipka v ČR — laboratorní záchyty podle typu a subtypu po týdnech a sezónách"
+  en: "Influenza in Czechia — laboratory detections by type and subtype, by week and by season"
+
+genomics_overview:
+  cs: "Genomická data z Česka — veřejné sekvenční záznamy v archivu ENA"
+  en: "Genomic data from Czechia — public sequence records in the ENA archive"
+genomics_lineages:
+  cs: "České kmeny ve veřejných stromech příbuznosti Nextstrain"
+  en: "Czech strains in the public Nextstrain phylogenetic trees"
+genomics_amr:
+  cs: "Geny rezistence v českých bakteriálních izolátech (NCBI Pathogen Detection)"
+  en: "Resistance genes in Czech bacterial isolates (NCBI Pathogen Detection)"
+
 isin_top_diseases:
   cs: "Deset nejčastějších hlášených infekčních nemocí v ČR — roční počty případů"
   en: "Ten most common notified infectious diseases in Czechia — annual case counts"
