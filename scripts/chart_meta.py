@@ -10,18 +10,21 @@ odpovídat správně — a zlom v hlášení (EWS od 7/2025) vydá za epidemii.
 Frontend blok ignoruje (Chart.js si bere jen `labels`/`datasets`), takže se
 na webu nic nemění; čtou ho MCP, `/api/charts` a katalog zdrojů.
 
-Skládá se ze dvou vstupů:
+Skládá se ze tří vstupů:
   charts.yaml                   co který graf měří (ručně vedená mapa)
+  curated/chart_titles.yaml     jak se graf jmenuje, česky a anglicky
   data/meta/source_metadata.json  co o zdrojích tvrdí jejich vydavatelé
                                   (vyrábí scripts/source_metadata.py)
 
-Obojí je volitelné: bez nich se grafy vygenerují dál, jen bez metadat. Chybějící
+Všechno je volitelné: bez nich se grafy vygenerují dál, jen bez metadat. Chybějící
 popisek nesmí shodit pipeline, která veze vlastní data.
 """
 
+import calendar
 import json
 import os
-from datetime import datetime, timezone
+import re
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import yaml
@@ -29,11 +32,19 @@ import yaml
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = Path(os.environ.get("DATA_DIR", str(ROOT / "data")))
 CHARTS_META_FILE = ROOT / "charts.yaml"
+CHART_TITLES_FILE = ROOT / "curated" / "chart_titles.yaml"
+SOURCES_FILE = ROOT / "sources.yaml"
 SOURCE_META_FILE = DATA_DIR / "meta" / "source_metadata.json"
 
 # Zrna, u kterých je osa X čas a má smysl z ní číst rozsah období. U věkových
 # skupin nebo krajů by „od 0-4 do 80+“ bylo matoucí, proto seznam, ne odhad.
-TIME_GRAINS = {"day", "week", "month", "year"}
+TIME_GRAINS = {"day", "week", "month", "year", "season"}
+
+# Číselníky, kterými jsou kódované řady grafu (`series_code` v charts.yaml).
+# Kód je v `datasets[i].code`; tady je, co ten kód znamená.
+CODE_SYSTEMS = {
+    "icd10": {"id": "ICD-10", "name": "MKN-10 / ICD-10", "url": "https://icd.who.int/browse10/2019/en"},
+}
 
 
 def _load_charts() -> dict:
@@ -42,6 +53,29 @@ def _load_charts() -> dict:
     except FileNotFoundError:
         print(f"  [meta] {CHARTS_META_FILE.name} chybí — grafy budou bez metadat")
         return {}
+
+
+def _load_titles() -> dict:
+    try:
+        return yaml.safe_load(CHART_TITLES_FILE.read_text(encoding="utf-8")) or {}
+    except FileNotFoundError:
+        print(f"  [meta] {CHART_TITLES_FILE.name} chybí — grafy budou bez názvu")
+        return {}
+
+
+def _load_open_sources() -> set:
+    """
+    Zdroje, jejichž podmínky dovolují volné další užití (`licence.open` v sources.yaml).
+
+    Čte se registr v repozitáři, ne source_metadata.json: pod jakou licencí
+    vydáváme vlastní výstup, je naše rozhodnutí zapsané v gitu, ne údaj, který se
+    zjišťuje u vydavatele a při výpadku sítě chybí.
+    """
+    try:
+        registry = yaml.safe_load(SOURCES_FILE.read_text(encoding="utf-8")) or []
+    except FileNotFoundError:
+        return set()
+    return {s["id"] for s in registry if (s.get("licence") or {}).get("open") is True}
 
 
 def _load_sources() -> dict:
@@ -56,6 +90,8 @@ def _load_sources() -> dict:
 
 
 _CHARTS = _load_charts()
+_TITLES = _load_titles()
+_OPEN_SOURCES = _load_open_sources()
 _SOURCES = _load_sources()
 
 
@@ -69,11 +105,78 @@ def spec_for(name: str) -> dict | None:
     return None
 
 
-def _period(obj: dict) -> dict | None:
+_ISO_DAY = re.compile(r"^(\d{4})-(\d{2})-(\d{2})$")
+_ISO_MONTH = re.compile(r"^(\d{4})-(\d{2})$")
+_YEAR = re.compile(r"^(\d{4})$")
+_KT_WEEK = re.compile(r"^KT (\d{1,2})/(\d{2})$")       # „KT 40/26“ = ISO týden 40 roku 2026
+
+
+def _bounds(label: str, grain: str) -> tuple[date, date] | None:
+    """
+    První a poslední kalendářní den období, které popisek na ose označuje.
+
+    Popisky jsou psané pro čtenáře grafu („KT 40/26“, „2018-01“, „2025“), stroj
+    z nich datum nevyčte. Co nejde převést jistě, vrací None — sezóna
+    „2012/2013“ nemá den, kterým začíná, zapsaný v datech, a datum, které by
+    tu vzniklo odhadem, by vypadalo stejně důvěryhodně jako skutečné.
+    """
+    try:
+        if m := _ISO_DAY.match(label):
+            first = date(int(m[1]), int(m[2]), int(m[3]))
+            # U týdenních řad je popiskem pondělí týdne (to_weekly, ISO týdny ERVISS).
+            return first, (first + timedelta(days=6) if grain == "week" else first)
+        if m := _ISO_MONTH.match(label):
+            y, mth = int(m[1]), int(m[2])
+            return date(y, mth, 1), date(y, mth, calendar.monthrange(y, mth)[1])
+        if m := _YEAR.match(label):
+            return date(int(m[1]), 1, 1), date(int(m[1]), 12, 31)
+        if m := _KT_WEEK.match(label):
+            monday = date.fromisocalendar(2000 + int(m[2]), int(m[1]), 1)
+            return monday, monday + timedelta(days=6)
+    except ValueError:          # 31. únor, 53. týden v roce, který ho nemá
+        return None
+    return None
+
+
+def _period(obj: dict, grain: str) -> dict | None:
     labels = obj.get("labels")
     if not labels or not isinstance(labels, list):
         return None
-    return {"start": str(labels[0]), "end": str(labels[-1]), "points": len(labels)}
+    period = {"start": str(labels[0]), "end": str(labels[-1]), "points": len(labels)}
+    first, last = _bounds(str(labels[0]), grain), _bounds(str(labels[-1]), grain)
+    # Obě data, nebo žádné: polovina rozsahu by se četla jako „od … dodnes“.
+    if first and last:
+        period["start_date"] = first[0].isoformat()
+        period["end_date"] = last[1].isoformat()
+    return period
+
+
+def licence_for(source_ids: list) -> dict:
+    """
+    Licence výstupu — pod čím smí graf někdo použít dál.
+
+    Graf je cizí číslo plus naše zpracování. Zpracování licencovat můžeme, ale
+    nemůžeme dát dál víc práv, než dal zdroj nám: CC BY 4.0 na grafu ze zdroje
+    s licencí „nekomerčně, bez úprav“ by čtenáři slibovalo, co nám nikdo
+    nedovolil. Proto CC BY 4.0 jen tam, kde volné užití dovolují VŠECHNY zdroje
+    grafu. Jinak se žádná licence neuvádí (schválně ani `url` — stroj, který
+    katalog sklízí, si dovětek nepřečte a viděl by jen otevřenou licenci)
+    a `restricted_by` říká, čí podmínky rozhodují; jsou v `sources[].licence`.
+    """
+    restricted = [sid for sid in source_ids if sid not in _OPEN_SOURCES]
+    if source_ids and not restricted:
+        return {"id": "CC-BY-4.0",
+                "name": {"cs": "CC BY 4.0", "en": "CC BY 4.0"},
+                "url": "https://creativecommons.org/licenses/by/4.0/"}
+    return {"id": "source-terms",
+            "name": {"cs": "platí podmínky zdroje", "en": "the terms of the source apply"},
+            "restricted_by": restricted}
+
+
+def title_for(name: str) -> dict | None:
+    """Název grafu `{"cs": …, "en": …}` z curated/chart_titles.yaml."""
+    title = _TITLES.get(name)
+    return dict(title) if isinstance(title, dict) and title.get("cs") and title.get("en") else None
 
 
 def _now() -> str:
@@ -95,19 +198,30 @@ def meta_for(name: str, obj: dict | None = None, quiet: bool = False) -> dict | 
         return None
 
     source_ids = spec["source"] if isinstance(spec["source"], list) else [spec["source"]]
-    meta = {
-        "chart_id": name,
+    meta = {"chart_id": name}
+    title = title_for(name)
+    if title:
+        meta["title"] = title
+    elif not quiet:
+        print(f"  ⚠️  [{name}] nemá název v {CHART_TITLES_FILE.name}")
+    meta |= {
         "metric": spec["metric"],
         "unit": spec["unit"],
         "grain": spec["grain"],
         "region": spec["region"],
         "generated_at": _now(),
         "source_ids": source_ids,
+        "licence": licence_for(source_ids),
     }
     if obj and spec["grain"] in TIME_GRAINS:
-        period = _period(obj)
+        period = _period(obj, spec["grain"])
         if period:
             meta["period"] = period
+    # Číselník se uvádí jen u grafu, kde nějaká řada kód opravdu nese — souhrnná
+    # řada „Ostatní diagnózy“ žádný nemá a hlavička by slibovala, co v datech není.
+    code_system = CODE_SYSTEMS.get(spec.get("series_code"))
+    if code_system and any(isinstance(d, dict) and d.get("code") for d in (obj or {}).get("datasets") or []):
+        meta["series_code_system"] = code_system
 
     sources, caveats = [], []
     for sid in source_ids:
