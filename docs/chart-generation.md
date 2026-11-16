@@ -207,7 +207,25 @@ it.
 The thematic groups are defined in `DISEASE_GROUPS` in `generate_json.py`:
 `childhood_airborne`, `gastrointestinal`, `skin_contact`, `vector_animal`, `hepatitis`, `sti`,
 `rare_severe`. Influenza is excluded from ISIN charts on purpose — the SZÚ source is more
-detailed.
+detailed. Since November 2026 whooping cough, infectious mononucleosis and the other viral rash
+infections belong to `childhood_airborne` and tularaemia to `vector_animal`; before that the first
+three were hidden in the single total of `isin_group_other`.
+
+Three more files, for the overview dashboard and the thematic group pages, are written by
+`compute_isin.py`, which runs after `generate_json.py`:
+
+| File | Function | Input | Content |
+|---|---|---|---|
+| `isin_weekly` | `build_weekly` | weekly ÚZIS summary + `population_age.csv` | 11 diagnoses: weekly counts for five years with the EWS part, year to date, last four weeks, age groups of the last 52 weeks per 100,000 |
+| `isin_groups` | `build_groups` | ISIN CSV + `population_age.csv` | per thematic group: yearly counts of every diagnosis with the EWS part, age groups of the last year per 100,000; for "other" the ten largest diagnoses of every year |
+| `isin_overview` | `build_overview` | ISIN CSV + `population_age.csv` + `isin_regional_incidence.json` | the ten most frequent diagnoses of every year with their EWS share, age groups of the last year per 100,000, and the sentence for the regional map |
+
+Every block carries facts and a comment composed from them (`facts.py`). One rule is enforced
+by tests: when more than 10% of a diagnosis's records come from EWS reports, its count is not
+compared with previous years and the comment carries a warning instead. Reader-facing names of
+diagnoses come from `curated/diagnosis_names.yaml`; the official name is always kept next to
+them. A file whose content did not change is not rewritten, so an hourly run does not produce
+an hourly commit.
 
 ### STI and tuberculosis registries — source ÚZIS RPN, RTBC
 

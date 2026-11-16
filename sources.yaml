@@ -78,6 +78,27 @@
     nkod: "https://data.gov.cz/zdroj/datové-sady/00024341/c117b2588a0d1ffb022f9d63912e9663"
     http_head: "https://datanzis.uzis.gov.cz/data/NR-27-ISIN/NR-27-01/Otevrena-data-NR-27-01-infekcni-nemoci.csv"
 
+- id: uzis-isin-weekly
+  publisher: "ÚZIS ČR"
+  landing: "https://www.nzip.cz/data/2620-infekcni-nemoci-mezirocni-srovnani-datovy-souhrn"
+  licence:
+    name: "neuvedena"
+    url: "https://www.nzip.cz/data/2620-infekcni-nemoci-mezirocni-srovnani-datovy-souhrn"
+    note: >-
+      Datový souhrn NR-27-04, ne otevřená datová sada: stránka souhrnu ani
+      metodický popis (verze 2026-01.01) licenci neuvádějí, uvádějí jen
+      požadovanou citaci. Patička NZIP nemá stránku s podmínkami užití. Data
+      se proto přebírají s citací a bez příznaku `open` — graf z nich
+      nevychází pod CC BY 4.0, platí podmínky zdroje.
+    verified: "2026-11-16"
+  citation: >-
+    Šanca O., Májek T., Davidová H., Rázková K., Klimeš D., Kubát J., Blaha M., Jarkovský J. Meziroční srovnání počtu infekčních nemocí po týdnech v ČR. Národní zdravotnický informační portál [online]. Praha: Ministerstvo zdravotnictví ČR a Ústav zdravotnických informací a statistiky ČR, 2026. Dostupné z: https://www.nzip.cz/data/2620-infekcni-nemoci-mezirocni-srovnani-datovy-souhrn. ISSN 2695-0340.
+  files: ["isin/isin_tydenni.csv", "isin/isin_tydenni_stav.json"]
+  methodology: ["isin-ews-podil-roste", "isin-tydenni-kraje-bez-kraje"]
+  # Soubory leží na sdíleném úložišti (share.uzis.cz) bez strojově čitelných
+  # metadat; stav dat u zdroje si scraper čte z hlavičky XLSX do
+  # isin_tydenni_stav.json. Proto žádné `discovery`.
+
 - id: uzis-rpn
   publisher: "ÚZIS ČR"
   landing: "https://www.nzip.cz/data/2639-pohlavni-nemoci-otevrena-data"
@@ -253,7 +274,7 @@
       nesmí se vydávat za nezměněnou oficiální statistiku ČSÚ — incidence na
       100 000 obyvatel jsou odvozené údaje portálu.
     verified: "2026-10-25"
-  files: ["csu/population.csv"]
+  files: ["csu/population.csv", "csu/population_age.csv"]
   methodology: []
   discovery:
     http_head: "https://data.csu.gov.cz/api/dotaz/v1/data/sady/PORKR01?format=CSV"

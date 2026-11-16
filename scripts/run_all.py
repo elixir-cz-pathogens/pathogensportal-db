@@ -15,7 +15,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from scrapers import (mzcr_covid, ecdc_covid, ecdc_erviss, ecdc_erviss_snapshots, ecdc_respicast,
                       ena_czech, ncbi_pathogen, nextstrain_czech,
-                      szu_influenza, szu_weekly, uzis_isin, uzis_registries, csu_population,
+                      szu_influenza, szu_weekly, uzis_isin, uzis_isin_weekly, uzis_registries,
+                      csu_population,
                       who_flu)
 from snapshot import snapshot
 
@@ -37,7 +38,8 @@ def run() -> int:
         ("ECDC RespiCast (CZ)",   ecdc_respicast.download,     DATA_ROOT / "ecdc"),
     ]
 
-    # Genomické zdroje: tři cizí archivy, na kterých nezávisí žádný jiný graf.
+    # Vedlejší zdroje: tři genomické archivy a týdenní souhrn ÚZIS. Nezávisí na
+    # nich žádný jiný graf než jejich vlastní bloky.
     # Běží ve stejné smyčce jako povinné zdroje (ať se dostanou do snapshotu
     # a do metadat o zdrojích), ale jejich selhání nevrací exit 1 — ten by
     # v kontejneru zastavil celý řetěz a portál by kvůli výpadku ENA nebo NCBI
@@ -47,6 +49,10 @@ def run() -> int:
         ("ENA sekvence (CZ)",     ena_czech.download,          DATA_ROOT / "ena"),
         ("Nextstrain stromy (CZ)", nextstrain_czech.download,  DATA_ROOT / "nextstrain"),
         ("NCBI rezistence (CZ)",  ncbi_pathogen.download,      DATA_ROOT / "ncbi"),
+        # Týdenní souhrn ÚZIS leží na sdíleném úložišti, ne v katalogu otevřených
+        # dat: odkaz se může změnit bez ohlášení. Stojí na něm jediný blok jedné
+        # stránky (compute_isin.py), a ten při výpadku zůstane u posledního stavu.
+        ("ÚZIS ISIN týdenní souhrn", uzis_isin_weekly.download, DATA_ROOT / "isin"),
     ]
     side_labels = {label for label, _, _ in side_jobs}
 
