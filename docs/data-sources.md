@@ -146,13 +146,18 @@ most of them come from the publishers as they are.
     run together. A year that does not fit its header cell is printed as `###`; it is inferred
     from the neighbouring table.
   - "By region": one PDF per week, reported by virological laboratory; laboratories of the same
-    region are summed. Published PDFs do not change, so they are cached in `szu/pdf_kraje/`.
+    region are summed. The PDFs are cached by file name in `szu/pdf_kraje/`. The week is read
+    from the table, not from the file name: on 16 November 2026 SZÚ published a corrected
+    week 45 under the name of week 46. When two PDFs carry the same week, the later file
+    replaces the earlier one; a PDF whose name and table disagree is downloaded again on every
+    run, because SZÚ may replace it under the same name.
 - **Output:**
   - `szu/szu_weekly_viry.csv` — `sezona, rok, tyden, virus, pocet`
   - `szu/szu_weekly_kraje.csv` — `rok, tyden, kraj, pozitivni, vysetreno`
 - **Checks:** in every table that has a "cumulative" column, the weekly values must add up to it
   for every virus; on a mismatch the parser raises an error rather than return wrong numbers.
-  Tests run on two real PDFs, one of each layout (`tests/fixtures/szu/`).
+  Tests run on real PDFs of every layout met so far (`tests/fixtures/szu/`), including the
+  two regional PDFs that carry the same week.
 - **Good to know:** Prague and Central Bohemia share laboratories and cannot be separated; they
   carry the combined code `CZ010+CZ020`.
 

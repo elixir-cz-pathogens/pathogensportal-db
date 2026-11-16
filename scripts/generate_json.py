@@ -376,7 +376,18 @@ def flu_weekly():
 # ── 9b. Regionální chřipka — týdenní průběh a sezónní součty ─────────────────
 def _load_szu_kraje():
     path = DATA_DIR / "szu" / "szu_weekly_kraje.csv"
-    return pd.read_csv(path) if path.exists() else pd.DataFrame()
+    if not path.exists():
+        return pd.DataFrame()
+    df = pd.read_csv(path)
+    # Jeden řádek na kraj a týden. Scraper to hlídá (szu_weekly.merge_kraje), ale
+    # CSV na disku může pocházet ze staršího běhu: zdvojený týden by týdenní graf
+    # shodil a sezónní součet tiše nadsadil. Platí pozdější řádek.
+    dup = df.duplicated(["rok", "tyden", "kraj"], keep="last")
+    if dup.any():
+        print(f"  [flu_regional] ⚠️ szu_weekly_kraje.csv: {int(dup.sum())} zdvojených "
+              f"řádků (kraj a týden) — beru pozdější")
+        df = df[~dup]
+    return df
 
 
 def flu_regional_weekly():

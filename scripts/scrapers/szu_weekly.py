@@ -9,8 +9,11 @@ hostuje PDF každého týdne běžící sezóny, a to dvojího druhu:
       týdenní matici (virus × kalendářní týden) pro běžící I minulou sezónu,
       včetně kontrolního sloupce „Kumulativně“. Stačí tedy stáhnout poslední.
   laboratorni_vysetreni_podle_kraju_*      — každé PDF nese jeden týden po
-      krajích (resp. virologických laboratořích). Stahují se všechna;
-      publikované PDF se nemění, takže cache podle jména souboru stačí.
+      krajích (resp. virologických laboratořích). Stahují se všechna
+      a ukládají se podle jména souboru. Týden se čte z tabulky, ne ze jména:
+      16. 11. 2026 SZÚ vystavil pod jménem „46. týden“ opravenou tabulku
+      45. týdne. Takový soubor nahrazuje starší PDF téhož týdne a stahuje se
+      při každém běhu znovu (viz _load_kraje_pdf, merge_kraje).
 
 Extrakce ověřená dvěma nezávislými kontrolami: součet týdnů běžící sezóny
 sedí na sloupec „Kumulativně“ (16/16 virů) a součet minulé sezóny na sezónní
@@ -266,7 +269,60 @@ def parse_kraje(pdf_bytes: bytes) -> tuple[int, int, list[dict]]:
     return year, week, rows
 
 
+def merge_kraje(parsed: list[tuple[str, int, int, list[dict]]]) -> list[dict]:
+    """Sloučí krajská PDF do řádků (rok, tyden, kraj, …): jeden týden = jedno PDF.
+
+    `parsed` je [(jméno souboru, rok, tyden, řádky)] seřazené podle týdne ve
+    jméně. Nesou-li dva soubory tentýž týden, platí ten pozdější — SZÚ takhle
+    vystavuje opravu. Obě verze vedle sebe by daly kraj v jednom týdnu dvakrát;
+    na tom 16. 11. 2026 spadlo generování grafů a s ním celá obnova dat.
+    """
+    by_week: dict[tuple[int, int], tuple[str, list[dict]]] = {}
+    for name, year, week, rows in parsed:
+        if (year, week) in by_week:
+            print(f"  [szu_weekly] ⚠️ týden {week}/{year} je ve dvou PDF: "
+                  f"{name} nahrazuje {by_week[(year, week)][0]}")
+        by_week[(year, week)] = (name, rows)
+    return [{"rok": year, "tyden": week, **row}
+            for (year, week), (_, rows) in by_week.items() for row in rows]
+
+
 # ── stahování ────────────────────────────────────────────────────────────────
+
+def _fetch(url: str) -> bytes:
+    r = requests.get(url, timeout=60)
+    r.raise_for_status()
+    return r.content
+
+
+def _load_kraje_pdf(url: str, cache_dir: Path, fetch=_fetch) -> tuple[int, int, list[dict]]:
+    """Krajské PDF z cache, nebo ze sítě, když v cache není.
+
+    PDF, jehož jméno slibuje jiný týden, než jaký nese tabulka, je omyl nebo
+    oprava a SZÚ ho pod stejným jménem může vyměnit. Cache by tu výměnu nikdy
+    neuviděla, proto se takový soubor stahuje při každém běhu znovu. Když
+    stažení selže, zůstává verze z cache — horší než nic není.
+    """
+    name = url.rsplit("/", 1)[-1]
+    cached = cache_dir / name
+    fresh = not cached.exists()
+    if fresh:
+        cached.write_bytes(fetch(url))
+    year, week, rows = parse_kraje(cached.read_bytes())
+    if (year, week) == _week_key(url):
+        return year, week, rows
+
+    if not fresh:
+        try:
+            content = fetch(url)
+            year, week, rows = parse_kraje(content)
+            cached.write_bytes(content)
+        except Exception as e:
+            print(f"  [szu_weekly] {name}: nové stažení selhalo ({e}) — zůstává verze z cache")
+    if (year, week) != _week_key(url):
+        print(f"  [szu_weekly] ⚠️ {name}: tabulka nese týden {week}/{year}, ne týden ze jména")
+    return year, week, rows
+
 
 def download(output_dir: Path) -> list[str]:
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -292,22 +348,17 @@ def download(output_dir: Path) -> list[str]:
     seasons = sorted({r["sezona"] for r in rows})
     print(f"  [szu_weekly] {len(rows):,} týdenních hodnot, sezóny {seasons}")
 
-    # Kraje: každý týden zvlášť; publikované PDF se nemění → cache podle jména.
-    kraje_rows = []
-    for url in sorted(set(kraje), key=_week_key):
+    # Kraje: každý týden zvlášť, PDF v cache podle jména.
+    parsed = []
+    for url in sorted(set(kraje), key=lambda u: (_week_key(u), u)):
         name = url.rsplit("/", 1)[-1]
-        cached = pdf_cache / name
-        if not cached.exists():
-            r = requests.get(url, timeout=60)
-            r.raise_for_status()
-            cached.write_bytes(r.content)
         try:
-            year, week, rows = parse_kraje(cached.read_bytes())
+            year, week, rows = _load_kraje_pdf(url, pdf_cache, _fetch)
         except Exception as e:
             print(f"  [szu_weekly] {name}: {e} — přeskakuji")
             continue
-        for row in rows:
-            kraje_rows.append({"rok": year, "tyden": week, **row})
+        parsed.append((name, year, week, rows))
+    kraje_rows = merge_kraje(parsed)
     kraje_path = output_dir / "szu_weekly_kraje.csv"
     pd.DataFrame(kraje_rows).sort_values(["rok", "tyden", "kraj"]).to_csv(
         kraje_path, index=False, encoding="utf-8")

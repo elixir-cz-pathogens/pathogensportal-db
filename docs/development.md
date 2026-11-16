@@ -46,6 +46,8 @@ The suite uses no network and no database; HTTP responses are stubbed. CI
 | `test_uzis_registries.py` | STI and tuberculosis chart generators on small samples |
 | `test_source_metadata.py` | metadata discovery, failure isolation, that every generated chart is in `charts.yaml` and has a title, and the conversion of axis labels to ISO dates |
 | `test_isin_codes.py` | ICD-10 codes on the series of the ISIN disease charts |
+| `test_szu_weekly.py` | SZÚ weekly PDFs on real files: every layout of the virus matrix; a regional PDF that carries another week than its name says, and the cache that must not keep it |
+| `test_flu_regional.py` | regional charts when a region appears twice in one week: the weekly chart is still written and the season totals do not count the week twice |
 | `test_glm.py` | the quasi-Poisson GLM against `statsmodels` (skipped when it is not installed) |
 | `test_scoring_golden.py` | golden values of the anomaly scoring |
 | `test_reporting_channel.py` | the EWS channel verdict |
