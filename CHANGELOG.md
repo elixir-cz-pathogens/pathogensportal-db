@@ -8,6 +8,15 @@ Releases are git tags `vMAJOR.MINOR.PATCH`. The portal pins one of them as its s
 
 Changes on `dev` since v0.4.0.
 
+- **Fixed: a corrected SZÚ regional PDF stopped the whole refresh** (no issue) — on 16 November
+  2026 SZÚ published the corrected table of week 45 under the file name of week 46. The scraper
+  reads the week from the table, so every region appeared twice in that week,
+  `flu_regional_weekly` raised a `TypeError` and the container chain stopped before any chart
+  was written. Now the later PDF replaces the earlier one for the same week
+  (`szu_weekly.merge_kraje`), a PDF whose name and table disagree is downloaded again on every
+  run instead of being served from the cache, and `generate_json.py` drops a doubled
+  region-week when it reads the CSV — which also keeps `flu_regional_overview` from counting
+  such a week twice.
 - **Respiratory blocks** (no issue) — `compute_resp.py` builds `resp_overview.json`,
   `resp_age.json` and `flu_types.json`: the week at a glance, ILI/ARI by age against the range of
   previous seasons, and influenza detections by type and subtype. Each block carries facts and a
