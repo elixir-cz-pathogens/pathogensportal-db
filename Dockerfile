@@ -30,4 +30,7 @@ ENV DATA_DIR=/data \
 # scraperech; i ono je za `||`, aby výpadek cizího archivu nezastavil obnovu grafů.
 # compute_isin.py (přehled infekčních nemocí) běží po generate_json.py, protože
 # větu ke krajské mapě bere z isin_regional_incidence.json; i ono je za `||`.
-CMD ["sh", "-c", "python scripts/run_all.py && python scripts/generate_json.py && python scripts/detect_anomalies.py && python scripts/compute_mem.py && (python scripts/compute_nowcast.py || echo 'flu_nowcast: selhal, pokračuji bez něj') && (python scripts/compute_resp.py || echo 'compute_resp: selhal, pokračuji bez něj') && (python scripts/compute_genomics.py || echo 'compute_genomics: selhal, pokračuji bez něj') && (python scripts/compute_isin.py || echo 'compute_isin: selhal, pokračuji bez něj')"]
+# detect_anomalies.py --zdroj tydenni (signály 11 diagnóz z týdenního souhrnu ÚZIS)
+# je vedlejší výstup: bez staženého souhrnu nic nezapíše a jeho pád nesmí zastavit
+# hlavní signály ani ostatní grafy, proto je také za `||`.
+CMD ["sh", "-c", "python scripts/run_all.py && python scripts/generate_json.py && python scripts/detect_anomalies.py && (python scripts/detect_anomalies.py --zdroj tydenni || echo 'anomaly_signals_weekly: selhal, pokračuji bez něj') && python scripts/compute_mem.py && (python scripts/compute_nowcast.py || echo 'flu_nowcast: selhal, pokračuji bez něj') && (python scripts/compute_resp.py || echo 'compute_resp: selhal, pokračuji bez něj') && (python scripts/compute_genomics.py || echo 'compute_genomics: selhal, pokračuji bez něj') && (python scripts/compute_isin.py || echo 'compute_isin: selhal, pokračuji bez něj')"]

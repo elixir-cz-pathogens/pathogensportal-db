@@ -35,6 +35,13 @@ Tvar zdroje (ověřeno na složkách 2026-10-05 až 2026-11-16):
     hlášení EWS (ne další případy navíc).
   - Řádky týdnů končí řádkem „Celkem/Total“; uvnitř bloku může být prázdný
     řádek. Datum u řádku „Celkem/Total“ je ve zdroji zastaralé a nečte se.
+
+Starší roky: souhrn nese jen posledních pět let. Rok, který z něj vypadne, se
+v CSV ponechá z minulého stažení (`keep_older_years`) — signály z týdenního
+souhrnu (detect_anomalies.py --zdroj tydenni) potřebují aspoň tři roky historie
+před zavedením EWS a bez toho by v roce 2027 přišly o rok 2022. Ponechávají se
+jen roky STARŠÍ než nejstarší rok nového stažení; rok, který zdroj ještě nese,
+se vždy bere ze zdroje.
 """
 
 import io
@@ -248,6 +255,35 @@ def parse_archive(content: bytes) -> tuple[pd.DataFrame, dict]:
     return df, state
 
 
+def keep_older_years(new: pd.DataFrame, old_path: Path) -> pd.DataFrame:
+    """
+    Nová tabulka doplněná o roky, které už zdroj nenese, z minulého CSV.
+
+    Po diagnózách: rok se doplní jen u diagnózy, která je i v novém stažení, a jen
+    když je starší než její nejstarší nový rok. Minulé CSV, které nejde přečíst
+    nebo má jiné sloupce, se nepoužije — raději kratší historie než smíchaná data.
+    """
+    if not old_path.exists():
+        return new
+    try:
+        old = pd.read_csv(old_path)
+    except (OSError, ValueError) as e:
+        print(f"  [uzis_isin_weekly] minulé CSV nejde přečíst ({e}) — starší roky nedoplňuji")
+        return new
+    if list(old.columns) != COLUMNS:
+        print("  [uzis_isin_weekly] minulé CSV má jiné sloupce — starší roky nedoplňuji")
+        return new
+    first = new.groupby("diagnoza")["rok"].min()
+    keep = old[old["diagnoza"].map(first).gt(old["rok"])]
+    if keep.empty:
+        return new
+    years = sorted(int(y) for y in keep["rok"].unique())
+    print(f"  [uzis_isin_weekly] ponechávám z minulého stažení roky, které zdroj už nenese: {years}")
+    return (pd.concat([keep, new], ignore_index=True)
+            .sort_values(["diagnoza", "kraj_kod", "rok", "tyden", "vek"], kind="stable")
+            .reset_index(drop=True))
+
+
 def _monday(day: date) -> date:
     return day - timedelta(days=day.weekday())
 
@@ -275,6 +311,7 @@ def download(output_dir: Path, today: date | None = None) -> list[str]:
         raise ValueError(f"nejnovější složka souhrnu je {state['slozka']} ({age} dní stará) — zdroj se neobnovuje")
 
     state["fetched_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    df = keep_older_years(df, csv_path)
     df.to_csv(csv_path, index=False, encoding="utf-8")
     state_path.write_text(json.dumps(state, ensure_ascii=False, indent=1), encoding="utf-8")
     last = df[df["rok"] == df["rok"].max()]

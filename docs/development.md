@@ -46,7 +46,7 @@ The suite uses no network and no database; HTTP responses are stubbed. CI
 | `test_uzis_registries.py` | STI and tuberculosis chart generators on small samples |
 | `test_source_metadata.py` | metadata discovery, failure isolation, that every generated chart is in `charts.yaml` and has a title, and the conversion of axis labels to ISO dates |
 | `test_isin_codes.py` | ICD-10 codes on the series of the ISIN disease charts |
-| `test_uzis_isin_weekly.py` | the weekly ÚZIS workbook: year blocks side by side, gaps in columns and rows, a block that lost its header; the weekly download cache and a source that stopped updating |
+| `test_uzis_isin_weekly.py` | the weekly ÚZIS workbook: year blocks side by side, gaps in columns and rows, a block that lost its header; the weekly download cache, a source that stopped updating and years kept from the previous download |
 | `test_compute_isin.py` | the overview blocks: no comparison with previous years when EWS exceeds 10%, figures in the text, age groups per 100,000, a file that is not rewritten without a change |
 | `test_csu_population_age.py` | population by single year of age; its failure must not stop the population download |
 | `test_szu_weekly.py` | SZÚ weekly PDFs on real files: every layout of the virus matrix; a regional PDF that carries another week than its name says, and the cache that must not keep it |
@@ -54,6 +54,7 @@ The suite uses no network and no database; HTTP responses are stubbed. CI
 | `test_glm.py` | the quasi-Poisson GLM against `statsmodels` (skipped when it is not installed) |
 | `test_scoring_golden.py` | golden values of the anomaly scoring |
 | `test_reporting_channel.py` | the EWS channel verdict |
+| `test_weekly_months.py` | weeks split into months by working days: no case lost or doubled, EWS never above the total, an open month not scored; the weekly run of the detector, its baseline rule and its own output file |
 | `test_mem_golden.py` | `mem.py` against the R package `mem` |
 | `test_compute_mem.py` | the week × season matrix |
 | `test_trend.py`, `test_forecast.py` | trend categories, exceedance probability |

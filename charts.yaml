@@ -82,6 +82,7 @@ isin_overview:           { source: [uzis-isin, csu-population], metric: cases, u
 isin_groups:             { source: [uzis-isin, csu-population], metric: cases, unit: count, grain: year, region: CZ }
 isin_weekly:             { source: [uzis-isin-weekly, csu-population], metric: cases, unit: count, grain: week, region: CZ }
 anomaly_signals:         { source: uzis-isin, metric: anomaly_score, unit: score, grain: month, region: NUTS3 }
+anomaly_signals_weekly:  { source: uzis-isin-weekly, metric: anomaly_score, unit: score, grain: month, region: NUTS3 }
 
 sti_registry_trend:      { source: uzis-rpn, metric: cases, unit: count, grain: year, region: CZ }
 sti_registry_incidence:  { source: [uzis-rpn, csu-population], metric: cases, unit: per_100k, grain: year, region: CZ }

@@ -113,8 +113,12 @@
     2022–2025 se liší nejvýš o 10. Část letošních záznamů tedy zatím nemá
     přiřazený kraj.
   dopad: >-
-    Celostátní týdenní počty jsou úplné, krajské za běžící rok ne. Portál z
-    týdenního souhrnu kreslí jen celou ČR.
+    Celostátní týdenní počty jsou úplné, krajské za běžící rok ne. Grafy portálu
+    z týdenního souhrnu kreslí jen celou ČR. Signály z týdenního souhrnu
+    (anomaly_signals_weekly) krajské řady hodnotí tak, jak jsou: od března 2026
+    v nich chybí 1–10 % záznamů podle diagnózy (nejvíc salmonelóza,
+    kampylobakterióza, plané neštovice, svrab), takže krajský signál těsně nad
+    prahem může chybět; falešný signál tím nevznikne.
 
 - id: flunet-jmenovatel-2021
   od: 2021-09

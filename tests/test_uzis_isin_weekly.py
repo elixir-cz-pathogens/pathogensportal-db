@@ -10,6 +10,7 @@ import json
 import zipfile
 from datetime import date
 
+import pandas as pd
 import pytest
 
 openpyxl = pytest.importorskip("openpyxl")
@@ -162,3 +163,27 @@ def test_zdroj_ktery_se_prestal_obnovovat_selze_a_nechá_stara_data(tmp_path, mo
     with pytest.raises(ValueError, match="neobnovuje"):
         u.download(tmp_path, today=date(2026, 11, 17))
     assert not (tmp_path / u.CSV_NAME).exists()
+
+
+def test_rok_ktery_zdroj_uz_nenese_zustane_z_minuleho_stazeni(tmp_path, monkeypatch):
+    # minulé stažení: 2024–2025; nové: 2025–2026 → 2024 zůstane, 2025 se vezme ze zdroje
+    old = archive({"2026-11-09": {"a.xlsx": workbook(years={2025: [(1, 0, 1, 0)], 2024: [(3, 0, 3, 0)]})}})
+    new = archive({"2026-11-16": {"a.xlsx": workbook(years={2026: [(1, 0, 4, 2)], 2025: [(5, 0, 6, 0)]})}})
+    monkeypatch.setattr(u.requests, "get", lambda url, timeout: _Response(old))
+    u.download(tmp_path, today=date(2026, 11, 10))
+    monkeypatch.setattr(u.requests, "get", lambda url, timeout: _Response(new))
+    u.download(tmp_path, today=date(2026, 11, 17))
+
+    df = pd.read_csv(tmp_path / u.CSV_NAME)
+    assert list(df.columns) == u.COLUMNS
+    cz = df[(df["kraj_kod"] == "CZ") & (df["vek"] == "Celkem")].set_index("rok")["pocet"]
+    assert cz.to_dict() == {2024: 6, 2025: 11, 2026: 5}
+    assert not df.duplicated(["diagnoza", "kraj_kod", "rok", "tyden", "vek"]).any()
+
+
+def test_minule_csv_s_jinymi_sloupci_se_nepouzije(tmp_path, monkeypatch):
+    (tmp_path / u.CSV_NAME).write_text("diagnoza,rok,pocet\nB15,2020,5\n", encoding="utf-8")
+    content = archive({"2026-11-16": {"a.xlsx": workbook()}})
+    monkeypatch.setattr(u.requests, "get", lambda url, timeout: _Response(content))
+    u.download(tmp_path, today=date(2026, 11, 17))
+    assert set(pd.read_csv(tmp_path / u.CSV_NAME)["rok"]) == {2025, 2026}

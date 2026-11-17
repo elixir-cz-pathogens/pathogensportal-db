@@ -22,6 +22,7 @@ python scripts/run_all.py             # download CSVs into $DATA_DIR, snapshot t
 python scripts/load_to_db.py          # optional: fill PostgreSQL
 python scripts/generate_json.py       # chart JSON into $OUTPUT_DIR
 python scripts/detect_anomalies.py    # $OUTPUT_DIR/anomaly_signals.json
+python scripts/detect_anomalies.py --zdroj tydenni   # $OUTPUT_DIR/anomaly_signals_weekly.json
 python scripts/compute_mem.py         # $OUTPUT_DIR/flu_mem.json
 python scripts/compute_nowcast.py     # $OUTPUT_DIR/flu_nowcast.json (shadow mode)
 ```
@@ -50,7 +51,7 @@ own and is idempotent — a repeated run neither duplicates nor breaks anything.
 | 2b | Source metadata | `scripts/source_metadata.py` (called by `run_all.py`) | `$DATA_DIR/meta/source_metadata.json` |
 | 3 | Normalise | `scripts/load_to_db.py` | PostgreSQL tables `observation`, `population` |
 | 4 | Charts | `scripts/generate_json.py` | `$OUTPUT_DIR/*.json` (Chart.js data + `meta` block) |
-| 5 | Analytics | `scripts/detect_anomalies.py` | `$OUTPUT_DIR/anomaly_signals.json` |
+| 5 | Analytics | `scripts/detect_anomalies.py` | `$OUTPUT_DIR/anomaly_signals.json`; with `--zdroj tydenni` `anomaly_signals_weekly.json` |
 |   |           | `scripts/compute_mem.py` | `$OUTPUT_DIR/flu_mem.json` |
 
 Every scraper runs in isolation: when one source fails (site down, format changed) the others
@@ -88,7 +89,9 @@ scripts/source_metadata.py     metadata from the publishers (licence, freshness)
 scripts/load_to_db.py          ETL: CSV → PostgreSQL (observation, population)
 scripts/generate_json.py       reads the data, writes Chart.js JSON into $OUTPUT_DIR
 scripts/chart_meta.py          the `meta` block attached to every chart
-scripts/detect_anomalies.py    anomaly detection (Farrington/Noufaily) → anomaly_signals.json
+scripts/detect_anomalies.py    anomaly detection (Farrington/Noufaily) → anomaly_signals.json,
+                               anomaly_signals_weekly.json (--zdroj tydenni)
+scripts/weekly_months.py       weekly ÚZIS summary → monthly series for the detector
 scripts/simulate_detection.py  simulation study of the detector
 scripts/compute_mem.py         seasonal influenza thresholds → flu_mem.json
 scripts/mem.py                 Moving Epidemic Method — the computation, no I/O

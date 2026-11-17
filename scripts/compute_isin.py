@@ -70,6 +70,7 @@ NAMES_FILE = ROOT / "curated" / "diagnosis_names.yaml"
 EWS_COMPARABLE_MAX = 10.0
 
 TOP_N = 10
+WEEKLY_YEARS = 5        # kolik let ukazuje týdenní blok (tolik jich nese zdroj)
 AGE_WINDOW_WEEKS = 52
 TOTAL = "Celkem"
 # Chřipka má vlastní, podrobnější zdroj (SZÚ) a vlastní panely.
@@ -315,6 +316,9 @@ def build_weekly() -> dict | None:
         return None
     state = json.loads(WEEKLY_STATE.read_text(encoding="utf-8"))
     df = pd.read_csv(WEEKLY_FILE)
+    # Scraper si drží i roky, které zdroj už nenese (pro signály); týdenní blok
+    # ukazuje stejných pět let jako zdroj.
+    df = df[df["rok"] > df["rok"].max() - WEEKLY_YEARS]
     cz = df[df["kraj_kod"] == "CZ"]
     total = cz[cz["vek"] == TOTAL]
     year = int(total["rok"].max())
