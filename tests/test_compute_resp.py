@@ -252,6 +252,21 @@ def test_prehled_ma_dlazdici_nemocnic_s_vlastni_jednotkou(ws):
     assert "hospitalizace ÚZIS" in source["cs"] and "hospitalisations from ÚZIS" in source["en"]
 
 
+def test_dlazdice_covidu_nese_svatek(ws):
+    """Týden se svátkem: změnu proti předchozímu týdnu portál u dlaždice nepíše."""
+    rates, lab = _overview_inputs(ws)
+    hol = _holidays(ws, [(2026, 44, 1, 0), (2026, 45, 0, 0)])
+    tile = cr.build_overview(rates, lab, hol, MEM, _covid(ws, "2026-11-12"))["tiles"][-1]
+    assert (tile["id"], tile["holiday"], tile["prev_holiday"]) == ("covid", None, "public")
+
+
+def test_dlazdice_nemocnic_nese_svatek(ws):
+    rates, lab = _overview_inputs(ws)
+    hol = _holidays(ws, [(2026, 44, 0, 0), (2026, 45, 1, 0)])
+    tile = cr.build_overview(rates, lab, hol, MEM, None, _hospital(ws, "2026-11-12"))["tiles"][-1]
+    assert (tile["holiday"], tile["prev_holiday"]) == ("public", None)
+
+
 def test_nemocnice_s_novejsim_tydnem_nez_ili_ho_jmenuji(ws):
     """E-surveillance bývá o týden napřed před ERVISS — věta musí říct, o kterém týdnu mluví."""
     rates, lab = _overview_inputs(ws)

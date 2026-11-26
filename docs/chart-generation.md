@@ -281,6 +281,11 @@ Rules worth knowing:
 
 - **Seven-day sums, not daily figures.** Reporting has a strong weekly rhythm (24 influenza cases
   on Sunday 22 November 2026, 1,090 on Monday). A 7-day sum always contains every weekday once.
+- **The comments compare complete ISO weeks, never rolling windows.** A public holiday inside a
+  rolling window makes a false jump (17 November 2026: the seven days to 24 November came out
+  "83% more" than the seven before). When either compared week has a holiday or school holidays
+  (`curated/holidays_cz_weekly.csv`), the change is not written and a caveat is. The same rule
+  marks the `covid` and `hosp` tiles of `resp_overview.json`.
 - **Not compared with ILI/ARI.** These are reports of all connected physicians and hospitals,
   not sentinel rates; nothing here is set against the MEM thresholds.
 - **Vaccination status is not charted.** Counts of vaccinated and unvaccinated cases without the

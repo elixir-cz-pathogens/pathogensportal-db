@@ -27,6 +27,8 @@ Changes on `dev` since v0.4.0.
   **One existing file gains a tile:** `resp_overview.json` carries a new tile `hosp` — new
   hospital admissions with an acute respiratory infection per complete ISO week — with the unit
   `admissions`, an optional sentence in the comment and `uzis-esurveillance` among its sources.
+  The `covid` tile and the new one carry `holiday` / `prev_holiday` like the ILI tiles, so a
+  week-on-week change next to a holiday week is not shown.
   The portal must know the unit before this lands (pathogensportal branch of the same name);
   an older `pp-resp.js` would label the number "per 100,000". Without the downloaded source the
   tile is simply absent.

@@ -530,11 +530,13 @@ def build_overview(rates: pd.DataFrame, lab: pd.DataFrame, holidays: dict, mem: 
         wk = covid.index[-1]
         now, prev_week = float(covid.iloc[-1]), shift(covid.index[-1], -1)
         prev = float(covid[prev_week]) if prev_week in covid.index else None
+        kind_c, kind_cp = holiday_kind(wk, holidays), holiday_kind(prev_week, holidays)
         tiles.append({"id": "covid", "label": TILE_LABELS["covid"][0], "label_en": TILE_LABELS["covid"][1],
                       "unit": "count",
                       "week": wk, "value": int(now), "prev_week": prev_week if prev is not None else None,
                       "prev": None if prev is None else int(prev),
                       "change_pct": None if not prev else round((now - prev) / prev * 100, 1),
+                      "holiday": kind_c or None, "prev_holiday": kind_cp or None,
                       "series": _series(covid, weeks)})
         f.week("wk_cov", wk)
         f.count("cov_cases", int(now), wk)
@@ -557,11 +559,15 @@ def build_overview(rates: pd.DataFrame, lab: pd.DataFrame, holidays: dict, mem: 
         prev = float(hosp[prev_week]) if prev_week in hosp.index else None
         # Jednotka „admissions“ má v portálu vlastní popisek; „count“ by tvrdil
         # „nových případů“ a „závisí na testování“, což pro nemocnice neplatí.
+        # Svátek v jednom z týdnů dělá ze změny artefakt hlášení (stejně jako u ILI);
+        # portál pak změnu nepíše a ukáže štítek svátku.
+        kind_h, kind_hp = holiday_kind(wk, holidays), holiday_kind(prev_week, holidays)
         tiles.append({"id": "hosp", "label": TILE_LABELS["hosp"][0], "label_en": TILE_LABELS["hosp"][1],
                       "unit": "admissions",
                       "week": wk, "value": int(now), "prev_week": prev_week if prev is not None else None,
                       "prev": None if prev is None else int(prev),
                       "change_pct": None if not prev else round((now - prev) / prev * 100, 1),
+                      "holiday": kind_h or None, "prev_holiday": kind_hp or None,
                       "series": _series(hosp, weeks)})
         f.week("wk_hosp", wk)
         f.count("hosp_new", int(now), wk)

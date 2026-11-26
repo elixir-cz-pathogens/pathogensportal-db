@@ -149,15 +149,71 @@ def day_text(iso: str, lang: str) -> str:
 
 def _last(wide: pd.DataFrame, key: str, offset: int = 0):
     """Hodnota řady k poslednímu dni (offset 7 = o týden dřív); None, když chybí."""
-    col = wide[key].dropna() if key in wide.columns else pd.Series(dtype=float)
-    if len(wide) <= offset:
+    if key not in wide.columns or len(wide) <= offset:
         return None
     value = wide[key].iloc[-1 - offset]
     return None if pd.isna(value) else int(value)
 
 
+def weekly(wide: pd.DataFrame, last_day: str) -> pd.DataFrame:
+    """
+    Součty po ISO týdnech („2026-W47“) — jen úplné týdny: všech sedm dní v datech
+    a neděle nejpozději v den „stavu k datu“. Běžící týden by vedle úplného vypadal
+    jako propad.
+    """
+    if wide.empty:
+        return wide
+    days = pd.to_datetime(wide.index)
+    iso = days.isocalendar()
+    key = iso["year"].astype(str).values + "-W" + iso["week"].astype(int).map("{:02d}".format).values
+    grouped = wide.groupby(key)
+    sums, counts = grouped.sum(min_count=1), grouped.size()
+    last = date.fromisoformat(last_day)
+    done = [w for w in sums.index
+            if counts[w] == 7 and date.fromisocalendar(int(w[:4]), int(w[6:]), 7) <= last]
+    return sums.loc[done]
+
+
+def week_text(week: str, lang: str) -> str:
+    """„2026-W47“ → „16.–22. listopadu 2026“ / „16–22 November 2026“."""
+    start = date.fromisocalendar(int(week[:4]), int(week[6:]), 1)
+    end = start + timedelta(days=6)
+    months = MONTHS_CS if lang == "cs" else MONTHS_EN
+
+    def d(x: date) -> str:
+        return f"{x.day}.{NBSP}{months[x.month - 1]}" if lang == "cs" else f"{x.day}{NBSP}{months[x.month - 1]}"
+
+    if start.month == end.month:
+        text = f"{start.day}.–{d(end)}" if lang == "cs" else f"{start.day}–{d(end)}"
+    else:
+        text = f"{d(start)} – {d(end)}"
+    return f"{text}{NBSP}{end.year}"
+
+
+def load_holidays() -> dict:
+    """Týdny se státním svátkem nebo školními prázdninami — tabulka sdílená s compute_resp.py."""
+    try:
+        import compute_resp
+        return compute_resp.load_holidays()
+    except Exception as e:                                        # tabulka je pomůcka, ne podmínka
+        print(f"  [esurv] tabulku svátků nejde načíst ({e}) — sváteční týdny se neoznačí")
+        return {}
+
+
+def holiday_kind(week: str, table: dict) -> str | None:
+    import compute_resp
+    return compute_resp.holiday_kind(week, table) if table else None
+
+
+HOLIDAY_TEXT = {
+    "public": ("státní svátek", "a public holiday"),
+    "school": ("školní prázdniny", "school holidays"),
+    "both": ("státní svátek a školní prázdniny", "a public holiday and school holidays"),
+}
+
+
 def _change(f: Facts, name: str, now: int, before: int | None) -> bool:
-    """Do faktů zapíše změnu proti předchozím sedmi dnům; False, když ji nejde spočítat."""
+    """Do faktů zapíše změnu proti předchozímu týdnu; False, když ji nejde spočítat."""
     if not before:
         return False
     pct = 100 * (now - before) / before
@@ -170,103 +226,154 @@ def _change(f: Facts, name: str, now: int, before: int | None) -> bool:
     return True
 
 
-def summary(data: dict) -> dict:
-    """Dlaždice, strojově čitelný souhrn po nemocech a tři bloky faktů s komentářem."""
+def summary(data: dict, holidays: dict | None = None) -> dict:
+    """
+    Dlaždice, strojově čitelný souhrn po nemocech a tři bloky faktů s komentářem.
+
+    Komentář srovnává CELÉ ISO TÝDNY, ne klouzavých sedm dní: klouzavé okno, ve
+    kterém leží státní svátek, dá falešný skok (17. 11. 2026 se skoro nehlásilo,
+    sedm dní do 24. 11. pak vyšlo „o 83 % víc“). Když je svátek nebo prázdniny
+    v jednom ze srovnávaných týdnů, změna se nepíše a místo ní je upozornění.
+    """
+    holidays = load_holidays() if holidays is None else holidays
     state, last = data["state"], data["state"]["stav_k"]
-    cases7 = rolling7(national(data["denni"], "pripady"))
+    cases = national(data["denni"], "pripady")
+    new_adm = national(data["denni"], "hosp_nove")
     current = national(data["denni"], "hosp_aktualne")
-    new7 = rolling7(national(data["denni"], "hosp_nove"))
     hosp = data["nemocnice"].assign(jip_aro=lambda x: x["jip"].fillna(0) + x["aro"].fillna(0))
-    icu7 = rolling7(national(hosp, "jip_aro"))
-    deaths7 = rolling7(national(hosp, "umrti_hosp"))
-    period = {"cs": f"Sedm dní do {day_text(last, 'cs')}", "en": f"Seven days to {day_text(last, 'en')}"}
+    icu, deaths = national(hosp, "jip_aro"), national(hosp, "umrti_hosp")
+    cases_w, adm_w, icu_w, deaths_w = (weekly(x, last) for x in (cases, new_adm, icu, deaths))
+    cases7, adm7 = rolling7(cases), rolling7(new_adm)
 
     out = {"posledni_datum": last, "slozka": state["slozka"], "zpracovano": state.get("zpracovano"),
            "fetched_at": state.get("fetched_at"), "nemoci": {}}
+    week = cases_w.index[-1] if len(cases_w) else None
+    prev = None
+    if week:
+        prev_start = date.fromisocalendar(int(week[:4]), int(week[6:]), 1) - timedelta(days=7)
+        y, w, _ = prev_start.isocalendar()
+        prev = f"{y}-W{w:02d}" if f"{y}-W{w:02d}" in cases_w.index else None
+    out["tyden"], out["tyden_predchozi"] = week, prev
+
+    def at(df, w, key):
+        if w is None or w not in df.index or key not in df.columns or pd.isna(df.loc[w, key]):
+            return None
+        return int(df.loc[w, key])
+
     for key, names in DISEASES.items():
         out["nemoci"][key] = {
             "nazev": names["cs"], "nazev_en": names["en"],
-            "pripady_7d": _last(cases7, key), "pripady_7d_predchozi": _last(cases7, key, 7),
-            "hosp_aktualne": _last(current, key), "hosp_nove_7d": _last(new7, key),
-            "jip_aro_7d": _last(icu7, key), "umrti_hosp_7d": _last(deaths7, key),
+            "pripady_tyden": at(cases_w, week, key), "pripady_tyden_predchozi": at(cases_w, prev, key),
+            "hosp_nove_tyden": at(adm_w, week, key), "jip_aro_tyden": at(icu_w, week, key),
+            "umrti_hosp_tyden": at(deaths_w, week, key),
+            "hosp_aktualne": _last(current, key),
+            # klouzavých 7 dní do posledního dne — pro stroje, text je nepoužívá
+            "pripady_7d": _last(cases7, key), "hosp_nove_7d": _last(adm7, key),
         }
         if out["nemoci"][key]["hosp_aktualne"] is not None:
             out[f"hosp_aktualne_{key}"] = out["nemoci"][key]["hosp_aktualne"]      # dlaždice (stat-card)
 
-    blocks = {}
-    n = out["nemoci"]
+    blocks, n = {}, out["nemoci"]
+    kind_now = holiday_kind(week, holidays) if week else None
+    kind_prev = holiday_kind(prev, holidays) if prev else None
+
+    def holiday_caveat(f: Facts):
+        """Upozornění na sváteční týden; vrací True, když srovnání týdnů nedává smysl."""
+        hit = [(w, k) for w, k in ((week, kind_now), (prev, kind_prev)) if k]
+        if not hit:
+            return False
+        w, k = hit[0]
+        f.text("svatek_tyden", week_text(w, "cs"), week_text(w, "en"))
+        f.text("svatek_druh", *HOLIDAY_TEXT[k])
+        f.fact("caveat_holiday", "caveat",
+               "V týdnu {svatek_tyden} byl {svatek_druh}; v takovém týdnu se hlásí méně a srovnání "
+               "s jiným týdnem neukazuje skutečný vývoj.",
+               "The week of {svatek_tyden} included {svatek_druh}; fewer cases are reported in such a "
+               "week and a comparison with another week does not show the real trend.", required=True)
+        f.say("V týdnu {svatek_tyden} byl {svatek_druh}, kdy se hlásí méně, proto týdny nesrovnáváme.",
+              "The week of {svatek_tyden} included {svatek_druh}, when fewer cases are reported, so the weeks "
+              "are not compared.", ["caveat_holiday"])
+        return True
 
     # ── případy ──
-    f = Facts()
-    f.text("den", day_text(last, "cs"), day_text(last, "en"))
-    for key in DISEASES:
-        f.count(f"n_{key}", n[key]["pripady_7d"] or 0)
-    f.fact("cases", "measurement",
-           "Hlášené případy za 7 dní do {den}: chřipka {n_chripka}, covid-19 {n_covid19}, RSV {n_rsv}, "
-           "ARI/ILI celkem {n_ari_ili}.",
-           "Reported cases in the 7 days to {den}: influenza {n_chripka}, COVID-19 {n_covid19}, RSV {n_rsv}, "
-           "ARI/ILI in total {n_ari_ili}.", required=True)
-    f.say("Lékaři za sedm dní do {den} nahlásili: chřipka {n_chripka}, covid-19 {n_covid19}, RSV {n_rsv}. "
-          "Všech akutních respiračních infekcí a onemocnění podobných chřipce (ARI/ILI) bylo {n_ari_ili}.",
-          "In the seven days to {den} physicians reported: influenza {n_chripka}, COVID-19 {n_covid19}, "
-          "RSV {n_rsv}. Acute respiratory infections and influenza-like illness (ARI/ILI) together: {n_ari_ili}.",
-          ["cases"])
-    if _change(f, "zmena_chripka", n["chripka"]["pripady_7d"] or 0, n["chripka"]["pripady_7d_predchozi"]):
-        f.count("p_chripka", n["chripka"]["pripady_7d_predchozi"])
-        f.fact("change_flu", "comparison",
-               "Chřipka: předchozích 7 dní {p_chripka} hlášených případů.",
-               "Influenza: {p_chripka} reported cases in the previous 7 days.")
-        f.say("U chřipky je to {zmena_chripka} v předchozích sedmi dnech ({p_chripka}).",
-              "For influenza that is {zmena_chripka} in the previous seven days ({p_chripka}).",
-              ["change_flu"], optional=True)
-    f.fact("caveat_reports", "caveat",
-           "Jde o hlášení lékařů, poslední dny se ještě doplňují; svátek nebo víkend součet sníží.",
-           "These are physicians' reports; the last days are still being completed, and a holiday or "
-           "weekend lowers the sum.")
-    f.say("Poslední dny se u zdroje ještě doplňují.", "The most recent days are still being completed at the source.",
-          ["caveat_reports"], optional=True)
-    blocks["cases"] = {"period": period, **f.block()}
+    if week:
+        period = {"cs": f"Týden {week_text(week, 'cs')}", "en": f"Week of {week_text(week, 'en')}"}
+        f = Facts()
+        f.text("tyden", week_text(week, "cs"), week_text(week, "en"))
+        for key in DISEASES:
+            f.count(f"n_{key}", n[key]["pripady_tyden"] or 0)
+        f.fact("cases", "measurement",
+               "Hlášené případy v týdnu {tyden}: chřipka {n_chripka}, covid-19 {n_covid19}, RSV {n_rsv}, "
+               "ARI/ILI celkem {n_ari_ili}.",
+               "Reported cases in the week of {tyden}: influenza {n_chripka}, COVID-19 {n_covid19}, RSV {n_rsv}, "
+               "ARI/ILI in total {n_ari_ili}.", required=True)
+        f.say("Lékaři v týdnu {tyden} nahlásili: chřipka {n_chripka}, covid-19 {n_covid19}, RSV {n_rsv}. "
+              "Všech akutních respiračních infekcí a onemocnění podobných chřipce (ARI/ILI) bylo {n_ari_ili}.",
+              "In the week of {tyden} physicians reported: influenza {n_chripka}, COVID-19 {n_covid19}, "
+              "RSV {n_rsv}. Acute respiratory infections and influenza-like illness (ARI/ILI) together: "
+              "{n_ari_ili}.", ["cases"])
+        if not holiday_caveat(f) and _change(f, "zmena_chripka", n["chripka"]["pripady_tyden"] or 0,
+                                             n["chripka"]["pripady_tyden_predchozi"]):
+            f.count("p_chripka", n["chripka"]["pripady_tyden_predchozi"])
+            f.text("tyden_pred", week_text(prev, "cs"), week_text(prev, "en"))
+            f.fact("change_flu", "comparison",
+                   "Chřipka v týdnu {tyden_pred}: {p_chripka} hlášených případů.",
+                   "Influenza in the week of {tyden_pred}: {p_chripka} reported cases.")
+            f.say("U chřipky je to {zmena_chripka} v předchozím týdnu ({p_chripka}).",
+                  "For influenza that is {zmena_chripka} in the previous week ({p_chripka}).",
+                  ["change_flu"], optional=True)
+        f.fact("caveat_reports", "caveat",
+               "Jde o hlášení lékařů; poslední týden se u zdroje ještě může doplnit.",
+               "These are physicians' reports; the last week may still be completed at the source.")
+        f.say("Poslední týden se u zdroje ještě může doplnit.",
+              "The last week may still be completed at the source.", ["caveat_reports"], optional=True)
+        blocks["cases"] = {"period": period, **f.block()}
 
     # ── nemocnice ──
-    if all(n[k]["hosp_aktualne"] is not None for k in ("chripka", "covid19", "rsv")):
+    if week and all(n[k]["hosp_aktualne"] is not None for k in ("chripka", "covid19", "rsv")):
         f = Facts()
         f.text("den", day_text(last, "cs"), day_text(last, "en"))
+        f.text("tyden", week_text(week, "cs"), week_text(week, "en"))
         for key in ("chripka", "covid19", "rsv"):
             f.count(f"h_{key}", n[key]["hosp_aktualne"])
-            f.count(f"a_{key}", n[key]["hosp_nove_7d"] or 0)
-            f.count(f"i_{key}", n[key]["jip_aro_7d"] or 0)
+            f.count(f"a_{key}", n[key]["hosp_nove_tyden"] or 0)
+            f.count(f"i_{key}", n[key]["jip_aro_tyden"] or 0)
         f.fact("in_hospital", "measurement",
                "V nemocnici k {den}: chřipka {h_chripka}, covid-19 {h_covid19}, RSV {h_rsv}.",
                "In hospital on {den}: influenza {h_chripka}, COVID-19 {h_covid19}, RSV {h_rsv}.", required=True)
         f.fact("admissions", "measurement",
-               "Nově přijatí za 7 dní: chřipka {a_chripka}, covid-19 {a_covid19}, RSV {a_rsv}.",
-               "New admissions in 7 days: influenza {a_chripka}, COVID-19 {a_covid19}, RSV {a_rsv}.", required=True)
+               "Nově přijatí v týdnu {tyden}: chřipka {a_chripka}, covid-19 {a_covid19}, RSV {a_rsv}.",
+               "New admissions in the week of {tyden}: influenza {a_chripka}, COVID-19 {a_covid19}, RSV {a_rsv}.",
+               required=True)
         f.fact("icu", "measurement",
-               "Nově na JIP nebo ARO za 7 dní: chřipka {i_chripka}, covid-19 {i_covid19}, RSV {i_rsv}.",
-               "New admissions to intensive care in 7 days: influenza {i_chripka}, COVID-19 {i_covid19}, RSV {i_rsv}.")
+               "Nově na JIP nebo ARO v týdnu {tyden}: chřipka {i_chripka}, covid-19 {i_covid19}, RSV {i_rsv}.",
+               "New admissions to intensive care in the week of {tyden}: influenza {i_chripka}, "
+               "COVID-19 {i_covid19}, RSV {i_rsv}.")
         f.say("V nemocnicích k {den} leželo: s chřipkou {h_chripka}, s covidem-19 {h_covid19}, s RSV {h_rsv}.",
               "In hospital on {den}: with influenza {h_chripka}, with COVID-19 {h_covid19}, with RSV {h_rsv}.",
               ["in_hospital"])
-        f.say("Nově přijatých za posledních sedm dní: chřipka {a_chripka}, covid-19 {a_covid19}, RSV {a_rsv}.",
-              "New admissions in the last seven days: influenza {a_chripka}, COVID-19 {a_covid19}, RSV {a_rsv}.",
+        f.say("Nově přijatých v týdnu {tyden}: chřipka {a_chripka}, covid-19 {a_covid19}, RSV {a_rsv}.",
+              "New admissions in the week of {tyden}: influenza {a_chripka}, COVID-19 {a_covid19}, RSV {a_rsv}.",
               ["admissions"])
         f.say("Z toho na JIP nebo ARO: chřipka {i_chripka}, covid-19 {i_covid19}, RSV {i_rsv}.",
               "Of these to intensive care: influenza {i_chripka}, COVID-19 {i_covid19}, RSV {i_rsv}.",
               ["icu"], optional=True)
-        blocks["hospital"] = {"period": period, **f.block()}
+        blocks["hospital"] = {"period": {"cs": f"Stav k {day_text(last, 'cs')}, příjmy v týdnu {week_text(week, 'cs')}",
+                                         "en": f"State on {day_text(last, 'en')}, admissions in the week of "
+                                               f"{week_text(week, 'en')}"}, **f.block()}
 
     # ── očkování ──
     doses = vaccination_series(data["ockovani"])
     if not doses.empty:
         f = Facts()
         f.text("den", day_text(doses.index[-1], "cs"), day_text(doses.index[-1], "en"))
-        week = data["ockovani"]
-        week = week[(week["rozmer"] == "vek") & (week["kategorie"] == TOTAL)
-                    & (week["datum"] > (date.fromisoformat(doses.index[-1]) - timedelta(days=7)).isoformat())]
+        recent = data["ockovani"]
+        recent = recent[(recent["rozmer"] == "vek") & (recent["kategorie"] == TOTAL)
+                        & (recent["datum"] > (date.fromisoformat(doses.index[-1]) - timedelta(days=7)).isoformat())]
         out["ockovani"] = {}
         for key in VACCINES:
             total = int(doses[key].iloc[-1]) if key in doses.columns and pd.notna(doses[key].iloc[-1]) else 0
-            last7 = int(week[week["nemoc"] == key]["davky"].sum())
+            last7 = int(recent[recent["nemoc"] == key]["davky"].sum())
             out["ockovani"][key] = {"davky_celkem": total, "davky_7d": last7}
             f.count(f"v_{key}", total)
             f.count(f"w_{key}", last7)
