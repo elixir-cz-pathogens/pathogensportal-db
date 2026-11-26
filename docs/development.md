@@ -50,6 +50,8 @@ The suite uses no network and no database; HTTP responses are stubbed. CI
 | `test_source_metadata.py` | metadata discovery, failure isolation, that every generated chart is in `charts.yaml` and has a title, and the conversion of axis labels to ISO dates |
 | `test_isin_codes.py` | ICD-10 codes on the series of the ISIN disease charts |
 | `test_uzis_isin_weekly.py` | the weekly ÚZIS workbook: year blocks side by side, gaps in columns and rows, a block that lost its header; the weekly download cache, a source that stopped updating and years kept from the previous download |
+| `test_uzis_esurveillance.py` | the daily ÚZIS e-surveillance on workbooks built in the source's layout: column positions read from the header, a missing age block or sheet, RSV age groups, repeated and conflicting rows, an incomplete folder; the download cache and a source that stopped updating; the fifteen chart files (7-day sums, rates by age, facts behind every sentence, a file not rewritten without a change); the rows for the database |
+| `test_load_esurveillance_db.py` | which snapshots of the daily e-surveillance stay in PostgreSQL (the newest and the Monday ones). **Skipped unless `PATHOGENS_TEST_DSN` is set** |
 | `test_compute_isin.py` | the overview blocks: no comparison with previous years when EWS exceeds 10%, figures in the text, age groups per 100,000, a file that is not rewritten without a change |
 | `test_csu_population_age.py` | population by single year of age; its failure must not stop the population download |
 | `test_szu_weekly.py` | SZÚ weekly PDFs on real files: every layout of the virus matrix; a regional PDF that carries another week than its name says, and the cache that must not keep it |

@@ -68,8 +68,8 @@ isin_group_*:            { source: uzis-isin, metric: cases, unit: count, grain:
 | Key | Values |
 |---|---|
 | `source` | an id from `sources.yaml`, or a list when the chart combines sources |
-| `metric` | `cases`, `deaths`, `tests`, `hospitalizations`, `lab_detections`, `positivity`, `case_fatality`, `hospitalization_rate`, `forecast`, `intensity_threshold`, `anomaly_score` |
-| `unit` | `count`, `per_100k`, `percent`, `score` — the machine-readable unit |
+| `metric` | `cases`, `deaths`, `tests`, `hospitalizations`, `lab_detections`, `positivity`, `case_fatality`, `hospitalization_rate`, `forecast`, `intensity_threshold`, `anomaly_score`, `vaccine_doses` |
+| `unit` | `count`, `per_100k`, `per_100` (per 100 inhabitants; vaccine doses, which are not a share of people), `percent`, `score` — the machine-readable unit |
 | `grain` | what the X axis is: `day`, `week`, `month`, `year`, `season`, `age_group`, `region`, `vaccination_status`, `cumulative`, `season_week` |
 | `region` | `CZ` = one number for the whole country; `NUTS3` = broken down by region |
 | `series_code` | optional; the code list the chart's series are coded with (`icd10`). The code itself is in `datasets[i].code` |

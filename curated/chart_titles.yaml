@@ -179,3 +179,50 @@ tbc_origin:
 tbc_age:
   cs: "Tuberkulóza v ČR — roční počty případů podle věkové skupiny"
   en: "Tuberculosis in Czechia — annual case counts by age group"
+
+# Daily e-surveillance of respiratory infections (ÚZIS)
+esurv_summary:
+  cs: "Respirační infekce v ČR — denní souhrn: hlášené případy, hospitalizace a očkování"
+  en: "Respiratory infections in Czechia — daily summary: reported cases, hospitalisations and vaccination"
+esurv_cases:
+  cs: "Chřipka, COVID-19, RSV a ARI/ILI v ČR — případy hlášené lékaři, 7denní součet"
+  en: "Influenza, COVID-19, RSV and ARI/ILI in Czechia — cases reported by physicians, 7-day sum"
+esurv_cases_age:
+  cs: "Chřipka, COVID-19, RSV a ARI/ILI v ČR — hlášené případy za 7 dní na 100 000 obyvatel podle věku"
+  en: "Influenza, COVID-19, RSV and ARI/ILI in Czechia — reported cases in 7 days per 100,000 population by age"
+esurv_hosp_current:
+  cs: "Hospitalizovaní s chřipkou, covidem-19, RSV a ARI/ILI v ČR — stav po dnech"
+  en: "Patients in hospital with influenza, COVID-19, RSV and ARI/ILI in Czechia — daily count"
+esurv_hosp_new:
+  cs: "Nově přijatí do nemocnice s chřipkou, covidem-19, RSV a ARI/ILI v ČR — 7denní součet"
+  en: "New hospital admissions with influenza, COVID-19, RSV and ARI/ILI in Czechia — 7-day sum"
+esurv_hosp_icu:
+  cs: "Nově přijatí na JIP nebo ARO s chřipkou, covidem-19, RSV a ARI/ILI v ČR — 7denní součet"
+  en: "New intensive-care admissions with influenza, COVID-19, RSV and ARI/ILI in Czechia — 7-day sum"
+esurv_hosp_deaths:
+  cs: "Zemřelí za hospitalizace s chřipkou, covidem-19, RSV a ARI/ILI v ČR — 7denní součet"
+  en: "Deaths during a hospital stay with influenza, COVID-19, RSV and ARI/ILI in Czechia — 7-day sum"
+esurv_hosp_age:
+  cs: "Nově přijatí do nemocnice s chřipkou, covidem-19, RSV a ARI/ILI v ČR — na 100 000 obyvatel podle věku"
+  en: "New hospital admissions with influenza, COVID-19, RSV and ARI/ILI in Czechia — per 100,000 population by age"
+esurv_map_chripka:
+  cs: "Chřipka v krajích ČR — hlášené případy za 7 dní na 100 000 obyvatel"
+  en: "Influenza in the regions of Czechia — reported cases in 7 days per 100,000 population"
+esurv_map_covid19:
+  cs: "COVID-19 v krajích ČR — hlášené případy za 7 dní na 100 000 obyvatel"
+  en: "COVID-19 in the regions of Czechia — reported cases in 7 days per 100,000 population"
+esurv_map_rsv:
+  cs: "RSV v krajích ČR — hlášené případy za 7 dní na 100 000 obyvatel"
+  en: "RSV in the regions of Czechia — reported cases in 7 days per 100,000 population"
+esurv_map_ari_ili:
+  cs: "ARI/ILI v krajích ČR — hlášené případy za 7 dní na 100 000 obyvatel"
+  en: "ARI/ILI in the regions of Czechia — reported cases in 7 days per 100,000 population"
+esurv_vaccination:
+  cs: "Očkování proti chřipce, covidu-19 a RSV v ČR — podané dávky od začátku sezóny"
+  en: "Vaccination against influenza, COVID-19 and RSV in Czechia — doses given since the start of the season"
+esurv_vaccination_age:
+  cs: "Očkování proti chřipce a covidu-19 v ČR — podané dávky na 100 obyvatel podle věku"
+  en: "Vaccination against influenza and COVID-19 in Czechia — doses given per 100 population by age"
+esurv_lab:
+  cs: "Laboratorně potvrzená chřipka, COVID-19, RSV a ARI/ILI v ČR — 7denní součet"
+  en: "Laboratory-confirmed influenza, COVID-19, RSV and ARI/ILI in Czechia — 7-day sum"

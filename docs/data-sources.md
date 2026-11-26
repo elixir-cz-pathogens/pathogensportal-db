@@ -22,6 +22,7 @@ The diagram shows which scraper produces which file and who reads it:
 | MZČR COVID-19 | `mzcr_covid.py` | `mzcr/covid_*.csv` (9 files) | day; month × age × region | no | `generate_json.py` |
 | ÚZIS ISIN | `uzis_isin.py` | `isin/isin_infekcni_nemoci.csv` | month × region × age × diagnosis | yes | `generate_json.py`, `detect_anomalies.py` |
 | ÚZIS ISIN weekly summary | `uzis_isin_weekly.py` | `isin/isin_tydenni.csv`, `isin/isin_tydenni_stav.json` | ISO week × region × age × diagnosis (11 diagnoses) | no | `compute_isin.py` |
+| ÚZIS daily e-surveillance | `uzis_esurveillance.py` | `uzis_esurv/esurv_*.csv` (6 files), `uzis_esurv/esurv_stav.json` | day × region × age group; influenza, COVID-19, RSV, ARI/ILI | national by age, regions in total | `compute_esurv.py` |
 | ÚZIS RPN + RTBC | `uzis_registries.py` | `uzis/uzis_pohlavni_nemoci.csv`, `uzis/uzis_tuberkuloza.csv` | year (TB: quarter) | yes | `generate_json.py` |
 | SZÚ seasonal | `szu_influenza.py` | `szu/szu_influenza_<season>.csv` | season total per virus | no | `generate_json.py` |
 | SZÚ weekly | `szu_weekly.py` | `szu/szu_weekly_viry.csv`, `szu/szu_weekly_kraje.csv` | week | yes | `generate_json.py` |
@@ -121,6 +122,64 @@ most of them come from the publishers as they are.
     did not change by more than two cases after it was first published.
   - In the running year the regional sheets add up to less than the national one; the portal
     draws only the national series. See `isin-tydenni-kraje-bez-kraje` in
+    `methodology_changes.yaml`.
+  - The source states no licence, only a citation. See `sources.yaml`.
+
+### ÚZIS — daily e-surveillance of respiratory infections
+
+- **Where:** the data summary "Respirační infekce – denní reporting e-surveillance"
+  ([NZIP page](https://www.nzip.cz/data/2860-respiracni-infekce-denni-reporting-esurveillance-datovy-souhrn)).
+  The files sit on the shared storage of ÚZIS (Nextcloud): one folder `YYYY-MM-DD/` per day with
+  56 files (about 21 MB), state as of the previous day. The reports are produced within the
+  SCOPE IS project (EU4Health).
+- **Scraper:** `uzis_esurveillance.py`
+- **What it is:** automated reports. New cases are reported by physicians to ISIN (the early
+  warning system, EWS); hospitalisations by the connected hospitals, counting every hospital stay
+  during which the infection was recorded; laboratory confirmations by the laboratories connected
+  to EWS; vaccine doses come from the Central Vaccination Register. Four conditions: influenza,
+  COVID-19, RSV, and ARI/ILI in total.
+- **Why it matters:** it is the only public source of hospitalisations with influenza and RSV
+  in Czechia, and it is one to two weeks fresher than the weekly ILI/ARI rates.
+- **Shape of the source:** every file carries the whole history, so only the newest folder is
+  read, and only 24 of its files (about 11 MB). Dates are text (`24.11.2026`). The daily file
+  (`EW05`) has five column blocks side by side on a sheet per region; positions are read from
+  the header, not from fixed column numbers. The folder listing needs the header
+  `X-Requested-With: XMLHttpRequest` (the public WebDAV endpoint answers 401 without it); the
+  `/download` link returns the whole storage as one ZIP (2.7 GB) and is not used.
+- **Output** (`uzis_esurv/`):
+  - `esurv_denni.csv` — `datum`, `nemoc` (`chripka`, `covid19`, `rsv`, `ari_ili`), `kraj_kod` (`CZ`
+    or NUTS3), `vek` (`celkem` or one of 12 age groups), `pripady`, `hosp_nove`, `hosp_aktualne`,
+    `jip_nove`, `umrti_hosp`; daily since 26 May 2025
+  - `esurv_nemocnice.csv` — daily hospital figures with the type of care of new admissions
+    (`jip`, `aro`, `kyslik`, `hfno`, `upv_ecmo`) and deaths
+  - `esurv_ockovani.csv` — doses given per day by region of residence and by age group
+  - `esurv_laboratore.csv` — laboratory-confirmed infections per day and the number of
+    reporting laboratories
+  - `esurv_uzemi.csv` — regions and districts on the last day: 7-day and 14-day incidence and
+    hospital figures per 100,000 as computed by the source
+  - `esurv_ockovani_stav.csv` — cases, admissions and intensive-care admissions by vaccination
+    in the season (influenza, COVID-19); archived, not charted
+  - `esurv_stav.json` — the folder taken, the status date, the processing time at the source,
+    the vaccines the source lists
+- **Checks:** all 24 files must be present; every sheet must have its header columns and, in
+  the daily file, all four age blocks with 12 age groups; the files of one folder must state
+  the same status date; identical repeated rows are merged, the same key with different
+  numbers fails. A newest folder older than a week fails the download.
+- **Not taken:** the per-hospital overview (`eHos02`) and the per-municipality vaccination file
+  (`eVak03`) — the portal shows nothing below the district level; `EW02` and `EW06` are
+  recomputations of the daily file; the DOCX and PDF summaries repeat the same numbers.
+- **Good to know:**
+  - It is a side source in `run_all.py`: a failure does not stop the refresh of the other data.
+  - The folder listing is asked on every run; the files are downloaded once per folder. Asking
+    the listing counts as a check of the source for `last_checked.json`.
+  - National figures agree between the daily file and the hospital file on every day. Regional
+    figures differ between them (the national sum is the same): the daily file and the region
+    table are by the patient's residence. Maps and age groups therefore come from the daily
+    file and `EW03`; from the hospital file only the type of care for the whole country.
+  - The laboratory file repeats some days with identical numbers (6 of 91 in the folder of
+    25 November 2026).
+  - The reported cases are **not** sentinel ILI/ARI rates and must not be compared with the
+    ERVISS series or the MEM thresholds. See `esurv-hlaseni-lekaru-a-nemocnic` in
     `methodology_changes.yaml`.
   - The source states no licence, only a citation. See `sources.yaml`.
 

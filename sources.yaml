@@ -99,6 +99,35 @@
   # metadat; stav dat u zdroje si scraper čte z hlavičky XLSX do
   # isin_tydenni_stav.json. Proto žádné `discovery`.
 
+- id: uzis-esurveillance
+  publisher: "ÚZIS ČR"
+  landing: "https://www.nzip.cz/data/2860-respiracni-infekce-denni-reporting-esurveillance-datovy-souhrn"
+  licence:
+    name: "neuvedena"
+    url: "https://www.nzip.cz/data/2860-respiracni-infekce-denni-reporting-esurveillance-datovy-souhrn"
+    note: >-
+      Datový souhrn, ne otevřená datová sada: stránka souhrnu ani soubory
+      licenci neuvádějí, uvádějí jen požadovanou citaci a informaci
+      o financování z projektu SCOPE IS (EU4Health, grantová dohoda
+      č. 101181612). Patička NZIP nemá stránku s podmínkami užití. Data se
+      proto přebírají s citací a bez příznaku `open` — graf z nich nevychází
+      pod CC BY 4.0, platí podmínky zdroje.
+    verified: "2026-11-26"
+  citation: >-
+    Šanca O., Blaha M., Zelinková H., Jarkovský J., Klimeš D., Kundrát M., Krejčí J., Klika P., Mužík J., Komenda M., Dušek L. Respirační infekce – denní reporting e-surveillance. Národní zdravotnický informační portál [online]. Praha: Ministerstvo zdravotnictví ČR a Ústav zdravotnických informací a statistiky ČR, 2026. Dostupné z: https://www.nzip.cz/data/2860-respiracni-infekce-denni-reporting-esurveillance-datovy-souhrn. ISSN 2695-0340.
+  files:
+    - "uzis_esurv/esurv_denni.csv"
+    - "uzis_esurv/esurv_nemocnice.csv"
+    - "uzis_esurv/esurv_ockovani.csv"
+    - "uzis_esurv/esurv_laboratore.csv"
+    - "uzis_esurv/esurv_uzemi.csv"
+    - "uzis_esurv/esurv_ockovani_stav.csv"
+    - "uzis_esurv/esurv_stav.json"
+  methodology: ["esurv-hlaseni-lekaru-a-nemocnic"]
+  # Soubory leží na sdíleném úložišti (share.uzis.cz) bez strojově čitelných
+  # metadat; stav dat u zdroje si scraper čte z hlavičky XLSX do
+  # esurv_stav.json. Proto žádné `discovery`.
+
 - id: uzis-rpn
   publisher: "ÚZIS ČR"
   landing: "https://www.nzip.cz/data/2639-pohlavni-nemoci-otevrena-data"

@@ -161,6 +161,10 @@ def test_kazdy_generovany_graf_ma_zaznam_v_charts_yaml():
     generated |= {"flu_mem", "anomaly_signals", "anomaly_signals_weekly", "resp_overview", "resp_age", "flu_types",
                   "genomics_overview", "genomics_lineages", "genomics_amr",
                   "isin_weekly", "isin_overview", "isin_groups"}
+    # compute_esurv.py: jména grafů jsou klíče slovníku z build(), ne volání save()
+    generated |= {"esurv_summary", "esurv_cases", "esurv_cases_age", "esurv_hosp_current", "esurv_hosp_new",
+                  "esurv_hosp_icu", "esurv_hosp_deaths", "esurv_hosp_age", "esurv_map_*", "esurv_vaccination",
+                  "esurv_vaccination_age", "esurv_lab"}
 
     assert generated, "nenašel jsem žádné save() — změnil se tvar volání?"
     for name in generated:
@@ -171,19 +175,22 @@ def test_kazdy_generovany_graf_ma_zaznam_v_charts_yaml():
         ids = spec["source"] if isinstance(spec["source"], list) else [spec["source"]]
         unknown = set(ids) - sources
         assert not unknown, f"{name}: zdroj {unknown} není v sources.yaml"
-        assert spec["unit"] in {"count", "per_100k", "percent", "score"}, \
+        assert spec["unit"] in {"count", "per_100k", "per_100", "percent", "score"}, \
             f"{name}: neznámá jednotka {spec['unit']}"
         assert spec.get("series_code") in {None, *chart_meta.CODE_SYSTEMS}, \
             f"{name}: neznámý číselník řad {spec.get('series_code')}"
 
 
 def _chart_names() -> set[str]:
-    """Jména grafů z charts.yaml; `isin_group_*` rozepsané na skutečné skupiny."""
+    """Jména grafů z charts.yaml; `isin_group_*` a `esurv_map_*` rozepsané na skutečné soubory."""
+    import compute_esurv
     import generate_json as g
     charts = yaml.safe_load((ROOT / "charts.yaml").read_text(encoding="utf-8"))
     names = {n for n in charts if not n.endswith("*")}
     assert "isin_group_*" in charts, "skupiny ISIN už nejsou pod hvězdičkou — uprav rozepsání"
-    return names | {f"isin_group_{key}" for key in g.DISEASE_GROUPS} | {"isin_group_other"}
+    assert "esurv_map_*" in charts, "mapy e-surveillance už nejsou pod hvězdičkou — uprav rozepsání"
+    return (names | {f"isin_group_{key}" for key in g.DISEASE_GROUPS} | {"isin_group_other"}
+            | {f"esurv_map_{key}" for key in compute_esurv.DISEASES})
 
 
 def test_kazdy_graf_ma_nazev_v_obou_jazycich():

@@ -24,7 +24,7 @@ Proměnné prostředí:
 import argparse
 import os
 import sys
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 import pandas as pd
@@ -325,6 +325,92 @@ def load_erviss(conn, snapshot: date, dry_run: bool = False) -> int:
     return len(rows)
 
 
+# ── denní e-surveillance (ÚZIS) ──────────────────────────────────────────────
+
+ESURV_SOURCE = "uzis_esurv"
+ESURV_NAMES = {"chripka": "Chřipka", "covid19": "COVID-19", "rsv": "RSV", "ari_ili": "ARI/ILI"}
+# sloupec v esurv_denni.csv → metrika v observation
+ESURV_METRICS = {"pripady": "cases", "hosp_nove": "hospitalizations", "hosp_aktualne": "hospitalized",
+                 "jip_nove": "icu_admissions", "umrti_hosp": "deaths"}
+
+
+def esurveillance_rows(snapshot: date | None = None) -> tuple[list, date | None]:
+    """
+    Řádky pro `observation` z denní e-surveillance a datum snímku, pod kterým jdou.
+
+    Snímek = datum denní složky u zdroje, ne den nahrání: opakované nahrání téže
+    složky přepíše tytéž řádky a nová verze čísel vznikne, až ÚZIS vydá další den.
+
+    Co se nahrává: celá ČR po dnech celkem i podle věku, kraje jen celkem (věk × kraj
+    × den by dal přes 400 tisíc řádků na snímek, většinou nul). U rozpadů podle věku
+    a kraje se nulové hodnoty nezapisují — chybějící řádek uvnitř rozsahu řady je
+    nula; celostátní součty jsou úplné včetně nul.
+    """
+    import json
+
+    base = DATA_DIR / "uzis_esurv"
+    state_path = base / "esurv_stav.json"
+    if not (base / "esurv_denni.csv").exists() or not state_path.exists():
+        return [], None
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    snap = snapshot or date.fromisoformat(state["slozka"])
+
+    rows = []
+    df = pd.read_csv(base / "esurv_denni.csv", dtype={"vek": str})
+    df = df[(df["kraj_kod"] == "CZ") | (df["vek"] == "celkem")]
+    for column, metric in ESURV_METRICS.items():
+        sub = df[["datum", "nemoc", "kraj_kod", "vek", column]].dropna(subset=[column])
+        national_total = (sub["kraj_kod"] == "CZ") & (sub["vek"] == "celkem")
+        sub = sub[national_total | (sub[column] != 0)]
+        for r in sub.itertuples(index=False):
+            start = date.fromisoformat(r.datum)
+            rows.append((ESURV_SOURCE, None, ESURV_NAMES[r.nemoc], None if r.kraj_kod == "CZ" else r.kraj_kod,
+                         None if r.vek == "celkem" else r.vek, None, start, start + timedelta(days=1),
+                         metric, float(getattr(r, column)), snap))
+
+    vax_path = base / "esurv_ockovani.csv"
+    if vax_path.exists():
+        vax = pd.read_csv(vax_path, dtype={"kategorie": str})
+        vax = vax[(vax["kategorie"] != "neznamy") & (vax["davky"] != 0)]
+        # Součet za ČR je v obou rozpadech; bere se jednou, z rozpadu podle věku.
+        vax = vax[~((vax["rozmer"] == "kraj") & (vax["kategorie"] == "CZ"))]
+        for r in vax.itertuples(index=False):
+            start = date.fromisoformat(r.datum)
+            region = r.kategorie if r.rozmer == "kraj" else None
+            age = None if r.rozmer == "kraj" or r.kategorie == "celkem" else r.kategorie
+            rows.append((ESURV_SOURCE, None, ESURV_NAMES[r.nemoc], region, age, None, start,
+                         start + timedelta(days=1), "vaccine_doses", float(r.davky), snap))
+    return rows, snap
+
+
+def load_esurveillance(conn, snapshot: date | None = None, dry_run: bool = False) -> int:
+    rows, snap = esurveillance_rows(snapshot)
+    if not rows:
+        print("  [esurveillance] denní e-surveillance není stažená — přeskakuji")
+        return 0
+    if dry_run:
+        print(f"  [esurveillance] {len(rows):,} řádků, snímek {snap} (dry-run)")
+        return len(rows)
+    _upsert_observations(conn, rows)
+    # Zdroj vydává novou verzi celé řady každý den. Držet všechny by bylo přes sto
+    # tisíc řádků denně kvůli opravám posledních dnů; drží se proto poslední snímek
+    # a z historie pondělní (stav k neděli) — týdenní krok na dopočet zpoždění stačí.
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            DELETE FROM observation
+             WHERE source_id = %s
+               AND snapshot_date <> (SELECT max(snapshot_date) FROM observation WHERE source_id = %s)
+               AND EXTRACT(ISODOW FROM snapshot_date) <> 1
+            """,
+            (ESURV_SOURCE, ESURV_SOURCE),
+        )
+        pruned = cur.rowcount
+    print(f"  [esurveillance] {len(rows):,} řádků, snímek {snap}"
+          + (f"; smazáno {pruned:,} řádků starších denních snímků" if pruned else ""))
+    return len(rows)
+
+
 # ── registr patogenů ─────────────────────────────────────────────────────────
 
 def load_pathogen_registry(conn, dry_run: bool = False) -> bool:
@@ -372,7 +458,9 @@ def main() -> int:
     ap.add_argument("--snapshot-date", default=None, help="YYYY-MM-DD (default: dnes)")
     args = ap.parse_args()
 
-    snap = date.fromisoformat(args.snapshot_date) if args.snapshot_date else date.today()
+    # U denní e-surveillance je snímkem datum složky u zdroje; --snapshot-date ho přebije.
+    explicit_snap = date.fromisoformat(args.snapshot_date) if args.snapshot_date else None
+    snap = explicit_snap or date.today()
     print(f"Načítám do Postgresu (snapshot_date={snap})…")
 
     if args.dry_run:
@@ -383,6 +471,7 @@ def main() -> int:
         load_uzis_registries(None, snap, dry_run=True)
         load_who_flu(None, snap, dry_run=True)
         load_erviss(None, snap, dry_run=True)
+        load_esurveillance(None, explicit_snap, dry_run=True)
         return 0
 
     with psycopg.connect(dsn()) as conn:
@@ -394,6 +483,7 @@ def main() -> int:
         load_uzis_registries(conn, snap)
         load_who_flu(conn, snap)
         load_erviss(conn, snap)
+        load_esurveillance(conn, explicit_snap)
         conn.commit()
     print("Hotovo.")
     return 0 if registry_ok else 1

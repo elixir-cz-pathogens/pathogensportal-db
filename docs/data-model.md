@@ -36,7 +36,7 @@ source, and a query across sources needs no `UNION`.
 | `age_group` | varchar, nullable | `NULL` = all ages |
 | `sex` | varchar, nullable | `NULL` = both sexes |
 | `period_start`, `period_end` | date | the period; `period_end` is exclusive |
-| `metric` | varchar | `cases`, `deaths`, `tests`, `hospitalizations`, `lab_detections`, `population_covered`, `rate_per_100k` |
+| `metric` | varchar | `cases`, `deaths`, `tests`, `hospitalizations` (new admissions), `hospitalized` (patients in hospital on the day), `icu_admissions`, `vaccine_doses`, `lab_detections`, `population_covered`, `rate_per_100k` |
 | `value` | numeric | the measurement |
 | `snapshot_date` | date | the day this version of the number was loaded |
 | `ingested_at` | timestamptz | when the row was written |
@@ -98,6 +98,7 @@ is reported and the script exits with code 1, but the observations are still loa
 | `load_who_flu` | `who/who_flunet_cz.csv` | `who_flunet_sentinel`, `who_flunet_nonsentinel`, `who_flunet` | `lab_detections`, `tests` | week; Influenza, Influenza A, Influenza B, RSV |
 |  | `who/who_fluid_cz.csv` | `who_fluid` | `cases`, `population_covered` | week × age group; ILI and ARI |
 | `load_erviss` | `ecdc/erviss_ili_ari_cz.csv` | `ecdc_erviss` | `rate_per_100k` | week × age group; ILI and ARI |
+| `load_esurveillance` | `uzis_esurv/esurv_denni.csv`, `esurv_ockovani.csv` | `uzis_esurv` | `cases`, `hospitalizations`, `hospitalized`, `icu_admissions`, `deaths`, `vaccine_doses` | day; the whole country in total and by age group, regions in total; influenza, COVID-19, RSV, ARI/ILI |
 
 Details that are easy to get wrong:
 
@@ -116,6 +117,13 @@ Details that are easy to get wrong:
   the CSV and in the charts only.
 - **Age "All" / "total"** in FluID and ERVISS is stored as `NULL`, following the table's
   convention.
+- **The daily e-surveillance has its own snapshot rule.** Its snapshot date is the date of the
+  daily folder at the source, not the day of loading: loading the same folder again rewrites the
+  same rows. The source reissues the whole series every day (about 110,000 rows), so after a
+  load only the newest snapshot and the Monday snapshots are kept — weekly steps are enough to
+  see how the last days were filled in, and the current state is always the newest snapshot.
+  In the breakdowns by age and by region zero values are not stored (a missing row inside the
+  range of the series is zero); the national totals are complete.
 - **MZČR COVID-19 and the SZÚ season summaries** are not loaded; their charts are built from the
   CSV files.
 
