@@ -35,7 +35,8 @@ docker run --rm -v "$PWD/data:/data" -v "$PWD/out/charts:/output/charts" pathoge
 ```
 
 The container runs `run_all.py → generate_json.py → detect_anomalies.py → compute_mem.py →
-compute_nowcast.py → compute_resp.py → compute_genomics.py → compute_isin.py → last_checked.py`;
+compute_nowcast.py → compute_resp.py → compute_genomics.py → compute_isin.py → compute_esurv.py →
+last_checked.py`;
 the steps from `compute_nowcast.py` on may fail without stopping the others.
 `load_to_db.py` is not part of that command; without a database `generate_json.py` reads the CSV
 files directly.
@@ -67,6 +68,7 @@ The pipeline writes JSON only. It does not write any Hugo pages.
 |---|---|---|---|
 | **MZČR** — COVID-19 open data | cases, hospitalisations, tests (PCR and antigen), incidence, deaths, vaccination status, per-person age and region | no copyrighted works, database not protected (terms in the national catalogue NKOD; the API page states none) | `mzcr_covid.py` |
 | **ÚZIS ISIN** | notifiable infectious diseases: 114 diagnoses by region, month and age group | CC BY 4.0, with a recommended citation | `uzis_isin.py` |
+| **ÚZIS daily e-surveillance** | influenza, COVID-19, RSV and ARI/ILI by day: cases reported by physicians, hospitalisations, intensive care, vaccine doses, laboratory confirmations | not stated — a data summary with a citation only | `uzis_esurveillance.py` |
 | **ÚZIS registries RPN, RTBC** | sexually transmitted infections (since 1994) and tuberculosis (since 2000) — these are not in ISIN | CC BY 4.0, with a recommended citation | `uzis_registries.py` |
 | **SZÚ** — seasonal archives | influenza / ARI season summaries since 2012/13 | CC BY-NC-ND 4.0 in the szu.gov.cz footer; whether it covers the figures is being checked with SZÚ | `szu_influenza.py` |
 | **SZÚ** — weekly PDFs | virus × week matrix and weekly reports by region | as above | `szu_weekly.py` |
@@ -94,6 +96,7 @@ scripts/pathogen_registry.py   reads and checks curated/pathogens.yaml — no da
 scripts/verify_pathogens.py    compares the registry with ENA, Wikidata and MeSH (needs the network)
 scripts/generate_json.py       reads the data, writes Chart.js JSON into $OUTPUT_DIR
 scripts/chart_meta.py          the `meta` block attached to every chart
+scripts/compute_esurv.py       daily e-surveillance (ÚZIS): cases, hospitals, vaccination → esurv_*.json
 scripts/last_checked.py        the day each chart was last checked against its sources → last_checked.json
 scripts/detect_anomalies.py    anomaly detection (Farrington/Noufaily) → anomaly_signals.json,
                                anomaly_signals_weekly.json (--zdroj tydenni)

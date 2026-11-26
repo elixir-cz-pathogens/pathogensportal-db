@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from scrapers import (mzcr_covid, ecdc_covid, ecdc_erviss, ecdc_erviss_snapshots, ecdc_respicast,
                       ena_czech, ncbi_pathogen, nextstrain_czech,
-                      szu_influenza, szu_weekly, uzis_isin, uzis_isin_weekly, uzis_registries,
+                      szu_influenza, szu_weekly, uzis_esurveillance, uzis_isin, uzis_isin_weekly, uzis_registries,
                       csu_population,
                       who_flu)
 from snapshot import snapshot
@@ -45,7 +45,8 @@ def run() -> int:
         ("ECDC RespiCast (CZ)",   ecdc_respicast.download,     DATA_ROOT / "ecdc", ("ecdc-respicast",)),
     ]
 
-    # Vedlejší zdroje: tři genomické archivy a týdenní souhrn ÚZIS. Nezávisí na
+    # Vedlejší zdroje: tři genomické archivy, týdenní souhrn ÚZIS a denní
+    # e-surveillance ÚZIS. Nezávisí na
     # nich žádný jiný graf než jejich vlastní bloky.
     # Běží ve stejné smyčce jako povinné zdroje (ať se dostanou do snapshotu
     # a do metadat o zdrojích), ale jejich selhání nevrací exit 1 — ten by
@@ -60,6 +61,12 @@ def run() -> int:
         # dat: odkaz se může změnit bez ohlášení. Stojí na něm jediný blok jedné
         # stránky (compute_isin.py), a ten při výpadku zůstane u posledního stavu.
         ("ÚZIS ISIN týdenní souhrn", uzis_isin_weekly.download, DATA_ROOT / "isin", ("uzis-isin-weekly",)),
+        # Denní report e-surveillance leží na stejném sdíleném úložišti a je to
+        # sada excelových reportů, ne datová sada: tvar se může změnit bez
+        # ohlášení. Stojí na něm jeden panel (compute_esurv.py), který při
+        # výpadku zůstane u posledního stavu.
+        ("ÚZIS e-surveillance (denní)", uzis_esurveillance.download, DATA_ROOT / "uzis_esurv",
+         ("uzis-esurveillance",)),
     ]
     side_labels = {label for label, *_ in side_jobs}
 

@@ -13,7 +13,8 @@ import run_all  # noqa: E402
 
 SCRAPERS = ("mzcr_covid", "ecdc_covid", "ecdc_erviss", "ecdc_erviss_snapshots", "ecdc_respicast",
             "ena_czech", "ncbi_pathogen", "nextstrain_czech", "szu_influenza", "szu_weekly",
-            "uzis_isin", "uzis_isin_weekly", "uzis_registries", "csu_population", "who_flu")
+            "uzis_esurveillance", "uzis_isin", "uzis_isin_weekly", "uzis_registries", "csu_population",
+            "who_flu")
 
 
 @pytest.fixture
@@ -32,6 +33,15 @@ def offline(monkeypatch, tmp_path):
     return monkeypatch
 
 
+def test_every_scraper_is_stubbed():
+    """Nový scraper v run_all.py bez záznamu v SCRAPERS by v testech sáhl na síť."""
+    import types
+    from scrapers import __name__ as pkg
+    imported = {name for name, obj in vars(run_all).items()
+                if isinstance(obj, types.ModuleType) and obj.__name__.startswith(pkg + ".")}
+    assert imported == set(SCRAPERS)
+
+
 def _fail(out):
     raise ConnectionError("archiv neodpovídá")
 
@@ -40,7 +50,8 @@ def test_all_sources_ok_returns_zero(offline):
     assert run_all.run() == 0
 
 
-@pytest.mark.parametrize("scraper", ["ena_czech", "nextstrain_czech", "ncbi_pathogen", "uzis_isin_weekly"])
+@pytest.mark.parametrize("scraper", ["ena_czech", "nextstrain_czech", "ncbi_pathogen", "uzis_isin_weekly",
+                                     "uzis_esurveillance"])
 def test_side_source_outage_does_not_stop_the_pipeline(offline, scraper):
     offline.setattr(getattr(run_all, scraper), "download", _fail)
     assert run_all.run() == 0

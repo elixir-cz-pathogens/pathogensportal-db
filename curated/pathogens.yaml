@@ -93,6 +93,7 @@ dashboards:
   /dashboards/influenza-surveillance/:         { kind: surveillance, chart: flu_weekly }
   /dashboards/influenza-regional/:             { kind: surveillance, chart: flu_regional_weekly }
   /dashboards/influenza-intensity/:            { kind: surveillance, chart: flu_mem }
+  /dashboards/respiratory-daily/:              { kind: surveillance, chart: esurv_summary }
   /dashboards/infectious-diseases-childhood/:  { kind: surveillance, chart: isin_group_childhood_airborne }
   /dashboards/infectious-diseases-gastro/:     { kind: surveillance, chart: isin_group_gastrointestinal }
   /dashboards/infectious-diseases-hepatitis/:  { kind: surveillance, chart: isin_group_hepatitis }
@@ -160,7 +161,7 @@ pathogens:
     disease: { cs: "COVID-19", en: "COVID-19" }
     ids: { wikidata: Q82069695, mesh: D000086402 }
     icd10: [U07.1]
-    dashboards: [/dashboards/covid19-surveillance/, /dashboards/genomics/, /dashboards/covid-demographics/, /dashboards/genomics-lineages/, /dashboards/nextstrain-sarscov2/, /dashboards/wastewater-monitoring/]
+    dashboards: [/dashboards/covid19-surveillance/, /dashboards/genomics/, /dashboards/covid-demographics/, /dashboards/genomics-lineages/, /dashboards/nextstrain-sarscov2/, /dashboards/wastewater-monitoring/, /dashboards/respiratory-daily/]
     verified: 2026-11-26
 
   - id: influenza-a
@@ -174,7 +175,7 @@ pathogens:
     disease: { cs: "Chřipka A", en: "Influenza A" }
     ids: { wikidata: Q834390, mesh: D009980 }
     icd10_shared: [J09, J10, J11]
-    dashboards: [/dashboards/influenza-surveillance/, /dashboards/genomics/, /dashboards/influenza-regional/, /dashboards/influenza-intensity/, /dashboards/genomics-lineages/, /dashboards/nextstrain-influenza/]
+    dashboards: [/dashboards/influenza-surveillance/, /dashboards/genomics/, /dashboards/influenza-regional/, /dashboards/influenza-intensity/, /dashboards/genomics-lineages/, /dashboards/nextstrain-influenza/, /dashboards/respiratory-daily/]
     verified: 2026-11-26
 
   - id: influenza-b
@@ -188,7 +189,7 @@ pathogens:
     disease: { cs: "Chřipka B", en: "Influenza B" }
     ids: { wikidata: Q1089532, mesh: D009981 }
     icd10_shared: [J10, J11]
-    dashboards: [/dashboards/influenza-surveillance/, /dashboards/genomics/, /dashboards/influenza-regional/, /dashboards/influenza-intensity/, /dashboards/genomics-lineages/, /dashboards/nextstrain-influenza/]
+    dashboards: [/dashboards/influenza-surveillance/, /dashboards/genomics/, /dashboards/influenza-regional/, /dashboards/influenza-intensity/, /dashboards/genomics-lineages/, /dashboards/nextstrain-influenza/, /dashboards/respiratory-daily/]
     verified: 2026-11-26
 
   - id: h5n1
@@ -217,7 +218,7 @@ pathogens:
     disease: { cs: "Infekce RSV", en: "RSV infection" }
     abbreviations: { cs: ["RSV"], en: ["RSV"] }
     ids: { wikidata: Q29004712 }
-    dashboards: [/dashboards/influenza-surveillance/, /dashboards/genomics/, /dashboards/genomics-lineages/]
+    dashboards: [/dashboards/influenza-surveillance/, /dashboards/genomics/, /dashboards/genomics-lineages/, /dashboards/respiratory-daily/]
     verified: 2026-11-26
 
   - id: tuberculosis

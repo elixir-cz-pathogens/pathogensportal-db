@@ -8,6 +8,28 @@ Releases are git tags `vMAJOR.MINOR.PATCH`. The portal pins one of them as its s
 
 Changes on `dev` since v0.4.0.
 
+- **Daily e-surveillance of respiratory infections** (no issue) — a new scraper,
+  `uzis_esurveillance.py`, reads the daily ÚZIS report (NZIP 2860): cases of influenza,
+  COVID-19, RSV and ARI/ILI reported by physicians, hospitalisations with the type of care,
+  deaths during a hospital stay, vaccine doses and laboratory confirmations, by day since
+  26 May 2025, by region and by age group. `compute_esurv.py` builds fifteen new files
+  `esurv_*.json` for a new dashboard: 7-day sums of cases and admissions, patients in hospital
+  by day, rates by age, regional maps, vaccination, and a summary with facts and comments.
+  The figures are automated reports, not sentinel rates, and are never set against the MEM
+  thresholds; the registry of methodology changes carries the note
+  `esurv-hlaseni-lekaru-a-nemocnic`. The source states no licence, only a citation, so the
+  charts go out under "the terms of the source apply". `load_to_db.py` loads the series into
+  `observation` (new metrics `hospitalized`, `icu_admissions`, `vaccine_doses`) and keeps the
+  newest and the Monday snapshots. New machine unit `per_100` and metric `vaccine_doses` in
+  `charts.yaml`. The pathogen registry links influenza, SARS-CoV-2 and RSV to the new page. The
+  scraper is a side source and `compute_esurv.py` a `||`-guarded step in `CMD`: their failure
+  does not stop the refresh.
+  **One existing file gains a tile:** `resp_overview.json` carries a new tile `hosp` — new
+  hospital admissions with an acute respiratory infection per complete ISO week — with the unit
+  `admissions`, an optional sentence in the comment and `uzis-esurveillance` among its sources.
+  The portal must know the unit before this lands (pathogensportal branch of the same name);
+  an older `pp-resp.js` would label the number "per 100,000". Without the downloaded source the
+  tile is simply absent.
 - **Date of the last source check** (no issue) — a new last step of the container command,
   `last_checked.py`, writes `last_checked.json`: for every chart file, the day (UTC) on which all
   of its sources were last asked successfully and the chart was rebuilt from that download or

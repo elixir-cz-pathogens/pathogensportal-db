@@ -257,6 +257,43 @@ Notes:
 | `flu_mem` | `compute_mem.py` | influenza thresholds, trend and forecast for ILI and ARI | [analytics/flu-mem.md](analytics/flu-mem.md) |
 | `flu_nowcast` | `compute_nowcast.py` | estimated final weekly lab detections for the last two weeks (shadow mode, not shown) | [analytics/nowcasting.md](analytics/nowcasting.md) |
 
+### Daily e-surveillance — `compute_esurv.py`
+
+Fifteen files for the dashboard "Respiratory infections — daily overview and hospitals", built
+from the daily ÚZIS report (`uzis_esurv/*.csv`). Four series in every time chart: influenza,
+COVID-19, RSV and ARI/ILI in total (the last one is an order of magnitude larger, the page
+draws it on its own with the `series` parameter).
+
+| File | Content |
+|---|---|
+| `esurv_summary` | figures for the tiles (patients in hospital on the last day), `posledni_datum` — the date the page shows —, a summary per condition and three blocks of facts with a comment (`cases`, `hospital`, `vaccination`) for the `comment` shortcode |
+| `esurv_cases` | cases reported by physicians, rolling 7-day sum |
+| `esurv_cases_age` | reported cases of the last 7 days per 100,000 of the age group |
+| `esurv_hosp_current` | patients in hospital on the day (a headcount, not a sum) |
+| `esurv_hosp_new`, `esurv_hosp_icu`, `esurv_hosp_deaths` | new admissions, new intensive-care admissions (JIP + ARO) and deaths during a hospital stay, rolling 7-day sums |
+| `esurv_hosp_age` | new admissions of the last 28 days per 100,000 of the age group |
+| `esurv_map_<condition>` | regions: new cases in 7 days per 100,000, values computed by the source (four files) |
+| `esurv_vaccination` | cumulative doses given since the start of the season; three series |
+| `esurv_vaccination_age` | doses per 100 inhabitants of the age group (influenza, COVID-19; RSV uses other age groups) |
+| `esurv_lab` | laboratory-confirmed infections, rolling 7-day sum |
+
+Rules worth knowing:
+
+- **Seven-day sums, not daily figures.** Reporting has a strong weekly rhythm (24 influenza cases
+  on Sunday 22 November 2026, 1,090 on Monday). A 7-day sum always contains every weekday once.
+- **Not compared with ILI/ARI.** These are reports of all connected physicians and hospitals,
+  not sentinel rates; nothing here is set against the MEM thresholds.
+- **Vaccination status is not charted.** Counts of vaccinated and unvaccinated cases without the
+  size of both groups by age would invite a conclusion the data do not support.
+- **A file is not rewritten when the daily folder is the same**, so the date on the page stays
+  true and the portal gets no commit for a run that brought nothing.
+- The charts by age need `csu/population_age.csv`; without it only those three are left out.
+
+The same source also feeds one tile of the weekly overview: `compute_resp.py` adds `hosp` to
+`resp_overview.json` — new hospital admissions with an acute respiratory infection (ARI/ILI in
+total) per complete ISO week, unit `admissions`. The e-surveillance is usually a week ahead of
+ERVISS, so the tile names its own week.
+
 ### Last check — `last_checked.json`
 
 Not a chart: one small file that says, for every chart file above, when the pipeline last checked

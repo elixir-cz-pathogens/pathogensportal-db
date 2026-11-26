@@ -21,6 +21,8 @@ def ws(tmp_path, monkeypatch):
     monkeypatch.setattr(cr, "FLU_MEM_FILE", tmp_path / "out" / "flu_mem.json")
     monkeypatch.setattr(cr, "COVID_WEEKLY_FILE", tmp_path / "out" / "covid_cases_weekly.json")
     monkeypatch.setattr(cr, "COVID_SUMMARY_FILE", tmp_path / "out" / "covid_summary.json")
+    monkeypatch.setattr(cr, "ESURV_DAILY_FILE", tmp_path / "esurv_denni.csv")
+    monkeypatch.setattr(cr, "ESURV_STATE_FILE", tmp_path / "esurv_stav.json")
     return tmp_path
 
 
@@ -210,6 +212,63 @@ def test_prehled_bez_grafu_covidu_dobehne(ws):
     rates, lab = _overview_inputs(ws)
     out = cr.build_overview(rates, lab, {}, MEM, cr.covid_weekly())
     assert [t["id"] for t in out["tiles"]] == ["ili", "ari", "flu_pos", "rsv_pos"]
+
+
+# ── Nemocnice (denní e-surveillance ÚZIS) ────────────────────────────────────
+
+def _hospital(ws, last_day, per_day=100):
+    """Denní řada od pondělí 26. 10. 2026 do `last_day`; týden 45 má o polovinu víc příjmů."""
+    from datetime import date, timedelta
+    days, d = [], date(2026, 10, 26)
+    while d <= date.fromisoformat(last_day):
+        days.append(d)
+        d += timedelta(days=1)
+    rows = [(x.isoformat(), "ari_ili", "CZ", "celkem", per_day * (1.5 if x.isocalendar()[1] == 45 else 1))
+            for x in days]
+    rows += [(x.isoformat(), "chripka", "CZ", "celkem", 1) for x in days]             # jiná nemoc se nesčítá
+    rows += [(x.isoformat(), "ari_ili", "CZ010", "celkem", 9) for x in days]          # kraj se nesčítá
+    rows += [(x.isoformat(), "ari_ili", "CZ", "75+", 7) for x in days]                # věk se nesčítá
+    pd.DataFrame(rows, columns=["datum", "nemoc", "kraj_kod", "vek", "hosp_nove"]).to_csv(ws / "esurv_denni.csv",
+                                                                                          index=False)
+    (ws / "esurv_stav.json").write_text(json.dumps({"stav_k": last_day}), encoding="utf-8")
+    return cr.hospital_weekly()
+
+
+def test_nemocnice_berou_jen_uplne_tydny_cele_republiky(ws):
+    """Běžící týden (data do čtvrtka) by vedle úplného vypadal jako propad."""
+    assert _hospital(ws, "2026-11-12").to_dict() == {"2026-W44": 700.0, "2026-W45": 1050.0}
+    assert list(_hospital(ws, "2026-11-15").index) == ["2026-W44", "2026-W45", "2026-W46"]
+
+
+def test_prehled_ma_dlazdici_nemocnic_s_vlastni_jednotkou(ws):
+    rates, lab = _overview_inputs(ws)
+    out = cr.build_overview(rates, lab, {}, MEM, None, _hospital(ws, "2026-11-12"))
+    tile = out["tiles"][-1]
+    assert (tile["id"], tile["unit"], tile["value"], tile["prev"], tile["change_pct"], tile["week"]) == \
+        ("hosp", "admissions", 1050, 700, 50.0, "2026-W45")
+    assert [p["value"] for p in tile["series"] if p["week"] in ("2026-W44", "2026-W45")] == [700.0, 1050.0]
+    assert "Nově přijatí do nemocnice s akutní respirační infekcí ve stejném týdnu: 1\u00a0050." in out["comment"]["cs"]
+    source = next(f for f in out["facts"]["facts"] if f["id"] == "source")
+    assert "hospitalizace ÚZIS" in source["cs"] and "hospitalisations from ÚZIS" in source["en"]
+
+
+def test_nemocnice_s_novejsim_tydnem_nez_ili_ho_jmenuji(ws):
+    """E-surveillance bývá o týden napřed před ERVISS — věta musí říct, o kterém týdnu mluví."""
+    rates, lab = _overview_inputs(ws)
+    out = cr.build_overview(rates, lab, {}, MEM, None, _hospital(ws, "2026-11-15"))
+    assert out["tiles"][-1]["week"] == "2026-W46" and out["week"] == "2026-W45"
+    # Věta je nepovinná (limit 80 slov), ale fakt i jeho týden v balíčku jsou vždy.
+    values = out["facts"]["values"]
+    assert values["hosp_when"]["cs"] == "v týdnu 9.–15.\u00a0listopadu" and values["hosp_new"]["raw"] == 700
+    assert len(out["comment"]["cs"].split()) <= cr.MAX_COMMENT_WORDS
+
+
+def test_prehled_bez_e_surveillance_dobehne_a_zdroj_ji_neuvadi(ws, capsys):
+    rates, lab = _overview_inputs(ws)
+    out = cr.build_overview(rates, lab, {}, MEM, None, cr.hospital_weekly())
+    assert "hosp" not in [t["id"] for t in out["tiles"]]
+    assert "ÚZIS" not in next(f for f in out["facts"]["facts"] if f["id"] == "source")["cs"]
+    assert "bez nemocnic" in capsys.readouterr().out
 
 
 # ── Věk ──────────────────────────────────────────────────────────────────────

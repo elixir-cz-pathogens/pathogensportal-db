@@ -255,3 +255,26 @@
     kvůli rezistenci a část vzorků pochází z odpadních vod (u klebsiel 205 z 1 149).
     Z počtů nalezených genů se proto nepočítají procenta — neříkaly by, jak častá je
     rezistence u pacientů.
+
+- id: esurv-hlaseni-lekaru-a-nemocnic
+  od: 2025-05
+  do: null
+  akce: poznamka
+  rozsah:
+    diagnozy: null
+    kraje: null
+  zdroj: "hlavičky souborů denního reportu e-surveillance ÚZIS (EW05, eHos03, EW07), složka 2026-11-25"
+  popis: >-
+    Denní report e-surveillance (NZIP 2860) nese automatizovaná hlášení: nové
+    případy hlásí lékaři do ISIN (EWS), hospitalizace hlásí zapojené
+    nemocnice a počítá se každá hospitalizace, v jejímž průběhu byla infekce
+    zaznamenána. Laboratorně potvrzené infekce hlásí laboratoře zapojené do
+    EWS (74 ze 101 k 24. 11. 2026). Zdroj uvádí, že v posledních dnech může
+    docházet ke zpětnému doplňování a korekcím hodnot.
+  dopad: >-
+    Počty nejsou sentinelová nemocnost ILI/ARI a nesrovnávají se s řadami
+    ERVISS ani s prahy MEM. Hlášení mají silný týdenní rytmus a svátky je
+    snižují, proto portál ukazuje 7denní součty. Poslední dny řady jsou
+    neúplné. Počet zapojených nemocnic a laboratoří se v čase mění, takže
+    růst řady nemusí být jen růst nemocnosti; „hospitalizace s infekcí“
+    neznamená hospitalizaci kvůli infekci.
