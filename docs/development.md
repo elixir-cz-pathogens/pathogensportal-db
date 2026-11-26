@@ -22,6 +22,7 @@ python scripts/scrapers/uzis_isin.py          # one source
 python scripts/run_all.py                     # all sources + snapshot + source metadata
 python scripts/source_metadata.py uzis-isin   # metadata of one source
 python scripts/load_to_db.py --dry-run        # count rows without a database
+python scripts/load_pathogens.py --dry-run    # check the pathogen registry without a database
 python scripts/generate_json.py               # all charts
 python scripts/detect_anomalies.py
 python scripts/compute_mem.py
@@ -44,6 +45,8 @@ The suite uses no network and no database; HTTP responses are stubbed. CI
 | `test_who_erviss_scrapers.py` | WHO and ERVISS scrapers: changed columns, empty country filter, a source that stopped updating |
 | `test_respicast_scraper.py` | RespiCast scraper: country filter, the duplicated median, the round cache |
 | `test_uzis_registries.py` | STI and tuberculosis chart generators on small samples |
+| `test_pathogen_registry.py` | the pathogen registry: every record has both languages and a taxon, an ICD-10 code is exclusive to one pathogen at most, pages and charts exist, agreement with `genomics_taxa.yaml` and with the constraints in `db/init.sql`; the data dates read from a chart; the comparison with ENA and Wikidata on stubbed answers |
+| `test_load_pathogens_db.py` | the registry loader against a real PostgreSQL: an old database is extended, a second run changes nothing, a changed record moves only its own `updated_at`, the views. **Skipped unless `PATHOGENS_TEST_DSN` is set** — the command is in the file's docstring |
 | `test_source_metadata.py` | metadata discovery, failure isolation, that every generated chart is in `charts.yaml` and has a title, and the conversion of axis labels to ISO dates |
 | `test_isin_codes.py` | ICD-10 codes on the series of the ISIN disease charts |
 | `test_uzis_isin_weekly.py` | the weekly ÚZIS workbook: year blocks side by side, gaps in columns and rows, a block that lost its header; the weekly download cache, a source that stopped updating and years kept from the previous download |
@@ -101,6 +104,12 @@ purpose, regenerate the golden values deliberately and say why in the commit.
 4. Add the file to the catalogue in [chart-generation.md](chart-generation.md).
 5. The portal refers to the file by name. A new chart is safe; renaming or removing one is a
    breaking change.
+
+## Adding a pathogen
+
+The steps are in [pathogen-registry.md](pathogen-registry.md#adding-a-pathogen). In short: a record
+in `curated/pathogens.yaml` with the taxon and names copied from ENA, then
+`python scripts/verify_pathogens.py <id>`.
 
 ## Recording a reporting change
 

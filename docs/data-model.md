@@ -14,7 +14,12 @@ population from another), baselines, and the reporting triangle.
 | `observation` | `load_to_db.py` | every measurement from every source, in one shape |
 | `population` | `load_to_db.py` | denominators from ČSÚ |
 | `dashboard_data` | the portal's backend | finished chart payloads served by `/api/charts` |
-| `pathogens` | `init.sql` (seed rows) | small reference list of pathogens |
+| `pathogens`, `pathogen_identifier`, `pathogen_term`, `pathogen_diagnosis`, `pathogen_dashboard` | `load_pathogens.py` | the pathogen registry: names, identifiers, glossary, ICD-10 codes, dashboards |
+| `diagnosis`, `dashboard`, `identifier_scheme` | `load_pathogens.py` | code lists the registry refers to |
+
+The registry tables are the **information layer** and have their own document:
+[pathogen-registry.md](pathogen-registry.md). `diagnosis.code` is the same code as
+`observation.diagnosis_code`, which is what joins the two layers.
 
 ### `observation`
 
@@ -77,7 +82,10 @@ Primary key: `(region_code, age_group, sex, year)`. A reload overwrites the valu
 
 ## What each loader writes
 
-`load_to_db.py` has one function per source. A missing CSV is skipped with a message.
+`load_to_db.py` has one function per source. A missing CSV is skipped with a message. It also
+loads the pathogen registry (`load_pathogen_registry`, described in
+[pathogen-registry.md](pathogen-registry.md)) in a savepoint of its own: a mistake in the registry
+is reported and the script exits with code 1, but the observations are still loaded.
 
 | Loader | Input | `source_id` | `metric` | Grain and notes |
 |---|---|---|---|---|
@@ -131,7 +139,9 @@ PostgreSQL runs the scripts in `docker-entrypoint-initdb.d` only when it initial
 volume. On a database that has already run once, `init.sql` is not executed again, so tables added
 later would never be created and the loader would fail with "relation does not exist".
 `load_to_db.py` therefore executes `db/init.sql` on every run. The file is fully idempotent
-(`CREATE TABLE IF NOT EXISTS`, `ON CONFLICT DO NOTHING`), so this is safe.
+(`CREATE TABLE IF NOT EXISTS`, `ADD COLUMN IF NOT EXISTS`, `ON CONFLICT DO NOTHING`; views are
+dropped and created again), so this is safe. `ADD COLUMN IF NOT EXISTS` is how a table that
+already exists in a running database — `pathogens` — gets its new columns.
 
 ## How the generators use the database
 

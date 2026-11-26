@@ -19,7 +19,7 @@ pip install -r requirements.txt
 cp .env.example .env                  # optional, the defaults work
 
 python scripts/run_all.py             # download CSVs into $DATA_DIR, snapshot them, collect source metadata
-python scripts/load_to_db.py          # optional: fill PostgreSQL
+python scripts/load_to_db.py          # optional: fill PostgreSQL (observations + the pathogen registry)
 python scripts/generate_json.py       # chart JSON into $OUTPUT_DIR
 python scripts/detect_anomalies.py    # $OUTPUT_DIR/anomaly_signals.json
 python scripts/detect_anomalies.py --zdroj tydenni   # $OUTPUT_DIR/anomaly_signals_weekly.json
@@ -89,6 +89,9 @@ scripts/scrapers/              one module per source
 scripts/snapshot.py            dated gzip snapshots with sha256 de-duplication
 scripts/source_metadata.py     metadata from the publishers (licence, freshness) → data/meta/
 scripts/load_to_db.py          ETL: CSV → PostgreSQL (observation, population)
+scripts/load_pathogens.py      pathogen registry → PostgreSQL (pathogens, glossary, identifiers, dashboards)
+scripts/pathogen_registry.py   reads and checks curated/pathogens.yaml — no database, no network
+scripts/verify_pathogens.py    compares the registry with ENA, Wikidata and MeSH (needs the network)
 scripts/generate_json.py       reads the data, writes Chart.js JSON into $OUTPUT_DIR
 scripts/chart_meta.py          the `meta` block attached to every chart
 scripts/last_checked.py        the day each chart was last checked against its sources → last_checked.json
@@ -105,6 +108,8 @@ scripts/nowcast.py             reporting triangle and chain-ladder — the compu
 sources.yaml                   source registry — where to find each publisher's metadata
 charts.yaml                    what each chart measures: source, metric, unit, grain
 curated/chart_titles.yaml      Czech and English title of each chart file
+curated/pathogens.yaml         pathogen registry: Czech/English names, taxon and other identifiers,
+                               ICD-10 codes, dashboards — the source of the registry tables
 methodology_changes.yaml       registry of reporting changes; the source of chart `caveats`
 curated/szu/                   SZÚ season totals 2022/23–2024/25, kept in the repo (the scraper does not read their PDFs)
 db/init.sql                    PostgreSQL schema (the portal mounts it into its database container)
@@ -160,6 +165,7 @@ here does not change the portal by itself. See [docs/deployment.md](docs/deploym
 | [docs/data-sources.md](docs/data-sources.md) | every source and its scraper: what is downloaded, how it is checked, what comes out |
 | [docs/snapshots.md](docs/snapshots.md) | the dated archive and why it exists |
 | [docs/data-model.md](docs/data-model.md) | the PostgreSQL schema and what each loader writes |
+| [docs/pathogen-registry.md](docs/pathogen-registry.md) | the pathogen registry: names, identifiers, ICD-10 codes, dashboards, and the tables built from it |
 | [docs/chart-generation.md](docs/chart-generation.md) | how a CSV becomes a chart JSON; catalogue of every generated file |
 | [docs/metadata.md](docs/metadata.md) | source metadata, `charts.yaml`, the `meta` block |
 | [docs/analytics/anomaly-detection.md](docs/analytics/anomaly-detection.md) | the early-warning system on ISIN |

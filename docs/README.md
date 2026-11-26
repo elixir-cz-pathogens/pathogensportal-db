@@ -8,6 +8,7 @@ Start with [architecture.md](architecture.md) — it has the diagrams and links 
 | [data-sources.md](data-sources.md) | what a given source provides, how its scraper works and what can go wrong with it |
 | [snapshots.md](snapshots.md) | how downloads are archived and how to reproduce an old result |
 | [data-model.md](data-model.md) | what is in PostgreSQL and how each CSV is mapped into it |
+| [pathogen-registry.md](pathogen-registry.md) | what a pathogen is called, how it is identified, where it is shown — and how to ask the database |
 | [chart-generation.md](chart-generation.md) | how a CSV becomes a chart JSON, and what every generated file contains |
 | [metadata.md](metadata.md) | how a chart learns its unit, source, freshness and caveats |
 | [analytics/anomaly-detection.md](analytics/anomaly-detection.md) | how the early-warning signals are computed and validated |
