@@ -148,13 +148,17 @@ def test_download_zapise_csv_a_stav_a_podruhe_nestahuje(tmp_path, monkeypatch):
     assert state["diagnozy"] == {"B15": {"cs": "HEPATITIDA A", "en": "Acute hepatitis A"}}
     assert (tmp_path / u.CSV_NAME).read_text(encoding="utf-8").startswith(",".join(u.COLUMNS))
     assert len(files) == 2 and len(calls) == 1
+    assert u.download.source_checked is True
 
-    # týž týden: 32 MB se znovu netahá
+    # týž týden: 32 MB se znovu netahá — a běh, který se zdroje nezeptal,
+    # se nesmí vydávat za ověření (run_all.py → last_checked.py)
     u.download(tmp_path, today=date(2026, 11, 20))
     assert len(calls) == 1
+    assert u.download.source_checked is False
     # další pondělí: zkusí se nová složka
     u.download(tmp_path, today=date(2026, 11, 23))
     assert len(calls) == 2
+    assert u.download.source_checked is True
 
 
 def test_zdroj_ktery_se_prestal_obnovovat_selze_a_nechá_stara_data(tmp_path, monkeypatch):

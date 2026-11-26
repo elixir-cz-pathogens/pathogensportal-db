@@ -55,6 +55,8 @@ REGION_TO_NUTS3 = {
 
 def download(output_dir: Path) -> list[str]:
     output_dir.mkdir(parents=True, exist_ok=True)
+    # run_all.py podle toho pozná, jestli tenhle běh zdroj opravdu ověřil.
+    download.source_checked = True
     print(f"  [csu_population] stahuju {URL}")
 
     resp = requests.get(URL, timeout=60)
@@ -94,6 +96,8 @@ def download(output_dir: Path) -> list[str]:
         return [str(out_path), str(download_age(output_dir))]
     except Exception as e:
         print(f"  [csu_population] věk se nepodařilo stáhnout ({type(e).__name__}: {e}) — pokračuji bez něj")
+        # Polovina zdroje zůstala z minula: běh nespadne, ale ověření to není.
+        download.source_checked = False
         return [str(out_path)]
 
 

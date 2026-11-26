@@ -20,7 +20,7 @@ docker run --rm \
 | Base | `python:3.12-slim` |
 | Dependencies | `requirements.txt` — the only place they are listed |
 | Environment | `DATA_DIR=/data`, `OUTPUT_DIR=/output/charts` |
-| Command | `run_all.py && generate_json.py && detect_anomalies.py && compute_mem.py && (compute_nowcast.py \|\| echo …)` |
+| Command | `run_all.py && generate_json.py && detect_anomalies.py && compute_mem.py`, then `compute_nowcast.py`, `compute_resp.py`, `compute_genomics.py`, `compute_isin.py` and `last_checked.py`, each as `&& (… \|\| echo …)` |
 
 Things that follow from this:
 
@@ -29,6 +29,8 @@ Things that follow from this:
 - `/data` should be a persistent volume. It holds the snapshot archive, the manifest and the
   caches (SZÚ regional PDFs, RespiCast rounds, historical SZÚ seasons). With an empty volume every
   run downloads everything again and the archive starts from nothing.
+- `last_checked.py` is last on purpose: it reads which charts the generators before it finished.
+  Its state, `meta/checks.json`, lives on the `/data` volume.
 - `load_to_db.py` is not part of the command.
 - The image contains no `.git` directory, so `code_version` in the anomaly output is `unknown`
   there.

@@ -63,6 +63,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import chart_meta
 import labels_en
+import last_checked
 import weekly_months
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -799,6 +800,9 @@ def run_current(long, periods, n_months, exclude_t=frozenset(),
     # vědomí o zlomu v hlášení (EWS od 7/2025), vydá změnu kanálu za epidemii.
     path.write_text(json.dumps(chart_meta.attach(name, out), ensure_ascii=False),
                     encoding="utf-8")
+    # Zpětný přepočet nad starým snapshotem (--as-of) neříká nic o dnešním zdroji.
+    if not (provenance or {}).get("as_of"):
+        last_checked.mark_chart(name)
     n_sig_fdr = sum(1 for r in signals if r.get("fdr_pass"))
     print(f"[{periods[t0]}] oskórováno {len(records)} řad ({skipped} přeskočeno), "
           f"signálů {len(signals)} (po FDR α={alpha}: {n_sig_fdr}; BH: {k_bh}; "

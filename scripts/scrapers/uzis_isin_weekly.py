@@ -292,6 +292,8 @@ def download(output_dir: Path, today: date | None = None) -> list[str]:
     output_dir.mkdir(parents=True, exist_ok=True)
     today = today or date.today()
     csv_path, state_path = output_dir / CSV_NAME, output_dir / STATE_NAME
+    # run_all.py podle toho pozná, jestli tenhle běh zdroj opravdu ověřil.
+    download.source_checked = True
 
     # Souhrn se mění jednou týdně, pipeline běží každou hodinu. Dokud máme
     # složku z tohoto týdne, 32 MB se znovu netahá.
@@ -299,6 +301,9 @@ def download(output_dir: Path, today: date | None = None) -> list[str]:
         state = json.loads(state_path.read_text(encoding="utf-8"))
         if state.get("slozka", "") >= _monday(today).isoformat():
             print(f"  [uzis_isin_weekly] složka {state['slozka']} je z tohoto týdne — nestahuji")
+            # Soubory vracíme, ale zdroje jsme se neptali: opravu vydanou pod
+            # stejnou složkou bychom neviděli, takže to ověření není.
+            download.source_checked = False
             return [str(csv_path), str(state_path)]
 
     print(f"  [uzis_isin_weekly] stahuji {URL}")

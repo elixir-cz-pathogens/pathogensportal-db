@@ -21,6 +21,8 @@ COUNTRY_CODE = "CZ"
 def download(output_dir: Path) -> list[str]:
     output_dir.mkdir(parents=True, exist_ok=True)
     out_path = output_dir / "ecdc_covid_cz.csv"
+    # run_all.py podle toho pozná, jestli tenhle běh zdroj opravdu ověřil.
+    download.source_checked = True
 
     # Sada je od 10/2022 zmrazená a nečte ji žádný graf — drží se jen jako archiv.
     # Když už ji máme, nestahuje se znovu: 30. 9. 2026 začal server ECDC shazovat
@@ -28,6 +30,7 @@ def download(output_dir: Path) -> list[str]:
     # při selhání kteréhokoli zdroje). Stejný vzor jako historické sezóny SZÚ.
     if out_path.exists():
         print(f"  [ecdc_covid] {out_path.name} už existuje (data zmrazená od 10/2022), přeskakuji")
+        download.source_checked = False     # soubor z disku, zdroje jsme se neptali
         return [str(out_path)]
 
     print(f"  [ecdc_covid] stahuju {URL}")

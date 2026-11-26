@@ -59,6 +59,8 @@ The suite uses no network and no database; HTTP responses are stubbed. CI
 | `test_compute_mem.py` | the week × season matrix |
 | `test_trend.py`, `test_forecast.py` | trend categories, exceedance probability |
 | `test_nowcast.py` | chain-ladder on a triangle with known factors, no look-ahead, shadow log and evaluation, the ERVISS snapshot mirror |
+| `test_run_all.py` | which sources may stop the refresh and which may not; which sources a run records as checked — not a failed one, not one served from disk |
+| `test_last_checked.py` | the date of the last source check: a failed scraper or an unfinished generator does not advance it, the file changes at most once a day and is not rewritten without a change, the date never goes back; every generator reports its charts |
 
 Golden tests exist so that the method cannot change by accident. If you change the method on
 purpose, regenerate the golden values deliberately and say why in the commit.
@@ -71,8 +73,11 @@ purpose, regenerate the golden values deliberately and say why in the commit.
    - raise an error on an empty result, on missing expected columns, and — for a live source — on
      a newest record that is too old. A loud failure is better than an empty chart;
    - be safe to run repeatedly.
-2. **Register it** in the `jobs` list of `scripts/run_all.py`, with a label and a target directory
-   under `$DATA_DIR`. The snapshot then happens automatically.
+2. **Register it** in the `jobs` list of `scripts/run_all.py`, with a label, a target directory
+   under `$DATA_DIR` and the `id` of the source it checks (step 3). The snapshot then happens
+   automatically, and a successful job counts as a check of that source for `last_checked.json`.
+   If the scraper can return without asking the source (a cache), it must set
+   `download.source_checked = False` on that path.
 3. **Describe it** in `sources.yaml`: `id`, publisher, landing page, licence as the source states
    it, the files it produces and at least one `discovery` route. Use the same `id` in the portal's
    catalogue.
@@ -87,6 +92,8 @@ purpose, regenerate the golden values deliberately and say why in the commit.
 
 1. Write a function in `scripts/generate_json.py` that reads the CSV, aggregates, and calls
    `save("<chart_name>", {...})`. Return early with a message when the input file is missing.
+   A generator with its own `save()` must call `last_checked.mark_chart(name)` there, otherwise
+   its charts never get a date of the last check (a test catches this).
 2. Call the function in the `__main__` block at the bottom of the file.
 3. Add a line for `<chart_name>` to `charts.yaml` (source, metric, unit, grain, region) and a Czech
    and English title to `curated/chart_titles.yaml`. Without them `tests/test_source_metadata.py`

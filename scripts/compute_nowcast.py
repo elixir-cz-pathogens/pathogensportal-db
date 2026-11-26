@@ -36,6 +36,7 @@ import pandas as pd
 
 import chart_meta
 import labels_en
+import last_checked
 import nowcast
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -228,6 +229,9 @@ def main() -> int:
     path = OUTPUT_DIR / "flu_nowcast.json"
     path.write_text(json.dumps(chart_meta.attach("flu_nowcast", out), ensure_ascii=False),
                     encoding="utf-8")
+    # Zpětný výpočet k jinému dni (--as-of) neříká nic o dnešním zdroji.
+    if not args.as_of:
+        last_checked.mark_chart("flu_nowcast")
     for name, s in out["series"].items():
         now = ", ".join(f"{w['label']}: {w['reported']} → {w['quantiles']['0.5']:.0f}" for w in s["weeks"])
         b = s["backtest"]["all"]

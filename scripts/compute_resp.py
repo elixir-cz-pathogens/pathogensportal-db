@@ -57,6 +57,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import chart_meta
 import generate_json as gj
+import last_checked
 from facts import MAX_COMMENT_WORDS, NBSP, Facts, fmt_num, fmt_pct, plural_cs
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -807,6 +808,7 @@ def save(name: str, obj: dict):
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     path = OUTPUT_DIR / f"{name}.json"
     path.write_text(json.dumps(chart_meta.attach(name, obj), ensure_ascii=False), encoding="utf-8")
+    last_checked.mark_chart(name)
     print(f"  [{name}] → {path}")
 
 
