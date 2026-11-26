@@ -325,6 +325,31 @@ def load_erviss(conn, snapshot: date, dry_run: bool = False) -> int:
     return len(rows)
 
 
+# ── registr patogenů ─────────────────────────────────────────────────────────
+
+def load_pathogen_registry(conn, dry_run: bool = False) -> bool:
+    """
+    Registr patogenů (curated/pathogens.yaml) do tabulek `pathogens`, `pathogen_*`.
+
+    Běží ve vlastním savepointu a chybu jen ohlásí: překlep v registru nesmí
+    zahodit načtená pozorování. Vrací False, když se registr načíst nepodařilo —
+    main() pak skončí kódem 1, aby to nezapadlo.
+    """
+    import load_pathogens
+    from pathogen_registry import RegistryError
+
+    try:
+        if dry_run:
+            load_pathogens.run(dry_run=True)
+        else:
+            with conn.transaction():
+                load_pathogens.run(conn)
+    except (RegistryError, psycopg.Error) as e:
+        print(f"  [pathogens] selhal, pokračuji bez něj: {e}", file=sys.stderr)
+        return False
+    return True
+
+
 def _upsert_observations(conn, rows: list) -> None:
     with conn.cursor() as cur:
         cur.executemany(
@@ -351,6 +376,7 @@ def main() -> int:
     print(f"Načítám do Postgresu (snapshot_date={snap})…")
 
     if args.dry_run:
+        load_pathogen_registry(None, dry_run=True)
         load_population(None, dry_run=True)
         load_isin(None, snap, dry_run=True)
         load_szu_weekly(None, snap, dry_run=True)
@@ -361,6 +387,7 @@ def main() -> int:
 
     with psycopg.connect(dsn()) as conn:
         ensure_schema(conn)
+        registry_ok = load_pathogen_registry(conn)
         load_population(conn)
         load_isin(conn, snap)
         load_szu_weekly(conn, snap)
@@ -369,7 +396,7 @@ def main() -> int:
         load_erviss(conn, snap)
         conn.commit()
     print("Hotovo.")
-    return 0
+    return 0 if registry_ok else 1
 
 
 if __name__ == "__main__":

@@ -19,6 +19,19 @@ Changes on `dev` since v0.4.0.
   of age (`population_age.csv`). The weekly summary states no licence, only a citation, so
   `isin_weekly` goes out under "the terms of the source apply". The scraper is a side source:
   its failure does not stop the refresh.
+- **Pathogen registry** (no issue) — `curated/pathogens.yaml` lists the 48 pathogens the portal
+  covers: Czech and English names, the NCBI Taxonomy number (the same one ENA at EMBL-EBI uses),
+  Wikidata and MeSH identifiers, the ICD-10 codes of the disease, and the dashboards that show it.
+  `load_pathogens.py` loads it into PostgreSQL: the existing `pathogens` table gains columns
+  (`ADD COLUMN IF NOT EXISTS`, so a running database is extended in place) and there are new
+  tables for identifiers, a glossary, ICD-10 codes and dashboards, with three views
+  (`pathogen_overview`, `pathogen_glossary`, `pathogen_ids`). A code is either exclusive to a
+  pathogen or shared with others, and a shared code is never attributed to one pathogen. For
+  every dashboard the loader reads how far its data reach and when its chart was last written, so
+  the database can say when the data about a pathogen last moved. `load_to_db.py` loads the
+  registry too. `verify_pathogens.py` compares the registry with ENA, Wikidata and NLM; it needs
+  the network and is run by hand. The container command and the generated JSON are unchanged.
+  [docs/pathogen-registry.md](docs/pathogen-registry.md).
 - **Thematic disease groups** (no issue) — `compute_isin.py` also builds `isin_groups.json` for the
   group pages: yearly counts of every diagnosis with the EWS part, age groups per 100,000 and, for
   "other", the ten largest diagnoses of every year. **Changed grouping:** whooping cough,

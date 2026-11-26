@@ -1,0 +1,813 @@
+# Pathogen registry — the reference list behind the portal's "information database".
+#
+# Why it exists: the portal names the same pathogen in several places (the
+# genomic table, the disease groups, dashboard titles, the page text), each
+# with its own wording and none with an identifier a machine could join on.
+# This file is the one place that says, for every pathogen the portal covers:
+# what it is called in Czech and in English, how the authorities identify it,
+# under which ICD-10 codes its disease appears in the data, and on which
+# dashboards a reader finds it. scripts/load_pathogens.py loads it into
+# PostgreSQL (tables in db/init.sql, described in docs/pathogen-registry.md).
+#
+# The file is the source of truth; the database is a copy that can be rebuilt
+# at any time. Edit here, never in the database.
+#
+# ── Where each value comes from ──────────────────────────────────────────────
+#   taxon, scientific_name, rank, species, family
+#             NCBI Taxonomy as served by ENA (EMBL-EBI):
+#             https://www.ebi.ac.uk/ena/taxonomy/rest/tax-id/<taxon>
+#             ENA, NCBI and UniProt share the identifier. scientific_name is
+#             the name of that node, letter for letter; species is the ICTV
+#             binomial of the species the node belongs to (viruses whose
+#             commonly used node sits below the species); family is taken
+#             from the lineage. scripts/verify_pathogens.py re-checks all of
+#             them against ENA.
+#   ids.wikidata  the Wikidata item whose "NCBI taxonomy ID" (P685) equals taxon
+#   ids.mesh      the MeSH descriptor stated by that Wikidata item (P486); each
+#                 was checked against id.nlm.nih.gov on the `verified` day.
+#                 A pathogen without a matching Wikidata item has no `ids` —
+#                 a gap is better than a guessed identifier.
+#   icd10         ICD-10 codes (WHO ICD-10 Version 2019 = the Czech MKN-10)
+#                 that mean this pathogen's disease and nothing else
+#   icd10_shared  codes whose heading covers this pathogen AND others (A04
+#                 "other bacterial intestinal infections" is Campylobacter and
+#                 more). Counts under a shared code must never be attributed
+#                 to one pathogen — the same rule as in diagnosis_names.yaml.
+#   name, disease, synonyms, abbreviations
+#             the portal's own reader-facing wording, Czech and English. For
+#             the pathogens of the genomic table the disease name is the one
+#             that table shows. The OFFICIAL disease titles are not repeated
+#             here: they are looked up by ICD-10 code in curated/labels_en.yaml
+#             (Czech: MKN-10 as published by ÚZIS, English: WHO ICD-10 2019).
+#   dashboards    portal pages that show this pathogen (paths of the Czech
+#                 site; the English page is the same path under /en)
+#   verified      the day somebody last checked the record against the
+#                 sources above
+#
+# ── Record format ────────────────────────────────────────────────────────────
+#   id        stable key. A pathogen that is also in curated/genomics_taxa.yaml
+#             or was seeded in db/init.sql keeps the id it has there (which is
+#             why some ids are disease words: tuberculosis, syphilis).
+#   category  virus | bacteria | fungus | parasite | other
+#   parent    id of the pathogen this one is a subtype or member of (optional)
+#   taxon_note  why the taxon is not an exact match (optional)
+#
+# Adding a pathogen: docs/pathogen-registry.md#adding-a-pathogen.
+
+# Identifier schemes. `uri` is the pattern of the public page of one record.
+# ncbi-taxon and ena-taxon are both filled from `taxon`.
+schemes:
+  ncbi-taxon:
+    title: "NCBI Taxonomy"
+    authority: "National Center for Biotechnology Information (NCBI)"
+    homepage: "https://www.ncbi.nlm.nih.gov/taxonomy"
+    uri: "https://www.ncbi.nlm.nih.gov/Taxonomy/Browser/wwwtax.cgi?id={id}"
+  ena-taxon:
+    title: "ENA Taxonomy"
+    authority: "European Nucleotide Archive, EMBL-EBI"
+    homepage: "https://www.ebi.ac.uk/ena/browser/"
+    uri: "https://www.ebi.ac.uk/ena/browser/view/Taxon:{id}"
+  wikidata:
+    title: "Wikidata"
+    authority: "Wikimedia Foundation"
+    homepage: "https://www.wikidata.org/"
+    uri: "https://www.wikidata.org/entity/{id}"
+  mesh:
+    title: "Medical Subject Headings (MeSH)"
+    authority: "U.S. National Library of Medicine (NLM)"
+    homepage: "https://meshb.nlm.nih.gov/"
+    uri: "https://id.nlm.nih.gov/mesh/{id}"
+
+# Portal pages a pathogen can be linked to.
+#   kind   surveillance = case counts or laboratory detections
+#          genomics     = what is in the sequence archives
+#          report       = situational report written for one event
+#          external     = the tile leads to a dashboard run elsewhere
+#   chart  the chart JSON that carries the page's data date — the same file the
+#          page names in `update_from` in the portal. The loader reads the
+#          date from it, so the database can say when the data about a
+#          pathogen last moved. Pages without their own data have none.
+dashboards:
+  /dashboards/covid19-surveillance/:           { kind: surveillance, chart: covid_summary }
+  /dashboards/covid-demographics/:             { kind: surveillance, chart: covid_by_vaccination }
+  /dashboards/influenza-surveillance/:         { kind: surveillance, chart: flu_weekly }
+  /dashboards/influenza-regional/:             { kind: surveillance, chart: flu_regional_weekly }
+  /dashboards/influenza-intensity/:            { kind: surveillance, chart: flu_mem }
+  /dashboards/infectious-diseases-childhood/:  { kind: surveillance, chart: isin_group_childhood_airborne }
+  /dashboards/infectious-diseases-gastro/:     { kind: surveillance, chart: isin_group_gastrointestinal }
+  /dashboards/infectious-diseases-hepatitis/:  { kind: surveillance, chart: isin_group_hepatitis }
+  /dashboards/infectious-diseases-rare/:       { kind: surveillance, chart: isin_group_rare_severe }
+  /dashboards/infectious-diseases-skin/:       { kind: surveillance, chart: isin_group_skin_contact }
+  /dashboards/infectious-diseases-sti/:        { kind: surveillance, chart: isin_group_sti }
+  /dashboards/infectious-diseases-tbc/:        { kind: surveillance, chart: tbc_incidence }
+  /dashboards/infectious-diseases-vector/:     { kind: surveillance, chart: isin_group_vector_animal }
+  /dashboards/genomics/:                       { kind: genomics, chart: genomics_overview }
+  /dashboards/genomics-lineages/:              { kind: genomics, chart: genomics_lineages }
+  /dashboards/genomics-amr/:                   { kind: genomics, chart: genomics_amr }
+  /dashboards/ebola-bundibugyo-2026/:          { kind: report }
+  /dashboards/hantavirus-mhondius/:            { kind: report }
+  /dashboards/nextstrain-influenza/:           { kind: external }
+  /dashboards/nextstrain-sarscov2/:            { kind: external }
+  /dashboards/wastewater-monitoring/:          { kind: external }
+
+# ICD-10 codes the records below refer to that are NOT in the code list of
+# curated/labels_en.yaml (that list holds the codes present in the ISIN data).
+# English = the WHO ICD-10 Version 2019 title, read from
+# https://icd.who.int/browse10/2019/en on 2026-11-26. The Czech MKN-10 title is
+# left out on purpose until somebody copies it from the official edition — our
+# own translation would look official without being it.
+diagnoses:
+  A04.5: { en: "Campylobacter enteritis" }
+  A04.7: { en: "Enterocolitis due to Clostridium difficile" }
+  A08.0: { en: "Rotaviral enteritis" }
+  A08.1: { en: "Acute gastroenteropathy due to Norovirus" }
+  A15:   { en: "Respiratory tuberculosis, bacteriologically and histologically confirmed" }
+  A16:   { en: "Respiratory tuberculosis, not confirmed bacteriologically or histologically" }
+  A17:   { en: "Tuberculosis of nervous system" }
+  A18:   { en: "Tuberculosis of other organs" }
+  A19:   { en: "Miliary tuberculosis" }
+  A37.0: { en: "Whooping cough due to Bordetella pertussis" }
+  A48.1: { en: "Legionnaires disease" }
+  A69.2: { en: "Lyme disease" }
+  A80:   { en: "Acute poliomyelitis" }
+  A98.4: { en: "Ebola virus disease" }
+  A98.5: { en: "Haemorrhagic fever with renal syndrome" }
+  B17.1: { en: "Acute hepatitis C" }
+  B17.2: { en: "Acute hepatitis E" }
+  B18.0: { en: "Chronic viral hepatitis B with delta-agent" }
+  B18.1: { en: "Chronic viral hepatitis B without delta-agent" }
+  B18.2: { en: "Chronic viral hepatitis C" }
+  B20:   { en: "Human immunodeficiency virus [HIV] disease resulting in infectious and parasitic diseases" }
+  B21:   { en: "Human immunodeficiency virus [HIV] disease resulting in malignant neoplasms" }
+  B22:   { en: "Human immunodeficiency virus [HIV] disease resulting in other specified diseases" }
+  B23:   { en: "Human immunodeficiency virus [HIV] disease resulting in other conditions" }
+  B24:   { en: "Unspecified human immunodeficiency virus [HIV] disease" }
+  B27.0: { en: "Gammaherpesviral mononucleosis" }
+  B33.4: { en: "Hantavirus (cardio-)pulmonary syndrome [HPS] [HCPS]" }
+  J09:   { en: "Influenza due to identified zoonotic or pandemic influenza virus" }
+  J11:   { en: "Influenza, virus not identified" }
+  U07.1: { en: "COVID-19, virus identified" }
+
+pathogens:
+  - id: sars-cov-2
+    category: virus
+    taxon: 2697049
+    scientific_name: "Severe acute respiratory syndrome coronavirus 2"
+    rank: "no rank"
+    species: "Betacoronavirus pandemicum"
+    family: Coronaviridae
+    name:    { cs: "SARS-CoV-2", en: "SARS-CoV-2" }
+    disease: { cs: "COVID-19", en: "COVID-19" }
+    ids: { wikidata: Q82069695, mesh: D000086402 }
+    icd10: [U07.1]
+    dashboards: [/dashboards/covid19-surveillance/, /dashboards/genomics/, /dashboards/covid-demographics/, /dashboards/genomics-lineages/, /dashboards/nextstrain-sarscov2/, /dashboards/wastewater-monitoring/]
+    verified: 2026-11-26
+
+  - id: influenza-a
+    category: virus
+    taxon: 11320
+    scientific_name: "Influenza A virus"
+    rank: "no rank"
+    species: "Alphainfluenzavirus influenzae"
+    family: Orthomyxoviridae
+    name:    { cs: "Virus chřipky A", en: "Influenza A virus" }
+    disease: { cs: "Chřipka A", en: "Influenza A" }
+    ids: { wikidata: Q834390, mesh: D009980 }
+    icd10_shared: [J09, J10, J11]
+    dashboards: [/dashboards/influenza-surveillance/, /dashboards/genomics/, /dashboards/influenza-regional/, /dashboards/influenza-intensity/, /dashboards/genomics-lineages/, /dashboards/nextstrain-influenza/]
+    verified: 2026-11-26
+
+  - id: influenza-b
+    category: virus
+    taxon: 11520
+    scientific_name: "Influenza B virus"
+    rank: "no rank"
+    species: "Betainfluenzavirus influenzae"
+    family: Orthomyxoviridae
+    name:    { cs: "Virus chřipky B", en: "Influenza B virus" }
+    disease: { cs: "Chřipka B", en: "Influenza B" }
+    ids: { wikidata: Q1089532, mesh: D009981 }
+    icd10_shared: [J10, J11]
+    dashboards: [/dashboards/influenza-surveillance/, /dashboards/genomics/, /dashboards/influenza-regional/, /dashboards/influenza-intensity/, /dashboards/genomics-lineages/, /dashboards/nextstrain-influenza/]
+    verified: 2026-11-26
+
+  - id: h5n1
+    category: virus
+    taxon: 102793
+    scientific_name: "H5N1 subtype"
+    rank: "serotype"
+    species: "Alphainfluenzavirus influenzae"
+    family: Orthomyxoviridae
+    parent: influenza-a
+    name:    { cs: "Virus chřipky A(H5N1)", en: "Influenza A(H5N1) virus" }
+    disease: { cs: "Ptačí chřipka H5N1", en: "Avian influenza H5N1" }
+    ids: { wikidata: Q160122, mesh: D053124 }
+    icd10_shared: [J09]
+    dashboards: [/dashboards/genomics-lineages/]
+    verified: 2026-11-26
+
+  - id: rsv
+    category: virus
+    taxon: 11250
+    scientific_name: "human respiratory syncytial virus"
+    rank: "no rank"
+    species: "Orthopneumovirus hominis"
+    family: Pneumoviridae
+    name:    { cs: "Respirační syncytiální virus", en: "Respiratory syncytial virus" }
+    disease: { cs: "Infekce RSV", en: "RSV infection" }
+    abbreviations: { cs: ["RSV"], en: ["RSV"] }
+    ids: { wikidata: Q29004712 }
+    dashboards: [/dashboards/influenza-surveillance/, /dashboards/genomics/, /dashboards/genomics-lineages/]
+    verified: 2026-11-26
+
+  - id: tuberculosis
+    category: bacteria
+    taxon: 77643
+    scientific_name: "Mycobacterium tuberculosis complex"
+    rank: "species group"
+    family: Mycobacteriaceae
+    name:    { cs: "Komplex Mycobacterium tuberculosis", en: "Mycobacterium tuberculosis complex" }
+    disease: { cs: "Tuberkulóza", en: "Tuberculosis" }
+    abbreviations: { cs: ["TBC"], en: ["TB"] }
+    icd10: [A15, A16, A17, A18, A19]
+    dashboards: [/dashboards/infectious-diseases-tbc/, /dashboards/genomics/]
+    verified: 2026-11-26
+
+  - id: strep-a
+    category: bacteria
+    taxon: 1314
+    scientific_name: "Streptococcus pyogenes"
+    rank: "species"
+    family: Streptococcaceae
+    name:    { cs: "Streptokok skupiny A", en: "Group A streptococcus" }
+    disease: { cs: "Streptokokové infekce skupiny A (např. spála)", en: "Group A streptococcal infections (e.g. scarlet fever)" }
+    abbreviations: { en: ["GAS"] }
+    ids: { wikidata: Q131271, mesh: D013297 }
+    icd10: [A38]
+    icd10_shared: [A46]
+    dashboards: [/dashboards/infectious-diseases-childhood/, /dashboards/genomics/]
+    verified: 2026-11-26
+
+  - id: pneumococcus
+    category: bacteria
+    taxon: 1313
+    scientific_name: "Streptococcus pneumoniae"
+    rank: "species"
+    family: Streptococcaceae
+    name:    { cs: "Pneumokok", en: "Pneumococcus" }
+    disease: { cs: "Pneumokokové infekce", en: "Pneumococcal disease" }
+    ids: { wikidata: Q221179, mesh: D013296 }
+    icd10: [J13]
+    dashboards: [/dashboards/infectious-diseases-childhood/, /dashboards/genomics/]
+    verified: 2026-11-26
+
+  - id: pertussis
+    category: bacteria
+    taxon: 520
+    scientific_name: "Bordetella pertussis"
+    rank: "species"
+    family: Alcaligenaceae
+    name:    { cs: "Bordetella pertussis", en: "Bordetella pertussis" }
+    disease: { cs: "Černý kašel", en: "Whooping cough" }
+    synonyms: { cs: ["Dávivý kašel", "Pertuse"], en: ["Pertussis"] }
+    ids: { wikidata: Q137103, mesh: D001886 }
+    icd10: [A37.0]
+    icd10_shared: [A37]
+    dashboards: [/dashboards/infectious-diseases-childhood/, /dashboards/genomics/]
+    verified: 2026-11-26
+
+  - id: measles
+    category: virus
+    taxon: 11234
+    scientific_name: "Measles morbillivirus"
+    rank: "no rank"
+    species: "Morbillivirus hominis"
+    family: Paramyxoviridae
+    name:    { cs: "Virus spalniček", en: "Measles virus" }
+    disease: { cs: "Spalničky", en: "Measles" }
+    ids: { wikidata: Q573943, mesh: D008459 }
+    icd10: [B05]
+    dashboards: [/dashboards/infectious-diseases-childhood/, /dashboards/genomics/, /dashboards/genomics-lineages/]
+    verified: 2026-11-26
+
+  - id: mumps
+    category: virus
+    taxon: 2560602
+    scientific_name: "Mumps orthorubulavirus"
+    rank: "no rank"
+    species: "Orthorubulavirus parotitidis"
+    family: Paramyxoviridae
+    name:    { cs: "Virus příušnic", en: "Mumps virus" }
+    disease: { cs: "Příušnice", en: "Mumps" }
+    ids: { wikidata: Q70625189 }
+    icd10: [B26]
+    dashboards: [/dashboards/infectious-diseases-childhood/]
+    verified: 2026-11-26
+
+  - id: vzv
+    category: virus
+    taxon: 10335
+    scientific_name: "Human alphaherpesvirus 3"
+    rank: "no rank"
+    species: "Varicellovirus humanalpha3"
+    family: Orthoherpesviridae
+    name:    { cs: "Virus varicella-zoster", en: "Varicella-zoster virus" }
+    disease: { cs: "Plané neštovice a pásový opar", en: "Chickenpox and shingles" }
+    abbreviations: { cs: ["VZV"], en: ["VZV"] }
+    ids: { wikidata: Q24808715 }
+    icd10: [B01, B02]
+    dashboards: [/dashboards/infectious-diseases-childhood/]
+    verified: 2026-11-26
+
+  - id: ebv
+    category: virus
+    taxon: 10376
+    scientific_name: "human gammaherpesvirus 4"
+    rank: "no rank"
+    species: "Lymphocryptovirus humangamma4"
+    family: Orthoherpesviridae
+    name:    { cs: "Virus Epsteina–Barrové", en: "Epstein–Barr virus" }
+    disease: { cs: "Infekční mononukleóza", en: "Infectious mononucleosis" }
+    abbreviations: { cs: ["EBV"], en: ["EBV"] }
+    ids: { wikidata: Q6900, mesh: D004854 }
+    icd10: [B27.0]
+    icd10_shared: [B27]
+    dashboards: [/dashboards/infectious-diseases-childhood/]
+    verified: 2026-11-26
+
+  - id: diphtheria
+    category: bacteria
+    taxon: 1717
+    scientific_name: "Corynebacterium diphtheriae"
+    rank: "species"
+    family: Corynebacteriaceae
+    name:    { cs: "Corynebacterium diphtheriae", en: "Corynebacterium diphtheriae" }
+    disease: { cs: "Záškrt", en: "Diphtheria" }
+    ids: { wikidata: Q131649, mesh: D003353 }
+    icd10: [A36]
+    dashboards: [/dashboards/infectious-diseases-childhood/, /dashboards/genomics/]
+    verified: 2026-11-26
+
+  - id: listeria
+    category: bacteria
+    taxon: 1639
+    scientific_name: "Listeria monocytogenes"
+    rank: "species"
+    family: Listeriaceae
+    name:    { cs: "Listeria monocytogenes", en: "Listeria monocytogenes" }
+    disease: { cs: "Listerióza", en: "Listeriosis" }
+    ids: { wikidata: Q292015, mesh: D008089 }
+    icd10: [A32]
+    dashboards: [/dashboards/infectious-diseases-gastro/, /dashboards/genomics/, /dashboards/genomics-amr/]
+    verified: 2026-11-26
+
+  - id: salmonella
+    category: bacteria
+    taxon: 590
+    scientific_name: "Salmonella"
+    rank: "genus"
+    family: Enterobacteriaceae
+    name:    { cs: "Salmonely", en: "Salmonella" }
+    disease: { cs: "Salmonelóza", en: "Salmonellosis" }
+    ids: { wikidata: Q150839, mesh: D012475 }
+    icd10: [A01, A02]
+    dashboards: [/dashboards/infectious-diseases-gastro/, /dashboards/genomics/]
+    verified: 2026-11-26
+
+  - id: campylobacter
+    category: bacteria
+    taxon: 194
+    scientific_name: "Campylobacter"
+    rank: "genus"
+    family: Campylobacteraceae
+    name:    { cs: "Kampylobakter", en: "Campylobacter" }
+    disease: { cs: "Kampylobakterióza", en: "Campylobacteriosis" }
+    ids: { wikidata: Q131488, mesh: D002167 }
+    icd10: [A04.5]
+    icd10_shared: [A04]
+    dashboards: [/dashboards/infectious-diseases-gastro/, /dashboards/genomics/]
+    verified: 2026-11-26
+
+  - id: shigella
+    category: bacteria
+    taxon: 620
+    scientific_name: "Shigella"
+    rank: "genus"
+    family: Enterobacteriaceae
+    name:    { cs: "Shigely", en: "Shigella" }
+    disease: { cs: "Shigelóza", en: "Shigellosis" }
+    ids: { wikidata: Q131029, mesh: D012760 }
+    icd10: [A03]
+    dashboards: [/dashboards/infectious-diseases-gastro/]
+    verified: 2026-11-26
+
+  - id: c-difficile
+    category: bacteria
+    taxon: 1496
+    scientific_name: "Clostridioides difficile"
+    rank: "species"
+    family: Peptostreptococcaceae
+    name:    { cs: "Clostridioides difficile", en: "Clostridioides difficile" }
+    disease: { cs: "Klostridiová infekce", en: "Clostridioides infection" }
+    synonyms: { cs: ["Clostridium difficile"], en: ["Clostridium difficile"] }
+    ids: { wikidata: Q56290719 }
+    icd10: [A04.7]
+    icd10_shared: [A04]
+    dashboards: [/dashboards/infectious-diseases-gastro/, /dashboards/genomics/]
+    verified: 2026-11-26
+
+  - id: rotavirus
+    category: virus
+    taxon: 10912
+    scientific_name: "Rotavirus"
+    rank: "genus"
+    family: Sedoreoviridae
+    name:    { cs: "Rotaviry", en: "Rotaviruses" }
+    disease: { cs: "Rotavirová gastroenteritida", en: "Rotavirus gastroenteritis" }
+    ids: { wikidata: Q164778, mesh: D012401 }
+    icd10: [A08.0]
+    icd10_shared: [A08]
+    dashboards: [/dashboards/infectious-diseases-gastro/, /dashboards/genomics/]
+    verified: 2026-11-26
+
+  - id: norovirus
+    category: virus
+    taxon: 142786
+    scientific_name: "Norovirus"
+    rank: "genus"
+    family: Caliciviridae
+    name:    { cs: "Noroviry", en: "Noroviruses" }
+    disease: { cs: "Norovirová gastroenteritida", en: "Norovirus gastroenteritis" }
+    ids: { wikidata: Q1142751, mesh: D029322 }
+    icd10: [A08.1]
+    icd10_shared: [A08]
+    dashboards: [/dashboards/infectious-diseases-gastro/]
+    verified: 2026-11-26
+
+  - id: hepatitis-a
+    category: virus
+    taxon: 12092
+    scientific_name: "Hepatovirus A"
+    rank: "no rank"
+    species: "Hepatovirus ahepa"
+    family: Picornaviridae
+    name:    { cs: "Virus hepatitidy A", en: "Hepatitis A virus" }
+    disease: { cs: "Hepatitida A", en: "Hepatitis A" }
+    abbreviations: { cs: ["HAV"], en: ["HAV"] }
+    ids: { wikidata: Q24722353 }
+    icd10: [B15]
+    dashboards: [/dashboards/infectious-diseases-hepatitis/, /dashboards/genomics/]
+    verified: 2026-11-26
+
+  - id: hepatitis-b
+    category: virus
+    taxon: 10407
+    scientific_name: "Hepatitis B virus"
+    rank: "no rank"
+    species: "Orthohepadnavirus hominoidei"
+    family: Hepadnaviridae
+    name:    { cs: "Virus hepatitidy B", en: "Hepatitis B virus" }
+    disease: { cs: "Hepatitida B", en: "Hepatitis B" }
+    abbreviations: { cs: ["HBV"], en: ["HBV"] }
+    ids: { wikidata: Q6844, mesh: D006515 }
+    icd10: [B16, B18.0, B18.1]
+    icd10_shared: [B18]
+    dashboards: [/dashboards/infectious-diseases-hepatitis/, /dashboards/genomics/]
+    verified: 2026-11-26
+
+  - id: hepatitis-c
+    category: virus
+    taxon: 11103
+    scientific_name: "Orthohepacivirus hominis"
+    rank: "species"
+    family: Hepaciviridae
+    name:    { cs: "Virus hepatitidy C", en: "Hepatitis C virus" }
+    disease: { cs: "Hepatitida C", en: "Hepatitis C" }
+    abbreviations: { cs: ["HCV"], en: ["HCV"] }
+    ids: { wikidata: Q29006893 }
+    icd10: [B17.1, B18.2]
+    icd10_shared: [B17, B18]
+    dashboards: [/dashboards/infectious-diseases-hepatitis/, /dashboards/genomics/]
+    verified: 2026-11-26
+
+  - id: hepatitis-e
+    category: virus
+    taxon: 1678143
+    scientific_name: "Paslahepevirus balayani"
+    rank: "species"
+    family: Hepeviridae
+    name:    { cs: "Virus hepatitidy E", en: "Hepatitis E virus" }
+    disease: { cs: "Hepatitida E", en: "Hepatitis E" }
+    abbreviations: { cs: ["HEV"], en: ["HEV"] }
+    ids: { wikidata: Q116161477 }
+    icd10: [B17.2]
+    icd10_shared: [B17]
+    dashboards: [/dashboards/infectious-diseases-hepatitis/, /dashboards/genomics/]
+    verified: 2026-11-26
+
+  - id: hiv
+    category: virus
+    taxon: 11676
+    scientific_name: "Human immunodeficiency virus 1"
+    rank: "no rank"
+    species: "Lentivirus humimdef1"
+    family: Retroviridae
+    name:    { cs: "Virus lidské imunodeficience 1", en: "Human immunodeficiency virus 1" }
+    disease: { cs: "Infekce HIV", en: "HIV infection" }
+    abbreviations: { cs: ["HIV-1", "HIV"], en: ["HIV-1", "HIV"] }
+    ids: { wikidata: Q18907320, mesh: D015497 }
+    icd10: [B20, B21, B22, B23, B24]
+    dashboards: [/dashboards/infectious-diseases-sti/, /dashboards/genomics/]
+    verified: 2026-11-26
+
+  - id: syphilis
+    category: bacteria
+    taxon: 160
+    scientific_name: "Treponema pallidum"
+    rank: "species"
+    family: Treponemataceae
+    name:    { cs: "Treponema pallidum", en: "Treponema pallidum" }
+    disease: { cs: "Syfilis", en: "Syphilis" }
+    ids: { wikidata: Q156007, mesh: D014210 }
+    icd10: [A50, A51, A52, A53]
+    dashboards: [/dashboards/infectious-diseases-sti/, /dashboards/genomics/]
+    verified: 2026-11-26
+
+  - id: gonorrhoea
+    category: bacteria
+    taxon: 485
+    scientific_name: "Neisseria gonorrhoeae"
+    rank: "species"
+    family: Neisseriaceae
+    name:    { cs: "Neisseria gonorrhoeae", en: "Neisseria gonorrhoeae" }
+    disease: { cs: "Kapavka", en: "Gonorrhoea" }
+    synonyms: { cs: ["Gonokok"], en: ["Gonococcus"] }
+    ids: { wikidata: Q131129, mesh: D009344 }
+    icd10: [A54]
+    dashboards: [/dashboards/infectious-diseases-sti/, /dashboards/genomics/]
+    verified: 2026-11-26
+
+  - id: chlamydia
+    category: bacteria
+    taxon: 813
+    scientific_name: "Chlamydia trachomatis"
+    rank: "species"
+    family: Chlamydiaceae
+    name:    { cs: "Chlamydia trachomatis", en: "Chlamydia trachomatis" }
+    disease: { cs: "Chlamydiové infekce", en: "Chlamydial infections" }
+    ids: { wikidata: Q131065, mesh: D002692 }
+    icd10: [A55, A56]
+    dashboards: [/dashboards/infectious-diseases-sti/]
+    verified: 2026-11-26
+
+  - id: trichomonas
+    category: parasite
+    taxon: 5722
+    scientific_name: "Trichomonas vaginalis"
+    rank: "species"
+    family: Trichomonadidae
+    name:    { cs: "Bičenka poševní", en: "Trichomonas vaginalis" }
+    disease: { cs: "Trichomoniáza", en: "Trichomoniasis" }
+    ids: { wikidata: Q132595, mesh: D014246 }
+    icd10: [A59]
+    dashboards: [/dashboards/infectious-diseases-sti/]
+    verified: 2026-11-26
+
+  - id: mpox
+    category: virus
+    taxon: 10244
+    scientific_name: "Monkeypox virus"
+    rank: "no rank"
+    species: "Orthopoxvirus monkeypox"
+    family: Poxviridae
+    name:    { cs: "Virus mpox", en: "Monkeypox virus" }
+    disease: { cs: "Mpox", en: "Mpox" }
+    abbreviations: { cs: ["MPXV"], en: ["MPXV"] }
+    synonyms: { cs: ["Virus opičích neštovic"], en: ["Mpox virus"] }
+    ids: { wikidata: Q6900886, mesh: D008993 }
+    icd10: [B04]
+    dashboards: [/dashboards/infectious-diseases-rare/, /dashboards/genomics/, /dashboards/genomics-lineages/]
+    verified: 2026-11-26
+
+  - id: tbe
+    category: virus
+    taxon: 11084
+    scientific_name: "Tick-borne encephalitis virus"
+    rank: "no rank"
+    species: "Orthoflavivirus encephalitidis"
+    family: Flaviviridae
+    name:    { cs: "Virus klíšťové encefalitidy", en: "Tick-borne encephalitis virus" }
+    disease: { cs: "Klíšťová encefalitida", en: "Tick-borne encephalitis" }
+    abbreviations: { cs: ["TBEV"], en: ["TBEV"] }
+    ids: { wikidata: Q251824, mesh: D004669 }
+    icd10: [A84]
+    dashboards: [/dashboards/infectious-diseases-vector/, /dashboards/genomics/]
+    verified: 2026-11-26
+
+  - id: borrelia
+    category: bacteria
+    taxon: 64895
+    scientific_name: "Borreliella"
+    rank: "genus"
+    family: Borreliaceae
+    name:    { cs: "Borelie", en: "Lyme borreliae" }
+    disease: { cs: "Lymeská borelióza", en: "Lyme disease" }
+    synonyms: { cs: ["Borrelia burgdorferi sensu lato"], en: ["Borrelia burgdorferi sensu lato"] }
+    ids: { wikidata: Q26209340 }
+    icd10: [A69.2]
+    icd10_shared: [A69]
+    dashboards: [/dashboards/infectious-diseases-vector/, /dashboards/genomics/]
+    verified: 2026-11-26
+
+  - id: tularaemia
+    category: bacteria
+    taxon: 263
+    scientific_name: "Francisella tularensis"
+    rank: "species"
+    family: Francisellaceae
+    name:    { cs: "Francisella tularensis", en: "Francisella tularensis" }
+    disease: { cs: "Tularemie", en: "Tularaemia" }
+    ids: { wikidata: Q1003460, mesh: D005604 }
+    icd10: [A21]
+    dashboards: [/dashboards/infectious-diseases-vector/, /dashboards/genomics/]
+    verified: 2026-11-26
+
+  - id: hantavirus
+    category: virus
+    taxon: 1980442
+    scientific_name: "Orthohantavirus"
+    rank: "genus"
+    family: Hantaviridae
+    name:    { cs: "Hantaviry", en: "Hantaviruses" }
+    disease: { cs: "Hantavirová onemocnění", en: "Hantavirus disease" }
+    ids: { wikidata: Q29001073 }
+    icd10: [A98.5]
+    icd10_shared: [A98]
+    dashboards: [/dashboards/infectious-diseases-vector/, /dashboards/genomics/]
+    verified: 2026-11-26
+
+  - id: andes-virus
+    category: virus
+    taxon: 1980456
+    scientific_name: "Orthohantavirus andesense"
+    rank: "species"
+    family: Hantaviridae
+    parent: hantavirus
+    name:    { cs: "Virus Andes", en: "Andes virus" }
+    disease: { cs: "Hantavirový kardiopulmonální syndrom", en: "Hantavirus cardiopulmonary syndrome" }
+    abbreviations: { cs: ["ANDV"], en: ["ANDV"] }
+    icd10_shared: [B33.4]
+    dashboards: [/dashboards/hantavirus-mhondius/]
+    verified: 2026-11-26
+
+  - id: ebola-bundibugyo
+    category: virus
+    taxon: 3052458
+    scientific_name: "Orthoebolavirus bundibugyoense"
+    rank: "species"
+    family: Filoviridae
+    name:    { cs: "Virus Bundibugyo", en: "Bundibugyo virus" }
+    disease: { cs: "Ebola způsobená virem Bundibugyo", en: "Bundibugyo virus disease" }
+    abbreviations: { cs: ["BDBV"], en: ["BDBV"] }
+    icd10_shared: [A98.4]
+    dashboards: [/dashboards/ebola-bundibugyo-2026/]
+    verified: 2026-11-26
+
+  - id: meningococcus
+    category: bacteria
+    taxon: 487
+    scientific_name: "Neisseria meningitidis"
+    rank: "species"
+    family: Neisseriaceae
+    name:    { cs: "Meningokok", en: "Meningococcus" }
+    disease: { cs: "Meningokokové infekce", en: "Meningococcal infection" }
+    ids: { wikidata: Q154625, mesh: D009345 }
+    icd10: [A39]
+    dashboards: [/dashboards/infectious-diseases-rare/, /dashboards/genomics/]
+    verified: 2026-11-26
+
+  - id: legionella
+    category: bacteria
+    taxon: 446
+    scientific_name: "Legionella pneumophila"
+    rank: "species"
+    family: Legionellaceae
+    name:    { cs: "Legionella pneumophila", en: "Legionella pneumophila" }
+    disease: { cs: "Legionelóza", en: "Legionellosis" }
+    ids: { wikidata: Q147885, mesh: D016952 }
+    icd10: [A48.1]
+    icd10_shared: [A48]
+    dashboards: [/dashboards/infectious-diseases-rare/, /dashboards/genomics/]
+    verified: 2026-11-26
+
+  - id: coxiella
+    category: bacteria
+    taxon: 777
+    scientific_name: "Coxiella burnetii"
+    rank: "species"
+    family: Coxiellaceae
+    name:    { cs: "Coxiella burnetii", en: "Coxiella burnetii" }
+    disease: { cs: "Q horečka", en: "Q fever" }
+    ids: { wikidata: Q133971, mesh: D016997 }
+    icd10: [A78]
+    dashboards: [/dashboards/infectious-diseases-rare/]
+    verified: 2026-11-26
+
+  - id: brucella
+    category: bacteria
+    taxon: 234
+    scientific_name: "Brucella"
+    rank: "genus"
+    family: Brucellaceae
+    name:    { cs: "Brucely", en: "Brucella" }
+    disease: { cs: "Brucelóza", en: "Brucellosis" }
+    ids: { wikidata: Q313358, mesh: D002002 }
+    icd10: [A23]
+    dashboards: [/dashboards/infectious-diseases-rare/]
+    verified: 2026-11-26
+
+  - id: yellow-fever
+    category: virus
+    taxon: 11089
+    scientific_name: "Yellow fever virus"
+    rank: "no rank"
+    species: "Orthoflavivirus flavi"
+    family: Flaviviridae
+    name:    { cs: "Virus žluté zimnice", en: "Yellow fever virus" }
+    disease: { cs: "Žlutá zimnice", en: "Yellow fever" }
+    ids: { wikidata: Q836749, mesh: D015005 }
+    icd10: [A95]
+    dashboards: [/dashboards/infectious-diseases-rare/]
+    verified: 2026-11-26
+
+  - id: scabies
+    category: parasite
+    taxon: 52283
+    scientific_name: "Sarcoptes scabiei"
+    rank: "species"
+    family: Sarcoptidae
+    name:    { cs: "Zákožka svrabová", en: "Itch mite" }
+    disease: { cs: "Svrab", en: "Scabies" }
+    ids: { wikidata: Q500869, mesh: D012520 }
+    icd10: [B86]
+    dashboards: [/dashboards/infectious-diseases-skin/]
+    verified: 2026-11-26
+
+  - id: poliovirus
+    category: virus
+    taxon: 138950
+    scientific_name: "Enterovirus C"
+    rank: "no rank"
+    species: "Enterovirus coxsackiepol"
+    family: Picornaviridae
+    taxon_note: "In NCBI Taxonomy the name poliovirus resolves to Enterovirus C (138950), which also contains coxsackie A viruses; polioviruses 1–3 are separate nodes below it."
+    name:    { cs: "Poliovirus", en: "Poliovirus" }
+    disease: { cs: "Dětská obrna (poliomyelitida)", en: "Poliomyelitis" }
+    ids: { wikidata: Q705548 }
+    icd10: [A80]
+    dashboards: [/dashboards/wastewater-monitoring/]
+    verified: 2026-11-26
+
+  - id: klebsiella
+    category: bacteria
+    taxon: 573
+    scientific_name: "Klebsiella pneumoniae"
+    rank: "species"
+    family: Enterobacteriaceae
+    name:    { cs: "Klebsiella pneumoniae", en: "Klebsiella pneumoniae" }
+    ids: { wikidata: Q132592, mesh: D007711 }
+    dashboards: [/dashboards/genomics/, /dashboards/genomics-amr/]
+    verified: 2026-11-26
+
+  - id: e-faecium
+    category: bacteria
+    taxon: 1352
+    scientific_name: "Enterococcus faecium"
+    rank: "species"
+    family: Enterococcaceae
+    name:    { cs: "Enterococcus faecium", en: "Enterococcus faecium" }
+    ids: { wikidata: Q140010, mesh: D016984 }
+    dashboards: [/dashboards/genomics/, /dashboards/genomics-amr/]
+    verified: 2026-11-26
+
+  - id: e-coli
+    category: bacteria
+    taxon: 562
+    scientific_name: "Escherichia coli"
+    rank: "species"
+    family: Enterobacteriaceae
+    name:    { cs: "Escherichia coli", en: "Escherichia coli" }
+    ids: { wikidata: Q25419, mesh: D004926 }
+    dashboards: [/dashboards/genomics/]
+    verified: 2026-11-26
+
+  - id: s-aureus
+    category: bacteria
+    taxon: 1280
+    scientific_name: "Staphylococcus aureus"
+    rank: "species"
+    family: Staphylococcaceae
+    name:    { cs: "Zlatý stafylokok", en: "Staphylococcus aureus" }
+    ids: { wikidata: Q188121, mesh: D013211 }
+    dashboards: [/dashboards/genomics/, /dashboards/genomics-amr/]
+    verified: 2026-11-26
