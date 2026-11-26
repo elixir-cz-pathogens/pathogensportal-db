@@ -23,7 +23,13 @@ Changes on `dev` since v0.4.0.
   newest and the Monday snapshots. New machine unit `per_100` and metric `vaccine_doses` in
   `charts.yaml`. The pathogen registry links influenza, SARS-CoV-2 and RSV to the new page. The
   scraper is a side source and `compute_esurv.py` a `||`-guarded step in `CMD`: their failure
-  does not stop the refresh. No existing file changes.
+  does not stop the refresh.
+  **One existing file gains a tile:** `resp_overview.json` carries a new tile `hosp` — new
+  hospital admissions with an acute respiratory infection per complete ISO week — with the unit
+  `admissions`, an optional sentence in the comment and `uzis-esurveillance` among its sources.
+  The portal must know the unit before this lands (pathogensportal branch of the same name);
+  an older `pp-resp.js` would label the number "per 100,000". Without the downloaded source the
+  tile is simply absent.
 - **Date of the last source check** (no issue) — a new last step of the container command,
   `last_checked.py`, writes `last_checked.json`: for every chart file, the day (UTC) on which all
   of its sources were last asked successfully and the chart was rebuilt from that download or

@@ -289,6 +289,11 @@ Rules worth knowing:
   true and the portal gets no commit for a run that brought nothing.
 - The charts by age need `csu/population_age.csv`; without it only those three are left out.
 
+The same source also feeds one tile of the weekly overview: `compute_resp.py` adds `hosp` to
+`resp_overview.json` — new hospital admissions with an acute respiratory infection (ARI/ILI in
+total) per complete ISO week, unit `admissions`. The e-surveillance is usually a week ahead of
+ERVISS, so the tile names its own week.
+
 ### Last check — `last_checked.json`
 
 Not a chart: one small file that says, for every chart file above, when the pipeline last checked

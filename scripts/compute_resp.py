@@ -72,6 +72,10 @@ FLU_MEM_FILE = OUTPUT_DIR / "flu_mem.json"
 # znovu z CSV, nýbrž z grafu, který z nich generate_json.py už udělal.
 COVID_WEEKLY_FILE = OUTPUT_DIR / "covid_cases_weekly.json"
 COVID_SUMMARY_FILE = OUTPUT_DIR / "covid_summary.json"
+# Hospitalizace z denní e-surveillance ÚZIS (scrapers/uzis_esurveillance.py) — vedlejší
+# zdroj: když není stažený, přehled se obejde bez dlaždice nemocnic.
+ESURV_DAILY_FILE = DATA_DIR / "uzis_esurv" / "esurv_denni.csv"
+ESURV_STATE_FILE = DATA_DIR / "uzis_esurv" / "esurv_stav.json"
 
 
 OVERVIEW_WEEKS = 12            # délka křivky v dlaždici (kalendářní týdny)
@@ -124,6 +128,8 @@ TILE_LABELS = {
     "flu": ("Laboratorně potvrzená chřipka", "Laboratory-confirmed influenza"),
     "rsv": ("Laboratorně potvrzený RSV", "Laboratory-confirmed RSV"),
     "covid": ("COVID-19", "COVID-19"),
+    "hosp": ("Nově přijatí do nemocnice s respirační infekcí",
+             "New hospital admissions with a respiratory infection"),
 }
 LEVEL_TEXT = {
     "baseline": ("pod epidemickým prahem", "below the epidemic threshold"),
@@ -316,6 +322,30 @@ def covid_weekly() -> pd.Series:
     return pd.Series(out, dtype=float)
 
 
+def hospital_weekly() -> pd.Series:
+    """
+    Nově přijatí do nemocnice se zaznamenanou akutní respirační infekcí (ARI/ILI celkem)
+    po ISO týdnech, celá ČR — jen úplné týdny. Z denní e-surveillance ÚZIS; prázdná
+    řada, když zdroj není stažený.
+
+    Úplný týden = má všech sedm dní a jeho neděle není po „stavu k datu“ zdroje.
+    Běžící týden by vedle úplného vypadal jako propad.
+    """
+    try:
+        last = date.fromisoformat(json.loads(ESURV_STATE_FILE.read_text(encoding="utf-8"))["stav_k"])
+        df = pd.read_csv(ESURV_DAILY_FILE, usecols=["datum", "nemoc", "kraj_kod", "vek", "hosp_nove"],
+                         dtype={"vek": str})
+    except (FileNotFoundError, KeyError, ValueError, json.JSONDecodeError):
+        print("  [resp] denní e-surveillance ÚZIS není k dispozici — přehled bude bez nemocnic")
+        return pd.Series(dtype=float)
+    sub = df[(df["nemoc"] == "ari_ili") & (df["kraj_kod"] == "CZ") & (df["vek"] == "celkem")]
+    sub = sub.dropna(subset=["hosp_nove"])
+    days = [date.fromisoformat(d) for d in sub["datum"]]
+    weekly = sub.assign(week=[iso(d) for d in days]).groupby("week")["hosp_nove"].agg(["sum", "count"])
+    done = [w for w in weekly.index if weekly.loc[w, "count"] == 7 and monday(w) + timedelta(days=6) <= last]
+    return weekly.loc[sorted(done), "sum"].astype(float)
+
+
 # ── 1. Přehled týdne ─────────────────────────────────────────────────────────
 
 def _series(values: pd.Series, weeks: list[str], provisional: set[str] = frozenset()) -> list[dict]:
@@ -328,7 +358,7 @@ def _series(values: pd.Series, weeks: list[str], provisional: set[str] = frozens
 
 
 def build_overview(rates: pd.DataFrame, lab: pd.DataFrame, holidays: dict, mem: dict,
-                   covid: pd.Series | None = None) -> dict | None:
+                   covid: pd.Series | None = None, hosp: pd.Series | None = None) -> dict | None:
     total = {ind: rates[(ind, "total")].dropna() for ind in INDICATORS if (ind, "total") in rates.columns}
     if "ILI" not in total or total["ILI"].empty:
         print("  [resp_overview] chybí řada ILI — přeskakuji")
@@ -520,11 +550,44 @@ def build_overview(rates: pd.DataFrame, lab: pd.DataFrame, holidays: dict, mem: 
         f.say("Nově potvrzených případů covidu-19 bylo {cov_when} {cov_cases}.",
               "Newly confirmed COVID-19 cases {cov_when}: {cov_cases}.", ["cov_cases"], optional=True)
 
+    has_hosp = hosp is not None and len(hosp) > 0
+    if has_hosp:
+        wk = hosp.index[-1]
+        now, prev_week = float(hosp.iloc[-1]), shift(hosp.index[-1], -1)
+        prev = float(hosp[prev_week]) if prev_week in hosp.index else None
+        # Jednotka „admissions“ má v portálu vlastní popisek; „count“ by tvrdil
+        # „nových případů“ a „závisí na testování“, což pro nemocnice neplatí.
+        tiles.append({"id": "hosp", "label": TILE_LABELS["hosp"][0], "label_en": TILE_LABELS["hosp"][1],
+                      "unit": "admissions",
+                      "week": wk, "value": int(now), "prev_week": prev_week if prev is not None else None,
+                      "prev": None if prev is None else int(prev),
+                      "change_pct": None if not prev else round((now - prev) / prev * 100, 1),
+                      "series": _series(hosp, weeks)})
+        f.week("wk_hosp", wk)
+        f.count("hosp_new", int(now), wk)
+        if wk == wk_syn:
+            f.text("hosp_when", "ve stejném týdnu", "in the same week")
+        else:
+            f.text("hosp_when", "v týdnu " + week_label(wk, "cs"), "in the week of " + week_label(wk, "en"))
+        f.fact("hosp_new", "measurement",
+               "Týden {wk_hosp} – nově přijatí do nemocnice se zaznamenanou akutní respirační infekcí podle "
+               "denního reportu ÚZIS: {hosp_new}. Počítá se každá hospitalizace, při které byla infekce "
+               "zaznamenána, ne jen hospitalizace kvůli ní.",
+               "Week of {wk_hosp} – new hospital admissions with a recorded acute respiratory infection "
+               "according to the daily ÚZIS report: {hosp_new}. Every hospital stay during which the infection "
+               "was recorded is counted, not only stays because of it.")
+        f.say("Nově přijatí do nemocnice s akutní respirační infekcí {hosp_when}: {hosp_new}.",
+              "New hospital admissions with an acute respiratory infection {hosp_when}: {hosp_new}.",
+              ["hosp_new"], optional=True)
+
     f.fact("source", "meta",
-           "Zdroj: hlášení praktických lékařů a laboratoří (ECDC ERVISS, WHO FluID), případy covidu-19 MZČR; "
-           "práh, trend a podíly počítá Pathogen Portal.",
+           "Zdroj: hlášení praktických lékařů a laboratoří (ECDC ERVISS, WHO FluID), případy covidu-19 MZČR"
+           + (", hospitalizace ÚZIS (denní reporting e-surveillance)" if has_hosp else "")
+           + "; práh, trend a podíly počítá Pathogen Portal.",
            "Source: reports from general practitioners and laboratories (ECDC ERVISS, WHO FluID), COVID-19 "
-           "cases from the Ministry of Health; the threshold, trend and shares are computed by Pathogen Portal.")
+           "cases from the Ministry of Health"
+           + (", hospitalisations from ÚZIS (daily e-surveillance reporting)" if has_hosp else "")
+           + "; the threshold, trend and shares are computed by Pathogen Portal.")
     return {"generated_at": _now(), "week": wk_syn, "lab_week": wk_lab, "weeks": weeks,
             "provisional_weeks": sorted(provisional), "tiles": tiles, **f.block()}
 
@@ -818,7 +881,7 @@ def main() -> int:
         return 0
     rates, lab, holidays = load_rates(), load_lab(), load_holidays()
     for name, build in (("resp_overview", lambda: build_overview(rates, lab, holidays, flu_mem_state(),
-                                                                 covid_weekly())),
+                                                                 covid_weekly(), hospital_weekly())),
                         ("resp_age", lambda: build_age(rates, holidays)),
                         ("flu_types", lambda: build_types(lab))):
         obj = build()
