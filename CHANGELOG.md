@@ -8,6 +8,18 @@ Releases are git tags `vMAJOR.MINOR.PATCH`. The portal pins one of them as its s
 
 Changes on `dev` since v0.4.0.
 
+- **Signals up to the last complete month for 11 diagnoses** (no issue) —
+  `detect_anomalies.py --zdroj tydenni` runs the detector on the weekly ÚZIS summary and writes a
+  new file, `anomaly_signals_weekly.json`; `anomaly_signals.json` is unchanged. The monthly series
+  are built from the weeks by `weekly_months.py` (a week across two months is split by working
+  days, in whole cases) and the whole history comes from the weekly source, from 2022. Diagnoses are grouped by what EWS did to them (reports moved: scored on the total;
+  new channel: not scored; uncertain: the EWS verdict), and epidemic months leave the baseline.
+  Besides `signals` the file carries `national` (every diagnosis with its group, status and last
+  12 months against the usual range) and `input`. The container runs it after the main detection; it is a side output and
+  its failure does not stop the refresh. `uzis_isin_weekly.py` now keeps a year that the source
+  no longer carries from the previous download, so that the history of the signals does not
+  lose 2022 in 2027; the weekly overview block still shows five years. Method, measurements and limits:
+  [docs/analytics/anomaly-detection.md](docs/analytics/anomaly-detection.md#the-weekly-source-eleven-diagnoses-up-to-the-last-complete-month).
 - **Weekly infectious-disease data and overview blocks** (no issue) — a new scraper,
   `uzis_isin_weekly.py`, reads the weekly ÚZIS data summary NR-27-04 (11 diagnoses by ISO week up
   to the previous week, with the records created from EWS reports counted separately), and

@@ -158,7 +158,7 @@ def test_kazdy_generovany_graf_ma_zaznam_v_charts_yaml():
         if m:
             generated.add(m.group(1) + ("*" if m.group(2) else ""))
     # Grafy, které si JSON zapisují samy (mimo save())
-    generated |= {"flu_mem", "anomaly_signals", "resp_overview", "resp_age", "flu_types",
+    generated |= {"flu_mem", "anomaly_signals", "anomaly_signals_weekly", "resp_overview", "resp_age", "flu_types",
                   "genomics_overview", "genomics_lineages", "genomics_amr",
                   "isin_weekly", "isin_overview", "isin_groups"}
 

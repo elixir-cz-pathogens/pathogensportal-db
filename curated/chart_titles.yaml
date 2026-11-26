@@ -147,6 +147,9 @@ isin_weekly:
 anomaly_signals:
   cs: "Signály detekce anomálií v hlášení infekčních nemocí v ČR"
   en: "Anomaly detection signals in infectious disease notifications in Czechia"
+anomaly_signals_weekly:
+  cs: "Signály detekce anomálií u 11 infekčních nemocí v ČR — poslední uzavřený měsíc z týdenního souhrnu ÚZIS"
+  en: "Anomaly detection signals for 11 infectious diseases in Czechia — latest complete month from the weekly ÚZIS summary"
 
 sti_registry_trend:
   cs: "Syfilis, kapavka a venerický lymfogranulom v ČR — roční počty hlášených případů"
