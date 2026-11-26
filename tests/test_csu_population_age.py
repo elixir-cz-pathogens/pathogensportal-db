@@ -50,3 +50,5 @@ def test_vypadek_veku_nezastavi_stazeni_populace(tmp_path, monkeypatch):
     monkeypatch.setattr(c.requests, "get", get)
     files = c.download(tmp_path)
     assert [f.rsplit("/", 1)[-1] for f in files] == ["population.csv"]
+    # běh nespadl, ale půlka zdroje je z minula — za ověření se to nepočítá
+    assert c.download.source_checked is False

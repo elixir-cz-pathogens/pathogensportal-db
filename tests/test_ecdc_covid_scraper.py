@@ -13,6 +13,8 @@ def test_existing_archive_is_not_downloaded_again(tmp_path, monkeypatch):
 
     monkeypatch.setattr(ecdc_covid.requests, "get", no_network)
     assert ecdc_covid.download(tmp_path) == [str(tmp_path / "ecdc_covid_cz.csv")]
+    # soubor z disku není ověření u zdroje (run_all.py → last_checked.py)
+    assert ecdc_covid.download.source_checked is False
 
 
 def test_missing_archive_is_downloaded(tmp_path, monkeypatch):
@@ -29,5 +31,6 @@ def test_missing_archive_is_downloaded(tmp_path, monkeypatch):
 
     monkeypatch.setattr(ecdc_covid.requests, "get", lambda *a, **k: Response())
     ecdc_covid.download(tmp_path)
+    assert ecdc_covid.download.source_checked is True
     lines = (tmp_path / "ecdc_covid_cz.csv").read_text(encoding="utf-8").splitlines()
     assert lines == ["datum,nove_pripady,nove_umrti,populace", "2022-01-01,5,0,10700000", "2022-01-02,10,1,10700000"]

@@ -257,6 +257,54 @@ Notes:
 | `flu_mem` | `compute_mem.py` | influenza thresholds, trend and forecast for ILI and ARI | [analytics/flu-mem.md](analytics/flu-mem.md) |
 | `flu_nowcast` | `compute_nowcast.py` | estimated final weekly lab detections for the last two weeks (shadow mode, not shown) | [analytics/nowcasting.md](analytics/nowcasting.md) |
 
+### Last check — `last_checked.json`
+
+Not a chart: one small file that says, for every chart file above, when the pipeline last checked
+it against its sources. Written by `scripts/last_checked.py`, the last step of the container
+command.
+
+```json
+{
+ "timezone": "UTC",
+ "charts": {
+  "anomaly_signals": {"checked": "2026-11-26"},
+  "genomics_overview": {"checked": "2026-11-25"}
+ },
+ "sources": {
+  "ena": {"checked": "2026-11-25"},
+  "uzis-isin": {"checked": "2026-11-26"}
+ }
+}
+```
+
+Why it exists: the date a dashboard shows is read from the data and moves only when the data
+change — an annual file keeps its date for a year. The pipeline meanwhile asks the source every
+hour. The reader needs both statements, and they must stay apart: `generated_at` and the axis
+labels say what the data are, this file says when somebody last looked.
+
+A chart gets a new date when both hold:
+
+1. **Every source of the chart was really asked.** `run_all.py` names the source ids each job
+   checks and records the ones whose jobs all returned without an error. A scraper may return
+   without asking the source — a cached file, a supplement that failed to download — and then
+   sets `download.source_checked = False`; such a run does not count. The historical SZÚ seasons
+   are downloaded once and check nothing.
+2. **The chart was finished after that check.** Every `save()` reports the chart with
+   `last_checked.mark_chart(name)` — when it wrote the file and also when it deliberately left an
+   unchanged file alone (`compute_isin.py`, `compute_genomics.py`). The generators behind `||` may
+   fail; their charts then keep the old date although the sources were checked.
+
+The date is the day of the *oldest* check among the chart's sources, taken at the start of the
+run. A chart that does not qualify keeps the date it has, and a date never moves backwards.
+
+The file holds days, not times, and is not rewritten when nothing changed. Its content therefore
+changes at most once a day per chart, however often the pipeline runs — on the portal that is one
+small commit a day, not one an hour. Keep it that way: do not add a timestamp to this file.
+
+The state between the steps is `$DATA_DIR/meta/checks.json` (last successful check per source,
+last finish per chart). The charts that arrive on the portal by another route (situational
+reports) are not in `charts.yaml` and get no entry.
+
 ## Conventions
 
 - **A missing input skips the chart**, it does not fail the run.

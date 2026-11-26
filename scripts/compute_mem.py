@@ -46,6 +46,7 @@ import pandas as pd
 
 import chart_meta
 import forecast
+import last_checked
 import mem
 import trend
 
@@ -460,6 +461,7 @@ def main() -> int:
     # mohl splést s počty případů, což jsou u intenzity chřipky dvě různá čísla.
     path.write_text(json.dumps(chart_meta.attach("flu_mem", out), ensure_ascii=False),
                     encoding="utf-8")
+    last_checked.mark_chart("flu_mem")
     for key, ind in out["indicators"].items():
         t, c = ind["thresholds"], ind["current"]
         print(f"  [flu_mem] {key.upper()}: {len(ind['seasons_used'])} sezón, δ={ind['delta']}; "

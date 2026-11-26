@@ -52,6 +52,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import chart_meta
 import labels_en
+import last_checked
 from facts import NBSP, Facts, fmt_int, plural_cs
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -738,6 +739,9 @@ def unchanged(path: Path, obj: dict) -> bool:
 def save(name: str, obj: dict, force: bool = False):
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     path = OUTPUT_DIR / f"{name}.json"
+    # I nepřepsaný soubor je ověřený: nad dnešním stažením vyšel stejně. Datum
+    # dat se tím nehýbe, posune se jen „naposledy ověřeno“ (last_checked.py).
+    last_checked.mark_chart(name)
     if not force and unchanged(path, obj):
         print(f"  [{name}] beze změny — nechávám, jak je (--force přepíše)")
         return

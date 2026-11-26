@@ -202,6 +202,10 @@ def test_weekly_run_writes_its_own_file_with_all_diagnoses(weekly_run):
     assert da.main() == 0
     out = json.loads((weekly_run / "out" / "anomaly_signals_weekly.json").read_text(encoding="utf-8"))
     assert not (weekly_run / "out" / "anomaly_signals.json").exists()   # hlavní výstup se nepřepisuje
+    # datum ověření u zdroje (last_checked.py) se hlásí k souboru, který běh zapsal,
+    # ne k hlavním signálům — ty stojí na jiném zdroji a tenhle běh se jich netýká
+    import last_checked
+    assert set(last_checked.load_state()["charts"]) == {"anomaly_signals_weekly"}
 
     assert out["target_period"] == "2026-10"
     assert out["input"]["source"] == "uzis-isin-weekly" and out["input"]["history_from"] == "2022-01"

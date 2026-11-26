@@ -45,6 +45,7 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import chart_meta
+import last_checked
 from facts import Facts, fmt_int, fmt_num, fmt_pct, plural_cs
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -575,6 +576,10 @@ def is_stale(path: Path, obj: dict) -> bool:
 def save(name: str, obj: dict, force: bool = False):
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     path = OUTPUT_DIR / f"{name}.json"
+    # Graf odpovídá tomu, co je na disku, ať se přepíše, nebo ne. Jestli je to
+    # i dnešní stav zdroje, rozhodne last_checked.py podle toho, zda scraper
+    # tentokrát uspěl — po výpadku archivu se datum ověření neposune.
+    last_checked.mark_chart(name)
     if not force and is_stale(path, obj):
         print(f"  [{name}] vstup se od {obj['fetched_at']} nezměnil — nechávám, jak je "
               f"(--force přepíše)")

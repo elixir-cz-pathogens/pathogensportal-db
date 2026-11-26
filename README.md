@@ -35,7 +35,8 @@ docker run --rm -v "$PWD/data:/data" -v "$PWD/out/charts:/output/charts" pathoge
 ```
 
 The container runs `run_all.py → generate_json.py → detect_anomalies.py → compute_mem.py →
-compute_nowcast.py`; the last step may fail without stopping the others.
+compute_nowcast.py → compute_resp.py → compute_genomics.py → compute_isin.py → last_checked.py`;
+the steps from `compute_nowcast.py` on may fail without stopping the others.
 `load_to_db.py` is not part of that command; without a database `generate_json.py` reads the CSV
 files directly.
 
@@ -53,6 +54,7 @@ own and is idempotent — a repeated run neither duplicates nor breaks anything.
 | 4 | Charts | `scripts/generate_json.py` | `$OUTPUT_DIR/*.json` (Chart.js data + `meta` block) |
 | 5 | Analytics | `scripts/detect_anomalies.py` | `$OUTPUT_DIR/anomaly_signals.json`; with `--zdroj tydenni` `anomaly_signals_weekly.json` |
 |   |           | `scripts/compute_mem.py` | `$OUTPUT_DIR/flu_mem.json` |
+| 6 | Last check | `scripts/last_checked.py` | `$OUTPUT_DIR/last_checked.json` (the day each chart was last checked against its sources) |
 
 Every scraper runs in isolation: when one source fails (site down, format changed) the others
 finish, and `run_all.py` lists what failed and exits with code 1.
@@ -89,6 +91,7 @@ scripts/source_metadata.py     metadata from the publishers (licence, freshness)
 scripts/load_to_db.py          ETL: CSV → PostgreSQL (observation, population)
 scripts/generate_json.py       reads the data, writes Chart.js JSON into $OUTPUT_DIR
 scripts/chart_meta.py          the `meta` block attached to every chart
+scripts/last_checked.py        the day each chart was last checked against its sources → last_checked.json
 scripts/detect_anomalies.py    anomaly detection (Farrington/Noufaily) → anomaly_signals.json,
                                anomaly_signals_weekly.json (--zdroj tydenni)
 scripts/weekly_months.py       weekly ÚZIS summary → monthly series for the detector

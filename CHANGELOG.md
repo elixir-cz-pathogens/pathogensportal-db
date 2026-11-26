@@ -8,6 +8,18 @@ Releases are git tags `vMAJOR.MINOR.PATCH`. The portal pins one of them as its s
 
 Changes on `dev` since v0.4.0.
 
+- **Date of the last source check** (no issue) — a new last step of the container command,
+  `last_checked.py`, writes `last_checked.json`: for every chart file, the day (UTC) on which all
+  of its sources were last asked successfully and the chart was rebuilt from that download or
+  found unchanged. The portal shows it next to the date of the data, which still moves only when
+  the data do — a page with annual data no longer looks abandoned between releases.
+  `run_all.py` records which sources a run really checked (the jobs now name their source ids);
+  a scraper that failed, or returned its files from disk without asking the source
+  (`download.source_checked = False`: the weekly ÚZIS summary within one week, the frozen ECDC
+  archive, ČSÚ without the age file), does not advance the date, and neither does a chart whose
+  generator did not finish. The file holds days only, so it changes at most once a day per chart
+  although the pipeline runs every hour. New output file and a new `||`-guarded step in `CMD`;
+  no existing file changes.
 - **Signals up to the last complete month for 11 diagnoses** (no issue) —
   `detect_anomalies.py --zdroj tydenni` runs the detector on the weekly ÚZIS summary and writes a
   new file, `anomaly_signals_weekly.json`; `anomaly_signals.json` is unchanged. The monthly series

@@ -14,6 +14,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import chart_meta
 import labels_en
+import last_checked
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = Path(os.environ.get("DATA_DIR",  str(ROOT / "data")))
@@ -67,6 +68,7 @@ def save(name: str, obj: dict):
         print(f"  [{name}] ⚠ bez anglického popisku: {missing}")
     path = OUTPUT_DIR / f"{name}.json"
     path.write_text(json.dumps(obj, ensure_ascii=False, default=str), encoding="utf-8")
+    last_checked.mark_chart(name)
     print(f"  [{name}] → {path}")
 
 
