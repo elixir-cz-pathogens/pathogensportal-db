@@ -358,6 +358,8 @@ def workdir(parsed, tmp_path, monkeypatch):
     monkeypatch.setattr(compute_esurv, "POP_AGE_FILE", tmp_path / "data" / "csu" / "population_age.csv")
     monkeypatch.setattr(compute_esurv, "OUTPUT_DIR", tmp_path / "out")
     monkeypatch.setattr("sys.argv", ["compute_esurv.py"])
+    # Bez svátků, ať testy nezávisí na kalendáři; svátky mají vlastní test.
+    monkeypatch.setattr(compute_esurv, "load_holidays", lambda: {})
     return tmp_path
 
 
@@ -398,17 +400,38 @@ def test_souhrn_ma_dlazdice_datum_a_komentare_z_faktu(workdir):
     compute_esurv.main()
     s = read(workdir, "esurv_summary")
     assert s["posledni_datum"] == "2026-11-24" and s["slozka"] == "2026-11-25"
-    assert s["hosp_aktualne_chripka"] == 5 and s["nemoci"]["rsv"]["hosp_nove_7d"] == 7
-    assert s["nemoci"]["chripka"]["pripady_7d"] == 618 and s["nemoci"]["chripka"]["pripady_7d_predchozi"] == 630
+    # poslední ÚPLNÝ týden je 16.–22. 11.; 23.–24. 11. je běžící týden a nepočítá se
+    assert (s["tyden"], s["tyden_predchozi"]) == ("2026-W47", "2026-W46")
+    flu = s["nemoci"]["chripka"]
+    # den i má 78 + 12 × (i % 3) případů; W47 = dny 2–8 od 24. 11., W46 = dny 9–15
+    assert (flu["pripady_tyden"], flu["pripady_tyden_predchozi"]) == (642, 618)
+    assert flu["hosp_nove_tyden"] == 7 and s["hosp_aktualne_chripka"] == 5
     assert set(s["blocks"]) == {"cases", "hospital", "vaccination"}
     cases = s["blocks"]["cases"]
-    assert cases["period"]["cs"] == "Sedm dní do 24. listopadu 2026"
-    assert "chřipka 618" in cases["comment"]["cs"] and "influenza 618" in cases["comment"]["en"]
-    assert "o 2 % méně než" in cases["comment"]["cs"]
-    # věta nesmí nést číslo, které není mezi fakty
+    assert cases["period"]["cs"] == "Týden 16.–22.\u00a0listopadu\u00a02026"
+    assert "chřipka 642" in cases["comment"]["cs"] and "influenza 642" in cases["comment"]["en"]
+    assert "o 4\u00a0% více než v předchozím týdnu (618)" in cases["comment"]["cs"]
     assert {f["id"] for f in cases["facts"]["facts"]} >= {"cases", "change_flu"}
     assert "s chřipkou 5" in s["blocks"]["hospital"]["comment"]["cs"]
     assert s["ockovani"]["chripka"] == {"davky_celkem": 36 * N_DAYS, "davky_7d": 36 * 7}
+
+
+def test_svatek_ve_srovnavanem_tydnu_zmenu_nepise(workdir, monkeypatch):
+    """17. 11. 2026: klouzavých sedm dní by ukázalo falešný skok — týden se svátkem se nesrovnává."""
+    holidays = {"2026-W46": {"public": 0, "school": 0.0}, "2026-W47": {"public": 1, "school": 0.0}}
+    monkeypatch.setattr(compute_esurv, "load_holidays", lambda: holidays)
+    compute_esurv.main()
+    cases = read(workdir, "esurv_summary")["blocks"]["cases"]
+    assert "státní svátek" in cases["comment"]["cs"] and "proto týdny nesrovnáváme" in cases["comment"]["cs"]
+    assert "více než" not in cases["comment"]["cs"] and "méně než" not in cases["comment"]["cs"]
+    assert "caveat_holiday" in cases["facts"]["required"]
+
+
+def test_tyden_se_pocita_jen_uplny():
+    wide = pd.DataFrame({"chripka": [1.0] * 10},
+                        index=[(date(2026, 11, 9) + timedelta(days=i)).isoformat() for i in range(10)])
+    out = compute_esurv.weekly(wide, "2026-11-18")
+    assert list(out.index) == ["2026-W46"] and out.loc["2026-W46", "chripka"] == 7
 
 
 def test_vek_na_sto_tisic_a_davky_na_sto_obyvatel(workdir):
